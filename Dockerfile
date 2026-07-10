@@ -15,13 +15,13 @@ RUN apt-get update && \
 # Pre-cache dependencies by building a stub binary first
 COPY Cargo.toml Cargo.lock ./
 RUN mkdir -p src && echo 'fn main() {}' > src/main.rs
-RUN cargo build --release --locked
+RUN cargo build --release
 RUN rm -f target/release/deps/dc_bot*
 
 # Copy real source and migrations, then build
 COPY src ./src
 COPY migrations ./migrations
-RUN touch src/main.rs && cargo build --release --locked
+RUN touch src/main.rs && cargo build --release
 
 # ────────────────────────────────────────────────────────────────────────────
 # Stage 2: Runtime
