@@ -1,0 +1,58 @@
+[package]
+name = "dc-bot"
+version = "0.1.0"
+edition = "2021"
+description = "A feature-rich Discord meme bot with auto-reactions, Reddit integration, and slash commands"
+
+[[bin]]
+name = "dc-bot"
+path = "src/main.rs"
+
+[dependencies]
+# Discord
+poise = "0.6"
+serenity = { version = "0.12", default-features = false, features = [
+    "client",
+    "gateway",
+    "rustls_backend",
+    "model",
+    "cache",
+    "http",
+] }
+
+# Async runtime
+tokio = { version = "1", features = ["full"] }
+
+# Database (SQLite, no compile-time checks required)
+sqlx = { version = "0.7", features = [
+    "runtime-tokio-rustls",
+    "sqlite",
+] }
+
+# HTTP / Reddit
+reqwest = { version = "0.11", default-features = false, features = [
+    "json",
+    "rustls-tls",
+] }
+
+# Serde
+serde = { version = "1", features = ["derive"] }
+serde_json = "1"
+
+# Config / env
+dotenvy = "0.15"
+
+# Logging
+tracing = "0.1"
+tracing-subscriber = { version = "0.3", features = ["env-filter", "fmt"] }
+
+# Error handling
+anyhow = "1"
+thiserror = "1"
+
+# Misc
+chrono = "0.4"
+feed-rs = "1"
+url = "2"
+
+

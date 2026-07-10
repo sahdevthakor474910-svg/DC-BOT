@@ -1,0 +1,27 @@
+version: "3.8"
+
+services:
+  dc-bot:
+    build: .
+    image: dc-bot:latest
+    container_name: dc-bot
+    restart: unless-stopped
+
+    # Load all secrets from a local .env file
+    env_file:
+      - .env
+
+    environment:
+      # Override the DB path to use the mounted volume
+      DATABASE_URL: sqlite:///data/bot.db
+
+    volumes:
+      # Persist SQLite database across container restarts
+      - ./data:/data
+
+    # Optional: forward logs to a log collector
+    logging:
+      driver: json-file
+      options:
+        max-size: "10m"
+        max-file: "3"

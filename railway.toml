@@ -1,0 +1,12 @@
+[build]
+builder = "dockerfile"
+dockerfilePath = "Dockerfile"
+
+[deploy]
+startCommand = "dc-bot"
+restartPolicyType = "on_failure"
+restartPolicyMaxRetries = 10
+healthcheckPath = "/"
+
+[[services]]
+name = "dc-bot"
