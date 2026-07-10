@@ -207,3 +207,43 @@ async fn main() -> Result<()> {
 
     Ok(())
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[tokio::test]
+    async fn test_jav_reddit_fetch() {
+        // JAV now uses meme-api.com via r/jav and r/javonline (R18.dev was Cloudflare-blocked)
+        let jav_client = reddit::client::RedditClient::new("discord-meme-bot/1.0 (by /u/SahdevXD)").unwrap();
+        let posts = jav_client.fetch_hot_posts("jav", 3).await;
+        assert!(posts.is_ok(), "Failed to fetch r/jav from meme-api: {:?}", posts.err());
+        let posts = posts.unwrap();
+        println!("Fetched r/jav posts: {:?}", posts);
+        assert!(!posts.is_empty(), "r/jav list should not be empty");
+    }
+
+    #[tokio::test]
+    async fn test_reddit_meme_client_fetch() {
+        let reddit_client = reddit::client::RedditClient::new("discord-meme-bot/1.0 (by /u/SahdevXD)").unwrap();
+        let posts = reddit_client.fetch_hot_posts("memes", 3).await;
+        assert!(posts.is_ok(), "Failed to fetch memes from meme-api: {:?}", posts.err());
+        let posts = posts.unwrap();
+        println!("Fetched memes: {:?}", posts);
+        assert!(!posts.is_empty(), "Memes list should not be empty");
+    }
+
+    #[tokio::test]
+    async fn test_news_feeds_fetch() {
+        let client = reqwest::Client::builder()
+            .user_agent("Mozilla/5.0")
+            .build()
+            .unwrap();
+        let articles = news::fetcher::fetch_feed(&client, "https://www.pcgamer.com/rss/", "PC Gamer").await;
+        assert!(articles.is_ok(), "Failed to fetch PC Gamer RSS feed: {:?}", articles.err());
+        let articles = articles.unwrap();
+        println!("Fetched news articles: {:?}", articles);
+        assert!(!articles.is_empty(), "News articles should not be empty");
+    }
+}
+
