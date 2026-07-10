@@ -47,8 +47,6 @@ fn get_target_channel_id(cfg: &queries::GuildConfig, subreddit: &str) -> Option<
         "brainrot" => cfg.brainrot_channel_id.clone(),
         "shitposting" | "whenthe" => cfg.shitposting_channel_id.clone(),
         "196" => cfg.instagram_channel_id.clone(),
-        // NSFW subreddits always go to the dedicated NSFW channel
-        "nsfw" | "gonewild" | "rule34" | "hentai" | "porn" => cfg.nsfw_channel_id.clone(),
         _ => None,
     }
 }
@@ -150,13 +148,20 @@ async fn tick(data: &Data, http: &Arc<serenity::Http>) -> Result<usize> {
             total_posted += post_subreddit(data, http, &cfg.guild_id, subreddit, &channel_id_str).await;
         }
 
-        // ── NSFW subreddits (only if nsfw_channel is configured) ──────────
-        if let Some(nsfw_channel) = &cfg.nsfw_channel_id {
-            for subreddit in NSFW_SUBREDDITS {
-                total_posted += post_subreddit(data, http, &cfg.guild_id, subreddit, nsfw_channel).await;
+        // ── NSFW subreddits ──────────────────────────────────────────────
+        for subreddit in NSFW_SUBREDDITS {
+            let target_channel = if *subreddit == "rule34" {
+                cfg.rule34_channel_id.as_ref().or(cfg.nsfw_channel_id.as_ref())
+            } else {
+                cfg.nsfw_channel_id.as_ref()
+            };
+
+            if let Some(channel_id) = target_channel {
+                total_posted += post_subreddit(data, http, &cfg.guild_id, subreddit, channel_id).await;
             }
         }
     }
 
     Ok(total_posted)
+
 }

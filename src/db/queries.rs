@@ -16,6 +16,7 @@ pub struct GuildConfig {
     pub news_channel_id: Option<String>,
     pub free_games_channel_id: Option<String>,
     pub nsfw_channel_id: Option<String>,  // added via migration 003
+    pub rule34_channel_id: Option<String>,
     pub auto_react_enabled: bool,
 }
 
@@ -35,7 +36,7 @@ pub async fn get_or_create_guild(db: &SqlitePool, guild_id: &str) -> Result<Guil
     let row = sqlx::query(
         "SELECT guild_id, meme_channel_id, posting_interval_secs, \
                 brainrot_channel_id, shitposting_channel_id, instagram_channel_id, \
-                news_channel_id, free_games_channel_id, nsfw_channel_id, auto_react_enabled \
+                news_channel_id, free_games_channel_id, nsfw_channel_id, rule34_channel_id, auto_react_enabled \
          FROM guild_config WHERE guild_id = ?",
     )
     .bind(guild_id)
@@ -52,6 +53,7 @@ pub async fn get_or_create_guild(db: &SqlitePool, guild_id: &str) -> Result<Guil
         news_channel_id: row.get("news_channel_id"),
         free_games_channel_id: row.get("free_games_channel_id"),
         nsfw_channel_id: row.get("nsfw_channel_id"),
+        rule34_channel_id: row.get("rule34_channel_id"),
         auto_react_enabled: row.get::<i64, _>("auto_react_enabled") != 0,
     })
 }
@@ -140,6 +142,18 @@ pub async fn set_nsfw_channel(db: &SqlitePool, guild_id: &str, channel_id: Optio
     Ok(())
 }
 
+pub async fn set_rule34_channel(db: &SqlitePool, guild_id: &str, channel_id: Option<&str>) -> Result<()> {
+    sqlx::query(
+        "INSERT INTO guild_config (guild_id, rule34_channel_id) VALUES (?, ?) \
+         ON CONFLICT(guild_id) DO UPDATE SET rule34_channel_id = excluded.rule34_channel_id",
+    )
+    .bind(guild_id)
+    .bind(channel_id)
+    .execute(db)
+    .await?;
+    Ok(())
+}
+
 pub async fn set_auto_react_enabled(db: &SqlitePool, guild_id: &str, enabled: bool) -> Result<()> {
     sqlx::query(
         "INSERT INTO guild_config (guild_id, auto_react_enabled) VALUES (?, ?) \
@@ -170,7 +184,7 @@ pub async fn get_all_guild_configs(db: &SqlitePool) -> Result<Vec<GuildConfig>> 
     let rows = sqlx::query(
         "SELECT guild_id, meme_channel_id, posting_interval_secs, \
                 brainrot_channel_id, shitposting_channel_id, instagram_channel_id, \
-                news_channel_id, free_games_channel_id, nsfw_channel_id, auto_react_enabled \
+                news_channel_id, free_games_channel_id, nsfw_channel_id, rule34_channel_id, auto_react_enabled \
          FROM guild_config",
     )
     .fetch_all(db)
@@ -188,6 +202,7 @@ pub async fn get_all_guild_configs(db: &SqlitePool) -> Result<Vec<GuildConfig>> 
             news_channel_id: r.get("news_channel_id"),
             free_games_channel_id: r.get("free_games_channel_id"),
             nsfw_channel_id: r.get("nsfw_channel_id"),
+            rule34_channel_id: r.get("rule34_channel_id"),
             auto_react_enabled: r.get::<i64, _>("auto_react_enabled") != 0,
         })
         .collect())
