@@ -7,7 +7,7 @@ use tracing::{error, info, warn};
 
 use crate::data::Data;
 use crate::db::queries;
-use crate::reddit::client::{RedditClient, SUBREDDITS, NSFW_SUBREDDITS, JAV_SUBREDDITS};
+use crate::reddit::client::{RedditClient, SUBREDDITS, NSFW_SUBREDDITS};
 
 /// Run a single fetch-and-post cycle (used by /admin force-refresh).
 pub async fn run_once(data: &Data, http: &Arc<serenity::Http>) -> Result<usize> {
@@ -213,13 +213,6 @@ async fn tick(data: &Data, http: &Arc<serenity::Http>, force: bool) -> Result<us
 
             if let Some(channel_id) = target_channel {
                 total_posted += post_subreddit(data, http, &cfg.guild_id, subreddit, channel_id, force).await;
-            }
-        }
-
-        // ── JAV subreddits (r/jav, r/javonline) ────────────────────────────────
-        if let Some(ref jav_channel) = cfg.jav_channel_id.clone() {
-            for subreddit in JAV_SUBREDDITS {
-                total_posted += post_subreddit(data, http, &cfg.guild_id, subreddit, jav_channel, force).await;
             }
         }
     }

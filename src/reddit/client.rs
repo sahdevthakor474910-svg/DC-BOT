@@ -11,8 +11,6 @@ pub const SUBREDDITS: &[&str] = &["memes", "dankmemes", "shitposting", "brainrot
 /// NSFW subreddits — only posted to age-restricted NSFW channels.
 pub const NSFW_SUBREDDITS: &[&str] = &["nsfw", "gonewild", "rule34", "hentai", "RealGirls", "milf", "boobs", "amateur"];
 
-/// JAV subreddits — routed to the dedicated JAV channel.
-pub const JAV_SUBREDDITS: &[&str] = &["jav", "javonline"];
 
 // ─── Meme API response ────────────────────────────────────────────────────────
 
