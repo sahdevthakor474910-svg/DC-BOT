@@ -40,6 +40,9 @@ pub struct RedditPost {
     pub is_video: bool,
     /// True when the post is marked NSFW.
     pub over_18: bool,
+    /// True when the post is marked as a spoiler.
+    #[serde(default)]
+    pub spoiler: bool,
     /// True for pinned/announcement posts.
     pub stickied: bool,
     /// Relative URL: "/r/memes/comments/…"
@@ -49,6 +52,7 @@ pub struct RedditPost {
     /// Reddit gallery / image previews.
     pub preview: Option<Preview>,
 }
+
 
 #[derive(Debug, Deserialize, Clone)]
 pub struct RedditMedia {

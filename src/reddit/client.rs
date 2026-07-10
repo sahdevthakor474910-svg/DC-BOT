@@ -1,170 +1,98 @@
-use anyhow::{anyhow, Result};
+use anyhow::Result;
 use reqwest::Client;
 use serde::Deserialize;
 use tracing::{debug, warn};
 
-use super::models::{RedditPost, RedditResponse};
+use super::models::RedditPost;
 
 /// Subreddits to poll for memes.
 pub const SUBREDDITS: &[&str] = &["memes", "dankmemes", "shitposting", "brainrot", "196", "whenthe"];
 
-// ─── OAuth2 token response ────────────────────────────────────────────────────
+// ─── Meme API response ────────────────────────────────────────────────────────
 
-#[derive(Deserialize)]
-struct TokenResponse {
-    access_token: String,
+#[derive(Deserialize, Debug)]
+struct MemeApiResponse {
+    #[serde(default)]
+    memes: Vec<MemeApiPost>,
+    // Single meme response fields
+    postLink: Option<String>,
+    subreddit: Option<String>,
+    title: Option<String>,
+    url: Option<String>,
+    nsfw: Option<bool>,
+    spoiler: Option<bool>,
+    author: Option<String>,
+    ups: Option<u32>,
+    preview: Option<Vec<String>>,
+}
+
+#[derive(Deserialize, Debug)]
+struct MemeApiPost {
+    postLink: String,
+    subreddit: String,
+    title: String,
+    url: String,
+    nsfw: bool,
+    spoiler: bool,
+    author: String,
+    ups: u32,
+    preview: Vec<String>,
 }
 
 // ────────────────────────────────────────────────────────────────────────────
 
 pub struct RedditClient {
     client: Client,
-    client_id: String,
-    client_secret: String,
-    user_agent: String,
-    token: tokio::sync::Mutex<Option<String>>,
 }
 
 impl RedditClient {
     pub fn new(user_agent: &str) -> Result<Self> {
-        // Reddit's public read-only OAuth app credentials (script app type)
-        // Falls back to anonymous-but-spoofed headers if env vars not set
-        let client_id     = std::env::var("REDDIT_CLIENT_ID").unwrap_or_default();
-        let client_secret = std::env::var("REDDIT_CLIENT_SECRET").unwrap_or_default();
-
         let client = Client::builder()
             .user_agent(user_agent)
             .build()?;
-
-        Ok(Self {
-            client,
-            client_id,
-            client_secret,
-            user_agent: user_agent.to_string(),
-            token: tokio::sync::Mutex::new(None),
-        })
+        Ok(Self { client })
     }
 
-    /// Get a valid OAuth2 access token (cached).
-    async fn get_token(&self) -> Result<String> {
-        let mut guard = self.token.lock().await;
-
-        // Return cached token if available
-        if let Some(tok) = guard.as_ref() {
-            return Ok(tok.clone());
-        }
-
-        if self.client_id.is_empty() || self.client_secret.is_empty() {
-            return Err(anyhow!("REDDIT_CLIENT_ID / REDDIT_CLIENT_SECRET not set"));
-        }
-
-        let resp: TokenResponse = self.client
-            .post("https://www.reddit.com/api/v1/access_token")
-            .basic_auth(&self.client_id, Some(&self.client_secret))
-            .form(&[("grant_type", "client_credentials")])
-            .header("User-Agent", &self.user_agent)
-            .send()
-            .await?
-            .error_for_status()?
-            .json()
-            .await?;
-
-        let token = resp.access_token.clone();
-        *guard = Some(resp.access_token);
-        Ok(token)
-    }
-
-    /// Fetch the top `limit` hot posts from a subreddit.
-    /// Tries OAuth2 first; falls back to anonymous JSON if credentials missing.
+    /// Fetch the top posts from a subreddit using meme-api.com (no auth needed).
     pub async fn fetch_hot_posts(&self, subreddit: &str, limit: u32) -> Result<Vec<RedditPost>> {
-        debug!("Fetching r/{} (limit {})", subreddit, limit);
+        debug!("Fetching r/{} via meme-api.com (limit {})", subreddit, limit);
 
-        let posts = if !self.client_id.is_empty() && !self.client_secret.is_empty() {
-            self.fetch_oauth(subreddit, limit).await?
-        } else {
-            self.fetch_anonymous(subreddit, limit).await?
-        };
-
-        debug!("Got {} usable posts from r/{}", posts.len(), subreddit);
-        Ok(posts)
-    }
-
-    /// Fetch via Reddit OAuth2 API (oauth.reddit.com) — works reliably.
-    async fn fetch_oauth(&self, subreddit: &str, limit: u32) -> Result<Vec<RedditPost>> {
-        let token = match self.get_token().await {
-            Ok(t) => t,
-            Err(e) => {
-                warn!("OAuth token fetch failed, trying anonymous: {}", e);
-                // Invalidate cached token
-                *self.token.lock().await = None;
-                return self.fetch_anonymous(subreddit, limit).await;
-            }
-        };
-
-        let url = format!(
-            "https://oauth.reddit.com/r/{}/hot?limit={}&raw_json=1",
-            subreddit, limit
-        );
-
-        let resp = self.client
-            .get(&url)
-            .bearer_auth(&token)
-            .header("User-Agent", &self.user_agent)
-            .send()
-            .await?;
-
-        // Token may have expired — retry once
-        if resp.status() == reqwest::StatusCode::UNAUTHORIZED {
-            *self.token.lock().await = None;
-            return Box::pin(self.fetch_oauth(subreddit, limit)).await;
-        }
-
-        let response = resp
-            .error_for_status()?
-            .json::<RedditResponse>()
-            .await?;
-
-        Ok(self.filter_posts(response))
-    }
-
-    /// Anonymous fallback — uses a browser-like UA to avoid 403s.
-    async fn fetch_anonymous(&self, subreddit: &str, limit: u32) -> Result<Vec<RedditPost>> {
-        let url = format!(
-            "https://www.reddit.com/r/{}/hot.json?limit={}&raw_json=1",
-            subreddit, limit
-        );
+        let url = format!("https://meme-api.com/gimme/{}/{}", subreddit, limit);
 
         let response = self.client
             .get(&url)
-            .header("User-Agent", "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/125.0.0.0 Safari/537.36")
-            .header("Accept", "application/json")
-            .header("Accept-Language", "en-US,en;q=0.9")
             .send()
             .await?
             .error_for_status()?
-            .json::<RedditResponse>()
+            .json::<MemeApiResponse>()
             .await?;
 
-        Ok(self.filter_posts(response))
-    }
-
-    fn filter_posts(&self, response: RedditResponse) -> Vec<RedditPost> {
-        response
-            .data
-            .children
+        let posts: Vec<RedditPost> = response.memes
             .into_iter()
-            .map(|w| w.data)
-            .filter(|p| !p.stickied)
-            .collect()
+            .map(|m| RedditPost {
+                id: m.postLink.split('/').nth(6).unwrap_or("").to_string(),
+                title: m.title,
+                author: m.author,
+                score: m.ups as i64,
+                url: m.url.clone(),
+                url_overridden_by_dest: Some(m.url),
+                is_video: false,
+                over_18: m.nsfw,
+                spoiler: m.spoiler,
+                stickied: false,
+                post_hint: Some("image".to_string()),
+                media: None,
+                preview: None,
+                subreddit: m.subreddit,
+                permalink: m.postLink,
+            })
+            .collect();
+
+        debug!("Got {} posts from r/{} via meme-api", posts.len(), subreddit);
+        Ok(posts)
     }
 
     /// Derive the best embeddable media URL for a post.
-    ///
-    /// Priority:
-    ///   1. Reddit-hosted video fallback URL (mp4)
-    ///   2. `url_overridden_by_dest` / `url` if it looks like a direct media file
-    ///   3. Preview image source (HTML-decoded)
-    ///   4. `None` — text / link post with no embeddable media
     pub fn media_url(post: &RedditPost) -> Option<String> {
         // 1. Reddit video
         if post.is_video {
@@ -210,7 +138,7 @@ impl RedditClient {
             }
         }
 
-        // 3. Preview image (HTML-encoded ampersands must be decoded)
+        // 3. Preview image
         if let Some(preview) = &post.preview {
             if let Some(first) = preview.images.first() {
                 let decoded = first.source.url.replace("&amp;", "&");
