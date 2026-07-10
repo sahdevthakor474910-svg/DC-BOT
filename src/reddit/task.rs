@@ -119,7 +119,9 @@ async fn post_subreddit(
                     )))
                     .color(0xFF4500); // Reddit orange-red
 
-                let message = serenity::CreateMessage::new().embed(embed);
+                let message = serenity::CreateMessage::new()
+                    .content(&media_url)
+                    .embed(embed);
 
                 if let Err(e) = channel.send_message(http, message).await {
                     error!(

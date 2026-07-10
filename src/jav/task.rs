@@ -94,7 +94,9 @@ async fn tick(data: &Data, http: &Arc<serenity::Http>) -> Result<usize> {
                                 post.subreddit, post.score, post.author
                             )));
 
-                        let msg = serenity::CreateMessage::new().embed(embed);
+                        let msg = serenity::CreateMessage::new()
+                            .content(&media_url)
+                            .embed(embed);
 
                         match channel.send_message(http, msg).await {
                             Ok(_) => {

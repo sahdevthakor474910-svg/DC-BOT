@@ -134,7 +134,9 @@ async fn post_videos(
                     video.duration, views_str, video.rating.split('.').next().unwrap_or(&video.rating), tag_str
                 )));
 
-            let msg = serenity::CreateMessage::new().embed(embed);
+            let msg = serenity::CreateMessage::new()
+                .content(&video.url)
+                .embed(embed);
 
             match channel.send_message(http, msg).await {
                 Ok(_) => {
