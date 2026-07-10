@@ -253,5 +253,15 @@ mod tests {
         println!("Fetched news articles: {:?}", articles);
         assert!(!articles.is_empty(), "News articles should not be empty");
     }
+
+    #[tokio::test]
+    async fn test_redtube_fetch() {
+        let client = porn::client::PornClient::new().unwrap();
+        let videos = client.fetch_videos("naughty america", 3).await;
+        assert!(videos.is_ok(), "Failed to fetch RedTube videos: {:?}", videos.err());
+        let videos = videos.unwrap();
+        println!("Fetched RedTube videos: {:?}", videos);
+        assert!(!videos.is_empty(), "RedTube videos list should not be empty");
+    }
 }
 

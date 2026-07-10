@@ -9,6 +9,7 @@ use crate::reddit;
 use crate::news;
 use crate::freegames;
 use crate::jav;
+use crate::porn;
 
 // ────────────────────────────────────────────────────────────────────────────
 // /admin parent (admin-only)
@@ -340,25 +341,28 @@ pub async fn force_refresh(ctx: Context<'_>) -> Result<(), Error> {
     let http: Arc<serenity::Http> = Arc::clone(&ctx.serenity_context().http);
 
     // Run all tasks concurrently
-    let (meme_res, news_res, fg_res, jav_res) = tokio::join!(
+    let (meme_res, news_res, fg_res, jav_res, porn_res) = tokio::join!(
         reddit::task::run_once(&data, &http),
         news::task::run_once(&data, &http),
         freegames::task::run_once(&data, &http),
         jav::task::run_once(&data, &http),
+        porn::task::run_once(&data, &http),
     );
 
     let meme_n = meme_res.unwrap_or_else(|e| { tracing::error!("Meme refresh: {:#}", e); 0 });
     let news_n = news_res.unwrap_or_else(|e| { tracing::error!("News refresh: {:#}", e); 0 });
     let fg_n   = fg_res.unwrap_or_else(|e|   { tracing::error!("FG refresh: {:#}", e);   0 });
     let jav_n  = jav_res.unwrap_or_else(|e|  { tracing::error!("JAV refresh: {:#}", e);  0 });
+    let porn_n = porn_res.unwrap_or_else(|e| { tracing::error!("Porn refresh: {:#}", e); 0 });
 
     ctx.say(format!(
         "✅ Force refresh complete!\n\
         📸 Memes posted: **{}**\n\
         📰 News articles posted: **{}**\n\
         🎁 Free game alerts posted: **{}**\n\
-        🎌 JAV titles posted: **{}**",
-        meme_n, news_n, fg_n, jav_n
+        🎌 JAV titles posted: **{}**\n\
+        🔞 Porn videos posted: **{}**",
+        meme_n, news_n, fg_n, jav_n, porn_n
     ))
     .await?;
 
