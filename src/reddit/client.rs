@@ -18,7 +18,8 @@ struct MemeApiResponse {
     #[serde(default)]
     memes: Vec<MemeApiPost>,
     // Single meme response fields
-    postLink: Option<String>,
+    #[serde(rename = "postLink")]
+    post_link: Option<String>,
     subreddit: Option<String>,
     title: Option<String>,
     url: Option<String>,
@@ -31,7 +32,8 @@ struct MemeApiResponse {
 
 #[derive(Deserialize, Debug)]
 struct MemeApiPost {
-    postLink: String,
+    #[serde(rename = "postLink")]
+    post_link: String,
     subreddit: String,
     title: String,
     url: String,
@@ -74,12 +76,12 @@ impl RedditClient {
             .into_iter()
             .filter(|m| !m.url.is_empty())
             .map(|m| {
-                // postLink is like "https://redd.it/1uskdj5" — the ID is the last path segment
-                let id = m.postLink
+                // post_link is like "https://redd.it/1uskdj5" — the ID is the last path segment
+                let id = m.post_link
                     .trim_end_matches('/')
                     .rsplit('/')
                     .next()
-                    .unwrap_or(&m.postLink)
+                    .unwrap_or(&m.post_link)
                     .to_string();
 
                 RedditPost {
@@ -97,8 +99,8 @@ impl RedditClient {
                     media: None,
                     preview: None,
                     subreddit: m.subreddit,
-                    // store the full postLink as permalink so embed URL works
-                    permalink: m.postLink,
+                    // store the full post_link as permalink so embed URL works
+                    permalink: m.post_link,
                 }
             })
             .collect();
