@@ -11,7 +11,7 @@ use crate::reddit::client::{RedditClient, JAV_SUBREDDITS};
 
 /// Single tick exposed for `/admin force-refresh`.
 pub async fn run_once(data: &Data, http: &Arc<serenity::Http>) -> Result<usize> {
-    tick(data, http).await
+    tick(data, http, true).await
 }
 
 /// Background task — runs every 15 minutes.
@@ -19,7 +19,7 @@ pub async fn run(data: Data, http: Arc<serenity::Http>) {
     info!("🎌 JAV task started (r/jav + r/javonline via meme-api)");
 
     loop {
-        match tick(&data, &http).await {
+        match tick(&data, &http, false).await {
             Ok(n) if n > 0 => info!("🎌 Posted {} JAV post(s)", n),
             Ok(_) => {}
             Err(e) => error!("JAV task error: {:#}", e),
@@ -34,7 +34,7 @@ pub async fn run(data: Data, http: Arc<serenity::Http>) {
     }
 }
 
-async fn tick(data: &Data, http: &Arc<serenity::Http>) -> Result<usize> {
+async fn tick(data: &Data, http: &Arc<serenity::Http>, force: bool) -> Result<usize> {
     let configs = queries::get_all_guild_configs(&data.db).await?;
     let relevant: Vec<_> = configs
         .into_iter()
@@ -63,11 +63,13 @@ async fn tick(data: &Data, http: &Arc<serenity::Http>) -> Result<usize> {
                 Ok(posts) => {
                     let mut posted_this_subreddit = 0usize;
                     for post in posts {
-                        // Dedup using seen_jav table
-                        match queries::is_jav_seen(&data.db, &cfg.guild_id, &post.id).await {
-                            Ok(true) => continue,
-                            Err(e) => { error!("DB error checking seen_jav: {}", e); continue; }
-                            _ => {}
+                        if !force {
+                            // Dedup using seen_jav table
+                            match queries::is_jav_seen(&data.db, &cfg.guild_id, &post.id).await {
+                                Ok(true) => continue,
+                                Err(e) => { error!("DB error checking seen_jav: {}", e); continue; }
+                                _ => {}
+                            }
                         }
 
                         if let Err(e) = queries::mark_jav_seen(&data.db, &cfg.guild_id, &post.id).await {
@@ -79,33 +81,55 @@ async fn tick(data: &Data, http: &Arc<serenity::Http>) -> Result<usize> {
                             continue;
                         }
 
-                        let media_url = match RedditClient::media_url(&post) {
-                            Some(u) => u,
-                            None => continue,
-                        };
+                        let is_video = is_video_url(&post.url)
+                            || post.is_video
+                            || post.post_hint.as_deref() == Some("hosted:video")
+                            || post.post_hint.as_deref() == Some("rich:video");
 
-                        let embed = serenity::CreateEmbed::new()
-                            .title(&post.title)
-                            .url(&post.permalink)
-                            .image(&media_url)
-                            .color(0xFF3366) // Hot pink for JAV
-                            .footer(serenity::CreateEmbedFooter::new(format!(
-                                "🎌 r/{} • 👍 {} • by u/{}",
-                                post.subreddit, post.score, post.author
-                            )));
+                        if is_video {
+                            let rxddit_url = to_rxddit_url(&post.permalink);
+                            let msg = serenity::CreateMessage::new()
+                                .content(format!("🎥 **{}**\n{}", post.title, rxddit_url));
 
-                        let msg = serenity::CreateMessage::new()
-                            .content(&media_url)
-                            .embed(embed);
-
-                        match channel.send_message(http, msg).await {
-                            Ok(_) => {
-                                info!("🎌 Posted JAV post {} to guild {}", post.id, cfg.guild_id);
-                                total += 1;
-                                posted_this_subreddit += 1;
+                            match channel.send_message(http, msg).await {
+                                Ok(_) => {
+                                    info!("🎥 Posted JAV video {} to guild {}", post.id, cfg.guild_id);
+                                    total += 1;
+                                    posted_this_subreddit += 1;
+                                }
+                                Err(e) => {
+                                    error!("Failed to post JAV video to channel {}: {}", channel_id_str, e);
+                                }
                             }
-                            Err(e) => {
-                                error!("Failed to post JAV to channel {}: {}", channel_id_str, e);
+                        } else {
+                            let media_url = match RedditClient::media_url(&post) {
+                                Some(u) => u,
+                                None => continue,
+                            };
+
+                            let embed = serenity::CreateEmbed::new()
+                                .title(&post.title)
+                                .url(&post.permalink)
+                                .image(&media_url)
+                                .color(0xFF3366) // Hot pink for JAV
+                                .footer(serenity::CreateEmbedFooter::new(format!(
+                                    "🎌 r/{} • 👍 {} • by u/{}",
+                                    post.subreddit, post.score, post.author
+                                )));
+
+                            let msg = serenity::CreateMessage::new()
+                                .content(&media_url)
+                                .embed(embed);
+
+                            match channel.send_message(http, msg).await {
+                                Ok(_) => {
+                                    info!("🎌 Posted JAV post {} to guild {}", post.id, cfg.guild_id);
+                                    total += 1;
+                                    posted_this_subreddit += 1;
+                                }
+                                Err(e) => {
+                                    error!("Failed to post JAV to channel {}: {}", channel_id_str, e);
+                                }
                             }
                         }
 
@@ -120,4 +144,15 @@ async fn tick(data: &Data, http: &Arc<serenity::Http>) -> Result<usize> {
     }
 
     Ok(total)
+}
+
+fn is_video_url(url: &str) -> bool {
+    let lower = url.to_lowercase();
+    lower.contains("v.redd.it") || lower.ends_with(".mp4") || lower.ends_with(".webm") || lower.ends_with(".mov")
+}
+
+fn to_rxddit_url(url: &str) -> String {
+    url.replace("www.reddit.com", "rxddit.com")
+       .replace("reddit.com", "rxddit.com")
+       .replace("redd.it", "rxddit.com")
 }

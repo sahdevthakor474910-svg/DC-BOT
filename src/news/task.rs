@@ -11,7 +11,7 @@ use super::fetcher;
 
 /// Single tick exposed for `/admin force-refresh`.
 pub async fn run_once(data: &Data, http: &Arc<serenity::Http>) -> Result<usize> {
-    tick(data, http).await
+    tick(data, http, true).await
 }
 
 /// Background task — runs every 5 minutes.
@@ -19,7 +19,7 @@ pub async fn run(data: Data, http: Arc<serenity::Http>) {
     info!("📰 Gaming-news task started");
 
     loop {
-        match tick(&data, &http).await {
+        match tick(&data, &http, false).await {
             Ok(n) if n > 0 => info!("📰 Posted {} gaming news article(s)", n),
             Ok(_) => {}
             Err(e) => error!("Gaming-news task error: {:#}", e),
@@ -45,7 +45,7 @@ fn source_colour(source: &str) -> u32 {
     }
 }
 
-async fn tick(data: &Data, http: &Arc<serenity::Http>) -> Result<usize> {
+async fn tick(data: &Data, http: &Arc<serenity::Http>, force: bool) -> Result<usize> {
     let configs = queries::get_all_guild_configs(&data.db).await?;
     let relevant: Vec<_> = configs
         .into_iter()
@@ -71,8 +71,10 @@ async fn tick(data: &Data, http: &Arc<serenity::Http>) -> Result<usize> {
         let channel = serenity::ChannelId::new(channel_id_u64);
 
         for article in &articles {
-            if queries::is_news_seen(&data.db, &cfg.guild_id, &article.id).await? {
-                continue;
+            if !force {
+                if queries::is_news_seen(&data.db, &cfg.guild_id, &article.id).await? {
+                    continue;
+                }
             }
 
             queries::mark_news_seen(&data.db, &cfg.guild_id, &article.id).await?;

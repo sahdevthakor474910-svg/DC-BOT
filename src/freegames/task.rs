@@ -11,7 +11,7 @@ use super::aggregator;
 
 /// Single tick for `/admin force-refresh`.
 pub async fn run_once(data: &Data, http: &Arc<serenity::Http>) -> Result<usize> {
-    tick(data, http).await
+    tick(data, http, true).await
 }
 
 /// Background task — runs every 15 minutes.
@@ -19,7 +19,7 @@ pub async fn run(data: Data, http: Arc<serenity::Http>) {
     info!("🎁 Free-games task started");
 
     loop {
-        match tick(&data, &http).await {
+        match tick(&data, &http, false).await {
             Ok(n) if n > 0 => info!("🎁 Posted {} free-game alert(s)", n),
             Ok(_) => {}
             Err(e) => error!("Free-games task error: {:#}", e),
@@ -44,7 +44,7 @@ fn store_colour(store: &str) -> u32 {
     }
 }
 
-async fn tick(data: &Data, http: &Arc<serenity::Http>) -> Result<usize> {
+async fn tick(data: &Data, http: &Arc<serenity::Http>, force: bool) -> Result<usize> {
     let configs = queries::get_all_guild_configs(&data.db).await?;
     let relevant: Vec<_> = configs
         .into_iter()
@@ -70,8 +70,10 @@ async fn tick(data: &Data, http: &Arc<serenity::Http>) -> Result<usize> {
         let channel = serenity::ChannelId::new(channel_id_u64);
 
         for game in &games {
-            if queries::is_giveaway_seen(&data.db, &cfg.guild_id, &game.id).await? {
-                continue;
+            if !force {
+                if queries::is_giveaway_seen(&data.db, &cfg.guild_id, &game.id).await? {
+                    continue;
+                }
             }
             queries::mark_giveaway_seen(&data.db, &cfg.guild_id, &game.id).await?;
 

@@ -11,7 +11,7 @@ use super::client::{PornClient, PORN_SEARCHES};
 
 /// Single tick exposed for `/admin force-refresh`.
 pub async fn run_once(data: &Data, http: &Arc<serenity::Http>) -> Result<usize> {
-    tick(data, http).await
+    tick(data, http, true).await
 }
 
 /// Background task — runs every 20 minutes.
@@ -33,7 +33,7 @@ pub async fn run(data: Data, http: Arc<serenity::Http>) {
         let search = PORN_SEARCHES[category_index % PORN_SEARCHES.len()];
         category_index += 1;
 
-        match tick_with_search(&data, &http, &client, search).await {
+        match tick_with_search(&data, &http, &client, search, false).await {
             Ok(n) if n > 0 => info!("🔞 Posted {} porn video(s) from search \"{}\"", n, search),
             Ok(_) => {}
             Err(e) => error!("Porn video task error: {:#}", e),
@@ -48,11 +48,11 @@ pub async fn run(data: Data, http: Arc<serenity::Http>) {
     }
 }
 
-async fn tick(data: &Data, http: &Arc<serenity::Http>) -> Result<usize> {
+async fn tick(data: &Data, http: &Arc<serenity::Http>, force: bool) -> Result<usize> {
     let client = PornClient::new()?;
     // On manual force-refresh, fetch top rated for variety
     let videos = client.fetch_top_rated(10).await?;
-    post_videos(data, http, &videos).await
+    post_videos(data, http, &videos, force).await
 }
 
 async fn tick_with_search(
@@ -60,15 +60,17 @@ async fn tick_with_search(
     http: &Arc<serenity::Http>,
     client: &PornClient,
     search: &str,
+    force: bool,
 ) -> Result<usize> {
     let videos = client.fetch_videos(search, 10).await?;
-    post_videos(data, http, &videos).await
+    post_videos(data, http, &videos, force).await
 }
 
 async fn post_videos(
     data: &Data,
     http: &Arc<serenity::Http>,
     videos: &[super::models::RedTubeVideo],
+    force: bool,
 ) -> Result<usize> {
     let configs = queries::get_all_guild_configs(&data.db).await?;
     let relevant: Vec<_> = configs
@@ -95,11 +97,13 @@ async fn post_videos(
         let mut posted_this_tick = 0usize;
 
         for video in videos {
-            // Dedup
-            match queries::is_porn_video_seen(&data.db, &cfg.guild_id, &video.video_id).await {
-                Ok(true) => continue,
-                Err(e) => { error!("DB error checking seen_porn_videos: {}", e); continue; }
-                _ => {}
+            if !force {
+                // Dedup
+                match queries::is_porn_video_seen(&data.db, &cfg.guild_id, &video.video_id).await {
+                    Ok(true) => continue,
+                    Err(e) => { error!("DB error checking seen_porn_videos: {}", e); continue; }
+                    _ => {}
+                }
             }
 
             if let Err(e) = queries::mark_porn_video_seen(&data.db, &cfg.guild_id, &video.video_id).await {
