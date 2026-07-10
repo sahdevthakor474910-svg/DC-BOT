@@ -8,6 +8,9 @@ use super::models::RedditPost;
 /// Subreddits to poll for memes.
 pub const SUBREDDITS: &[&str] = &["memes", "dankmemes", "shitposting", "brainrot", "196", "whenthe"];
 
+/// NSFW subreddits — only posted to age-restricted NSFW channels.
+pub const NSFW_SUBREDDITS: &[&str] = &["nsfw", "gonewild", "rule34", "hentai", "porn"];
+
 // ─── Meme API response ────────────────────────────────────────────────────────
 
 #[derive(Deserialize, Debug)]

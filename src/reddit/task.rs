@@ -7,7 +7,7 @@ use tracing::{error, info, warn};
 
 use crate::data::Data;
 use crate::db::queries;
-use crate::reddit::client::{RedditClient, SUBREDDITS};
+use crate::reddit::client::{RedditClient, SUBREDDITS, NSFW_SUBREDDITS};
 
 /// Run a single fetch-and-post cycle (used by /admin force-refresh).
 pub async fn run_once(data: &Data, http: &Arc<serenity::Http>) -> Result<usize> {
@@ -47,11 +47,89 @@ fn get_target_channel_id(cfg: &queries::GuildConfig, subreddit: &str) -> Option<
         "brainrot" => cfg.brainrot_channel_id.clone(),
         "shitposting" | "whenthe" => cfg.shitposting_channel_id.clone(),
         "196" => cfg.instagram_channel_id.clone(),
+        // NSFW subreddits always go to the dedicated NSFW channel
+        "nsfw" | "gonewild" | "rule34" | "hentai" | "porn" => cfg.nsfw_channel_id.clone(),
         _ => None,
     }
 }
 
-/// One sweep: for every guild with configured meme channels, fetch all subreddits and
+/// Fetch posts from one subreddit and post unseen ones to a Discord channel.
+/// Returns the number of posts successfully sent.
+async fn post_subreddit(
+    data: &Data,
+    http: &Arc<serenity::Http>,
+    guild_id: &str,
+    subreddit: &str,
+    channel_id_str: &str,
+) -> usize {
+    let channel_id_u64: u64 = match channel_id_str.parse() {
+        Ok(id) => id,
+        Err(_) => {
+            warn!("Invalid channel ID in DB for guild {}: {}", guild_id, channel_id_str);
+            return 0;
+        }
+    };
+
+    let channel = serenity::ChannelId::new(channel_id_u64);
+    let mut posted = 0usize;
+
+    match data.reddit.fetch_hot_posts(subreddit, 15).await {
+        Ok(posts) => {
+            for post in posts {
+                // Skip already-seen posts
+                match queries::is_post_seen(&data.db, guild_id, &post.id).await {
+                    Ok(true) => continue,
+                    Err(e) => { error!("DB error checking seen post: {}", e); continue; }
+                    _ => {}
+                }
+
+                // Mark seen immediately so we don't retry un-postable content
+                if let Err(e) = queries::mark_post_seen(&data.db, guild_id, &post.id).await {
+                    error!("DB error marking post seen: {}", e);
+                }
+
+                // Resolve embeddable media URL
+                let media_url = match RedditClient::media_url(&post) {
+                    Some(u) => u,
+                    None => continue,
+                };
+
+                // Build Discord Embed
+                let embed = serenity::CreateEmbed::new()
+                    .title(&post.title)
+                    .url(format!("https://reddit.com{}", post.permalink))
+                    .image(&media_url)
+                    .footer(serenity::CreateEmbedFooter::new(format!(
+                        "r/{} • 👍 {} • by u/{}",
+                        post.subreddit, post.score, post.author
+                    )))
+                    .color(0xFF4500); // Reddit orange-red
+
+                let message = serenity::CreateMessage::new().embed(embed);
+
+                if let Err(e) = channel.send_message(http, message).await {
+                    error!(
+                        "Failed to post {} to channel {}: {}",
+                        post.id, channel_id_str, e
+                    );
+                } else {
+                    info!("📸 Posted r/{} post {} to {}", subreddit, post.id, channel_id_str);
+                    posted += 1;
+                }
+
+                // Small delay between posts to avoid rate-limiting
+                tokio::time::sleep(Duration::from_millis(500)).await;
+            }
+        }
+        Err(e) => {
+            error!("Failed to fetch r/{}: {:#}", subreddit, e);
+        }
+    }
+
+    posted
+}
+
+/// One sweep: for every guild with configured channels, fetch all subreddits and
 /// post any unseen media posts as embeds.
 async fn tick(data: &Data, http: &Arc<serenity::Http>) -> Result<usize> {
     let configs = queries::get_all_guild_configs(&data.db).await?;
@@ -63,102 +141,19 @@ async fn tick(data: &Data, http: &Arc<serenity::Http>) -> Result<usize> {
     let mut total_posted = 0usize;
 
     for cfg in configs {
+        // ── Regular subreddits ────────────────────────────────────────────
         for subreddit in SUBREDDITS {
             let channel_id_str = match get_target_channel_id(&cfg, subreddit) {
                 Some(id) => id,
                 None => continue,
             };
+            total_posted += post_subreddit(data, http, &cfg.guild_id, subreddit, &channel_id_str).await;
+        }
 
-            let channel_id_u64: u64 = match channel_id_str.parse() {
-                Ok(id) => id,
-                Err(_) => {
-                    warn!("Invalid channel ID in DB for guild {}: {}", cfg.guild_id, channel_id_str);
-                    continue;
-                }
-            };
-
-            let channel = serenity::ChannelId::new(channel_id_u64);
-
-            // Fetch subreddit posts
-            match data.reddit.fetch_hot_posts(subreddit, 15).await {
-                Ok(posts) => {
-                    // Cache channel info to check NSFW status
-                    let mut cached_nsfw: Option<bool> = None;
-
-                    for post in posts {
-                        // Skip already-seen posts
-                        if queries::is_post_seen(&data.db, &cfg.guild_id, &post.id).await? {
-                            continue;
-                        }
-
-                        // Always mark as seen to avoid infinite retries on un-postable content
-                        queries::mark_post_seen(&data.db, &cfg.guild_id, &post.id).await?;
-
-                        // Resolve media
-                        let media_url = match RedditClient::media_url(&post) {
-                            Some(u) => u,
-                            None => continue,
-                        };
-
-                        // NSFW check: skip NSFW posts unless destination channel is NSFW
-                        if post.over_18 {
-                            let is_channel_nsfw = match cached_nsfw {
-                                Some(val) => val,
-                                None => {
-                                    // Serenity 0.12: to_channel takes &Http
-                                    let nsfw = channel
-                                        .to_channel(http)
-                                        .await
-                                        .ok()
-                                        .and_then(|ch| {
-                                            if let serenity::Channel::Guild(gc) = ch {
-                                                Some(gc.nsfw)
-                                            } else {
-                                                None
-                                            }
-                                        })
-                                        .unwrap_or(false);
-                                    cached_nsfw = Some(nsfw);
-                                    nsfw
-                                }
-                            };
-
-                            if !is_channel_nsfw {
-                                info!("Skipping NSFW post {} for non-NSFW channel {}", post.id, channel_id_str);
-                                continue;
-                            }
-                        }
-
-                        // Build Discord Embed
-                        let embed = serenity::CreateEmbed::new()
-                            .title(&post.title)
-                            .url(format!("https://reddit.com{}", post.permalink))
-                            .image(&media_url)
-                            .footer(serenity::CreateEmbedFooter::new(format!(
-                                "r/{} • 👍 {} • by u/{}",
-                                post.subreddit, post.score, post.author
-                            )))
-                            .color(0xFF4500); // Reddit orange-red
-
-                        let message = serenity::CreateMessage::new().embed(embed);
-
-                        if let Err(e) = channel.send_message(http, message).await {
-                            error!(
-                                "Failed to post meme {} to channel {}: {}",
-                                post.id, channel_id_str, e
-                            );
-                        } else {
-                            info!("📸 Posted r/{} post {} to {}", subreddit, post.id, channel_id_str);
-                            total_posted += 1;
-                        }
-
-                        // Small delay between posts to avoid rate-limiting
-                        tokio::time::sleep(Duration::from_millis(500)).await;
-                    }
-                }
-                Err(e) => {
-                    error!("Failed to fetch r/{}: {:#}", subreddit, e);
-                }
+        // ── NSFW subreddits (only if nsfw_channel is configured) ──────────
+        if let Some(nsfw_channel) = &cfg.nsfw_channel_id {
+            for subreddit in NSFW_SUBREDDITS {
+                total_posted += post_subreddit(data, http, &cfg.guild_id, subreddit, nsfw_channel).await;
             }
         }
     }
