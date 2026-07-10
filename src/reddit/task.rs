@@ -150,10 +150,11 @@ async fn tick(data: &Data, http: &Arc<serenity::Http>) -> Result<usize> {
 
         // ── NSFW subreddits ──────────────────────────────────────────────
         for subreddit in NSFW_SUBREDDITS {
-            let target_channel = if *subreddit == "rule34" {
-                cfg.rule34_channel_id.as_ref().or(cfg.nsfw_channel_id.as_ref())
-            } else {
-                cfg.nsfw_channel_id.as_ref()
+            let target_channel = match *subreddit {
+                "rule34" => cfg.rule34_channel_id.as_ref().or(cfg.nsfw_channel_id.as_ref()),
+                "porn" => cfg.porn_channel_id.as_ref().or(cfg.nsfw_channel_id.as_ref()),
+                "hentai" => cfg.hentai_channel_id.as_ref().or(cfg.nsfw_channel_id.as_ref()),
+                _ => cfg.nsfw_channel_id.as_ref(),
             };
 
             if let Some(channel_id) = target_channel {

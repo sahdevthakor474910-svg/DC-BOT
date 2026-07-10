@@ -27,6 +27,8 @@ use crate::freegames;
         "set_free_games_channel",
         "set_nsfw_channel",
         "set_rule34_channel",
+        "set_porn_channel",
+        "set_hentai_channel",
         "toggle_auto_react",
         "add_reaction_user",
         "remove_reaction_user",
@@ -147,6 +149,40 @@ pub async fn set_rule34_channel(
     Ok(())
 }
 
+/// Set a dedicated channel for r/porn content. Must be Age-Restricted in Discord.
+#[poise::command(slash_command, guild_only, rename = "set-porn-channel")]
+pub async fn set_porn_channel(
+    ctx: Context<'_>,
+    #[description = "Age-restricted channel to post r/porn content"] channel: serenity::GuildChannel,
+) -> Result<(), Error> {
+    let guild_id = ctx.guild_id().unwrap().to_string();
+    if !channel.nsfw {
+        ctx.say("❌ That channel is **not** marked as Age-Restricted in Discord!\n\
+            Go to **Channel Settings → Overview → Age-Restricted Channel** and enable it first.").await?;
+        return Ok(());
+    }
+    queries::set_porn_channel(&ctx.data().db, &guild_id, Some(channel.id.to_string().as_str())).await?;
+    ctx.say(format!("✅ Porn channel → {}", channel.id.mention())).await?;
+    Ok(())
+}
+
+/// Set a dedicated channel for r/hentai content. Must be Age-Restricted in Discord.
+#[poise::command(slash_command, guild_only, rename = "set-hentai-channel")]
+pub async fn set_hentai_channel(
+    ctx: Context<'_>,
+    #[description = "Age-restricted channel to post r/hentai content"] channel: serenity::GuildChannel,
+) -> Result<(), Error> {
+    let guild_id = ctx.guild_id().unwrap().to_string();
+    if !channel.nsfw {
+        ctx.say("❌ That channel is **not** marked as Age-Restricted in Discord!\n\
+            Go to **Channel Settings → Overview → Age-Restricted Channel** and enable it first.").await?;
+        return Ok(());
+    }
+    queries::set_hentai_channel(&ctx.data().db, &guild_id, Some(channel.id.to_string().as_str())).await?;
+    ctx.say(format!("✅ Hentai channel → {}", channel.id.mention())).await?;
+    Ok(())
+}
+
 // ── Auto-react toggle ────────────────────────────────────────────────────────
 
 /// Toggle automatic reactions on or off for this server.
@@ -237,6 +273,8 @@ pub async fn status(ctx: Context<'_>) -> Result<(), Error> {
         .field("🎁 Free Games",     ch_mention(cfg.free_games_channel_id.as_ref()),  true)
         .field("🔞 NSFW (Other)",   ch_mention(cfg.nsfw_channel_id.as_ref()),        true)
         .field("🔞 Rule34",         ch_mention(cfg.rule34_channel_id.as_ref()),      true)
+        .field("🔞 Porn",           ch_mention(cfg.porn_channel_id.as_ref()),        true)
+        .field("🔞 Hentai",         ch_mention(cfg.hentai_channel_id.as_ref()),      true)
         .field("⚡ Auto-React",     react_status,                                    true)
         .field("😄 Emojis",         emoji_list,                                      false)
         .field("📢 React Channels", ch_list,                                         false)
