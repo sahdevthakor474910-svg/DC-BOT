@@ -19,7 +19,11 @@ pub async fn run_migrations(db: &SqlitePool) -> Result<()> {
     // Each ALTER TABLE is run individually. Duplicate-column errors are silently
     // swallowed so re-running the bot on an already-migrated DB is safe.
     let m2 = include_str!("../../migrations/002_upgrade.sql");
-    run_migration_002(db, m2).await?;
+    run_migration_alter(db, m2, "002").await?;
+
+    // ── Migration 003: NSFW + rule34 / porn / hentai channels ─────────────────
+    let m3 = include_str!("../../migrations/003_nsfw_and_rule34.sql");
+    run_migration_alter(db, m3, "003").await?;
 
     info!("Database migrations complete");
     Ok(())
@@ -42,8 +46,9 @@ async fn run_statements(db: &SqlitePool, sql: &str) -> Result<()> {
     Ok(())
 }
 
-/// Execute migration 002, tolerating "duplicate column" errors for ALTER TABLE.
-async fn run_migration_002(db: &SqlitePool, sql: &str) -> Result<()> {
+/// Execute an ALTER-TABLE-heavy migration, tolerating "duplicate column" errors.
+/// Safe to re-run on an already-migrated DB.
+async fn run_migration_alter(db: &SqlitePool, sql: &str, label: &str) -> Result<()> {
     for stmt in sql.split(';') {
         // Strip comment lines
         let stmt = stmt
@@ -64,7 +69,7 @@ async fn run_migration_002(db: &SqlitePool, sql: &str) -> Result<()> {
                 // Safe to ignore — column already exists from a previous run
                 continue;
             }
-            return Err(anyhow::anyhow!("Migration 002 failed on:\n{}\nError: {}", stmt, e));
+            return Err(anyhow::anyhow!("Migration {} failed on:\n{}\nError: {}", label, stmt, e));
         }
     }
     Ok(())
