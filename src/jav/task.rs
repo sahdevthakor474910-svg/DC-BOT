@@ -7,20 +7,34 @@ use tracing::{error, info, warn};
 
 use crate::data::Data;
 use crate::db::queries;
-use crate::reddit::client::{RedditClient, JAV_SUBREDDITS};
+use super::client::{EpornerClient, JAV_SEARCHES};
 
-/// Single tick exposed for `/admin force-refresh`.
+/// Single tick exposed for `/admin force-refresh` and `/post`.
 pub async fn run_once(data: &Data, http: &Arc<serenity::Http>) -> Result<usize> {
     tick(data, http, true).await
 }
 
 /// Background task — runs every 15 minutes.
 pub async fn run(data: Data, http: Arc<serenity::Http>) {
-    info!("🎌 JAV task started (r/jav + r/javonline via meme-api)");
+    info!("🎌 JAV task started (eporner.com — direct MP4 playback)");
+
+    let client = match EpornerClient::new() {
+        Ok(c) => c,
+        Err(e) => {
+            error!("Failed to create EpornerClient: {:#}", e);
+            return;
+        }
+    };
+
+    // Rotate through JAV search queries each tick
+    let mut search_index = 0usize;
 
     loop {
-        match tick(&data, &http, false).await {
-            Ok(n) if n > 0 => info!("🎌 Posted {} JAV post(s)", n),
+        let query = JAV_SEARCHES[search_index % JAV_SEARCHES.len()];
+        search_index += 1;
+
+        match tick_with_query(&data, &http, &client, query, false).await {
+            Ok(n) if n > 0 => info!("🎌 Posted {} JAV video(s) for query \"{}\"", n, query),
             Ok(_) => {}
             Err(e) => error!("JAV task error: {:#}", e),
         }
@@ -29,12 +43,34 @@ pub async fn run(data: Data, http: Arc<serenity::Http>) {
             warn!("Could not prune seen_jav: {}", e);
         }
 
-        // Run every 30 minutes — same cadence as free games
+        // Run every 15 minutes
         tokio::time::sleep(Duration::from_secs(15 * 60)).await;
     }
 }
 
 async fn tick(data: &Data, http: &Arc<serenity::Http>, force: bool) -> Result<usize> {
+    let client = EpornerClient::new()?;
+    let videos = client.fetch_jav_videos("japanese uncensored", 8).await?;
+    post_videos(data, http, &videos, force).await
+}
+
+async fn tick_with_query(
+    data: &Data,
+    http: &Arc<serenity::Http>,
+    client: &EpornerClient,
+    query: &str,
+    force: bool,
+) -> Result<usize> {
+    let videos = client.fetch_jav_videos(query, 8).await?;
+    post_videos(data, http, &videos, force).await
+}
+
+async fn post_videos(
+    data: &Data,
+    http: &Arc<serenity::Http>,
+    videos: &[super::models::EpornerVideo],
+    force: bool,
+) -> Result<usize> {
     let configs = queries::get_all_guild_configs(&data.db).await?;
     let relevant: Vec<_> = configs
         .into_iter()
@@ -57,102 +93,82 @@ async fn tick(data: &Data, http: &Arc<serenity::Http>, force: bool) -> Result<us
             }
         };
         let channel = serenity::ChannelId::new(channel_id_u64);
+        let mut posted_this_tick = 0usize;
 
-        for subreddit in JAV_SUBREDDITS {
-            match data.reddit.fetch_hot_posts(subreddit, 10).await {
-                Ok(posts) => {
-                    let mut posted_this_subreddit = 0usize;
-                    for post in posts {
-                        if !force {
-                            // Dedup using seen_jav table
-                            match queries::is_jav_seen(&data.db, &cfg.guild_id, &post.id).await {
-                                Ok(true) => continue,
-                                Err(e) => { error!("DB error checking seen_jav: {}", e); continue; }
-                                _ => {}
-                            }
-                        }
-
-                        if let Err(e) = queries::mark_jav_seen(&data.db, &cfg.guild_id, &post.id).await {
-                            error!("DB error marking jav seen: {}", e);
-                        }
-
-                        // Limit to 5 posts per subreddit per tick to keep channels active.
-                        if posted_this_subreddit >= 5 {
-                            continue;
-                        }
-
-                        let is_video = is_video_url(&post.url)
-                            || post.is_video
-                            || post.post_hint.as_deref() == Some("hosted:video")
-                            || post.post_hint.as_deref() == Some("rich:video");
-
-                        if is_video {
-                            let rxddit_url = to_rxddit_url(&post.permalink);
-                            let msg = serenity::CreateMessage::new()
-                                .content(format!("🎥 **{}**\n{}", post.title, rxddit_url));
-
-                            match channel.send_message(http, msg).await {
-                                Ok(_) => {
-                                    info!("🎥 Posted JAV video {} to guild {}", post.id, cfg.guild_id);
-                                    total += 1;
-                                    posted_this_subreddit += 1;
-                                }
-                                Err(e) => {
-                                    error!("Failed to post JAV video to channel {}: {}", channel_id_str, e);
-                                }
-                            }
-                        } else {
-                            let media_url = match RedditClient::media_url(&post) {
-                                Some(u) => u,
-                                None => continue,
-                            };
-
-                            let embed = serenity::CreateEmbed::new()
-                                .title(&post.title)
-                                .url(&post.permalink)
-                                .image(&media_url)
-                                .color(0xFF3366) // Hot pink for JAV
-                                .footer(serenity::CreateEmbedFooter::new(format!(
-                                    "🎌 r/{} • 👍 {} • by u/{}",
-                                    post.subreddit, post.score, post.author
-                                )));
-
-                            let msg = serenity::CreateMessage::new()
-                                .content(&media_url)
-                                .embed(embed);
-
-                            match channel.send_message(http, msg).await {
-                                Ok(_) => {
-                                    info!("🎌 Posted JAV post {} to guild {}", post.id, cfg.guild_id);
-                                    total += 1;
-                                    posted_this_subreddit += 1;
-                                }
-                                Err(e) => {
-                                    error!("Failed to post JAV to channel {}: {}", channel_id_str, e);
-                                }
-                            }
-                        }
-
-                        tokio::time::sleep(Duration::from_millis(500)).await;
+        for video in videos {
+            if !force {
+                // Deduplicate via seen_jav table
+                match queries::is_jav_seen(&data.db, &cfg.guild_id, &video.id).await {
+                    Ok(true) => continue,
+                    Err(e) => {
+                        error!("DB error checking seen_jav: {}", e);
+                        continue;
                     }
-                }
-                Err(e) => {
-                    error!("Failed to fetch r/{}: {:#}", subreddit, e);
+                    _ => {}
                 }
             }
+
+            if let Err(e) = queries::mark_jav_seen(&data.db, &cfg.guild_id, &video.id).await {
+                error!("DB error marking jav seen: {}", e);
+            }
+
+            // Limit to 5 per tick per guild
+            if posted_this_tick >= 5 {
+                continue;
+            }
+
+            // Format views nicely
+            let views_str = format_views(&video.views);
+
+            // Build the footer
+            let footer = format!(
+                "🎌 eporner • ⏱️ {} • 👁️ {} views",
+                video.duration, views_str
+            );
+
+            let embed = serenity::CreateEmbed::new()
+                .title(&video.title)
+                .url(&video.page_url)
+                .color(0xFF3366) // Hot pink for JAV
+                .footer(serenity::CreateEmbedFooter::new(footer));
+
+            // Post the direct MP4 URL as message content so Discord renders
+            // an inline video player with audio. The embed provides title + link.
+            let content = format!("🎥 **{}**\n{}", video.title, video.mp4_url);
+            let mut msg_builder = serenity::CreateMessage::new().content(&content);
+
+            // Only attach the embed if we have a thumbnail
+            if !video.thumb_url.is_empty() {
+                msg_builder = msg_builder.embed(embed.image(&video.thumb_url));
+            } else {
+                msg_builder = msg_builder.embed(embed);
+            }
+
+            match channel.send_message(http, msg_builder).await {
+                Ok(_) => {
+                    info!("🎌 Posted JAV video {} to guild {}", video.id, cfg.guild_id);
+                    total += 1;
+                    posted_this_tick += 1;
+                }
+                Err(e) => {
+                    error!("Failed to post JAV video to channel {}: {}", channel_id_str, e);
+                }
+            }
+
+            tokio::time::sleep(Duration::from_millis(750)).await;
         }
     }
 
     Ok(total)
 }
 
-fn is_video_url(url: &str) -> bool {
-    let lower = url.to_lowercase();
-    lower.contains("v.redd.it") || lower.ends_with(".mp4") || lower.ends_with(".webm") || lower.ends_with(".mov")
-}
-
-fn to_rxddit_url(url: &str) -> String {
-    url.replace("www.reddit.com", "rxddit.com")
-       .replace("reddit.com", "rxddit.com")
-       .replace("redd.it", "rxddit.com")
+fn format_views(views: &str) -> String {
+    let n: u64 = views.parse().unwrap_or(0);
+    if n >= 1_000_000 {
+        format!("{:.1}M", n as f64 / 1_000_000.0)
+    } else if n >= 1_000 {
+        format!("{:.0}K", n as f64 / 1_000.0)
+    } else {
+        views.to_string()
+    }
 }

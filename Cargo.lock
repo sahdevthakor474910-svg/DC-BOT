@@ -454,6 +454,7 @@ dependencies = [
  "dotenvy",
  "feed-rs",
  "poise",
+ "regex",
  "reqwest 0.11.27",
  "serde",
  "serde_json",
