@@ -1,5 +1,6 @@
 /target/
 /data/
+/.cargo/
 .env
 *.db
 *.db-wal
