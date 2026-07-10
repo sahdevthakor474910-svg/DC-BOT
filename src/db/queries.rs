@@ -31,7 +31,7 @@ pub struct GuildConfig {
 /// Ensure a row exists for the guild and return it.
 pub async fn get_or_create_guild(db: &SqlitePool, guild_id: &str) -> Result<GuildConfig> {
     sqlx::query(
-        "INSERT OR IGNORE INTO guild_config (guild_id, posting_interval_secs, auto_react_enabled) VALUES (?, 300, 1)",
+        "INSERT OR IGNORE INTO guild_config (guild_id, posting_interval_secs, auto_react_enabled) VALUES (?, 60, 1)",
     )
     .bind(guild_id)
     .execute(db)

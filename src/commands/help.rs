@@ -1,121 +1,71 @@
 use poise::serenity_prelude as serenity;
 use crate::data::{Context, Error};
 
-/// 📖 Show all bot commands and how to use the bot.
-#[poise::command(slash_command, guild_only)]
+/// 📖 How to use the bot — quick reference for all commands.
+#[poise::command(slash_command)]
 pub async fn help(ctx: Context<'_>) -> Result<(), Error> {
     let embed = serenity::CreateEmbed::new()
-        .title("📖 Bot Help — All Commands")
+        .title("📖 Quick Start Guide")
         .description(
-            "Welcome! This bot auto-posts **memes**, **gaming news**, **free games**, and **NSFW content** \
-            straight into your chosen channels.\n\n\
-            Use the commands below to set it up. All channel-setup commands require **Manage Server** permission."
+            "This bot auto-posts **memes**, **gaming news**, **free games**, **JAV**, and **porn videos** \
+            into your chosen channels — hands free!\n\n\
+            There are only **4 commands** to learn:"
         )
         .color(0x5865F2)
 
-        // ── QUICK START ──────────────────────────────────────────────────────
+        // ── /setup ───────────────────────────────────────────────────────────
         .field(
-            "🚀 Quick Start (do this first!)",
-            "```\n\
-            1. /admin set-meme-channel      → pick your #memes channel\n\
-            2. /admin set-news-channel      → pick your #gaming-news channel\n\
-            3. /admin set-free-games-channel → pick your #free-games channel\n\
-            4. /admin set-nsfw-channel      → pick your 🔞 channel (must be Age-Restricted)\n\
-            5. /admin force-refresh         → trigger first post immediately\n\
-            ```",
+            "🛠️ `/setup` — Pick your channels *(first thing to do!)*",
+            "Run `/setup` and fill in whichever channels you want:\n\
+             • **memes** → 🖼️ r/memes, r/dankmemes, r/brainrot, r/shitposting\n\
+             • **news** → 📰 Gaming news every 5 min\n\
+             • **free_games** → 🎁 Epic & Steam free game alerts\n\
+             • **nsfw** → 🔞 r/nsfw, r/gonewild, r/rule34, r/hentai, r/porn *(channel must be Age-Restricted!)*\n\
+             • **jav** → 🎌 JAV videos from Reddit *(Age-Restricted!)*\n\
+             • **porn_videos** → 🔥 RedTube: Brazzers, MILF, NaughtyAmerica *(Age-Restricted!)*\n\n\
+             All fields are optional — only fill what you want!",
             false,
         )
 
-        // ── /admin channel setters ───────────────────────────────────────────
+        // ── /post ────────────────────────────────────────────────────────────
         .field(
-            "📺 /admin — Channel Setup  *(Manage Server required)*",
-            "`/admin set-meme-channel` `#channel`\n→ Posts r/memes, r/dankmemes, r/196, r/whenthe\n\n\
-             `/admin set-brainrot-channel` `#channel`\n→ Posts r/brainrot content\n\n\
-             `/admin set-shitposting-channel` `#channel`\n→ Posts r/shitposting\n\n\
-             `/admin set-instagram-channel` `#channel`\n→ Posts r/196 (Instagram-style memes)\n\n\
-             `/admin set-news-channel` `#channel`\n→ Posts gaming news (every 15 min)\n\n\
-             `/admin set-free-games-channel` `#channel`\n→ Posts free game alerts (every 30 min)",
+            "⚡ `/post` — Post everything right now!",
+            "Don't want to wait? `/post` instantly triggers all content.\n\
+             The bot won't re-post anything it already sent.",
             false,
         )
 
-        // ── /admin NSFW ──────────────────────────────────────────────────────
+        // ── /status ──────────────────────────────────────────────────────────
         .field(
-            "🔞 /admin — NSFW Channel Setup  *(channel must be Age-Restricted)*",
-            "`/admin set-nsfw-channel` `#channel`\n→ General NSFW (r/nsfw, r/gonewild). Also acts as fallback for rule34/porn/hentai if those aren't set.\n\n\
-             `/admin set-rule34-channel` `#channel`\n→ Dedicated channel for r/rule34\n\n\
-             `/admin set-porn-channel` `#channel`\n→ Dedicated channel for r/porn\n\n\
-             `/admin set-hentai-channel` `#channel`\n→ Dedicated channel for r/hentai\n\n\
-             `/admin set-jav-channel` `#channel`\n→ Dedicated channel for 🎌 JAV Videos (popular and latest releases from R18.dev)\n\n\
-             💡 **Tip:** If you only set `/admin set-nsfw-channel`, all NSFW content goes there (except JAV which requires a dedicated channel or won't post).\n\
-             Set the others only if you want to split them into separate channels.",
+            "📊 `/status` — See your current setup",
+            "Shows all configured channels, post intervals, and reaction settings at a glance.",
             false,
         )
 
-        // ── /admin utilities ─────────────────────────────────────────────────
+        // ── /settings ────────────────────────────────────────────────────────
         .field(
-            "⚙️ /admin — Utilities",
-            "`/admin status`\n→ Shows all configured channels and settings in a dashboard\n\n\
-             `/admin force-refresh`\n→ Immediately posts new memes, news, free games & JAV videos right now\n\n\
-             `/admin toggle-auto-react`\n→ Turn automatic emoji reactions ON or OFF for this server\n\n\
-             `/admin add-reaction-user` `@user`\n→ Bot will always react to this user's messages\n\n\
-             `/admin remove-reaction-user` `@user`\n→ Remove a user from auto-react list",
+            "⚙️ `/settings` — Advanced options",
+            "`/settings interval 60` → Post memes every 60 seconds (faster!)\n\
+             `/settings auto-react` → Toggle auto-reactions ON/OFF\n\
+             `/settings add-react-channel #ch` → React to all messages in a channel\n\
+             `/settings add-react-user @user` → Always react to someone's messages\n\
+             `/settings add-emoji 🔥` → Add emoji to the reaction pool",
             false,
         )
 
-        // ── /config ──────────────────────────────────────────────────────────
+        // ── Tips ─────────────────────────────────────────────────────────────
         .field(
-            "🛠️ /config — Advanced Settings  *(Manage Server required)*",
-            "`/config meme-channel` `#channel`\n→ Same as /admin set-meme-channel\n\n\
-             `/config interval` `<seconds>`\n→ Set how often memes post (min 60s, default 300s = 5 min)\n\n\
-             `/config add-reaction-channel` `#channel`\n→ Bot reacts to all messages in this channel\n\n\
-             `/config remove-reaction-channel` `#channel`\n→ Stop reacting in that channel\n\n\
-             `/config add-user` `@user`\n→ React to all messages from this user\n\n\
-             `/config remove-user` `@user`\n→ Remove user from react list\n\n\
-             `/config add-emoji` `🔥`\n→ Add an emoji to the bot's reaction pool\n\n\
-             `/config remove-emoji` `🔥`\n→ Remove an emoji from the pool\n\n\
-             `/config show`\n→ Show current config summary",
-            false,
-        )
-
-        // ── /memes ───────────────────────────────────────────────────────────
-        .field(
-            "🖼️ /memes — Meme Controls",
-            "`/memes status`\n→ Show which subreddits are active and the fetch interval\n\n\
-             `/memes fetch-now`\n→ Manually trigger a meme fetch right now *(Manage Server)*",
-            false,
-        )
-
-        // ── /ping ────────────────────────────────────────────────────────────
-        .field(
-            "🏓 Other",
-            "`/ping`\n→ Check if the bot is alive and see response latency\n\n\
-             `/help`\n→ Show this help message",
-            false,
-        )
-
-        // ── What the bot watches ─────────────────────────────────────────────
-        .field(
-            "📡 What Subreddits and Sources Does the Bot Watch?",
-            "**SFW Memes:** r/memes • r/dankmemes • r/shitposting • r/brainrot • r/196 • r/whenthe\n\
-             **NSFW General:** r/nsfw • r/gonewild\n\
-             **NSFW Rule34:** r/rule34\n\
-             **NSFW Porn:** r/porn\n\
-             **NSFW Hentai:** r/hentai\n\
-             **🎌 JAV Videos:** Popular & latest releases from R18.dev\n\n\
-             🕐 **Post frequency:** Memes every ~5 min • News every 15 min • Free Games every 30 min • JAV every 2 hours",
-            false,
-        )
-
-        // ── NSFW setup tip ───────────────────────────────────────────────────
-        .field(
-            "⚠️ How to Make an Age-Restricted Channel",
-            "Right-click the channel → **Edit Channel** → **Overview** → Enable **Age-Restricted Channel**\n\
-             The bot will refuse to post NSFW/JAV content in non-age-restricted channels.",
+            "💡 Tips",
+            "• Use `/setup` again anytime to change channels\n\
+             • NSFW channels must have **Age-Restricted** enabled in Discord\n\
+               *(Right-click channel → Edit Channel → Overview → Age-Restricted)*\n\
+             • `/post` is great for testing — it posts immediately\n\
+             • Check `/status` to confirm your setup is correct",
             false,
         )
 
         .footer(serenity::CreateEmbedFooter::new(
-            "Tip: Use /admin status anytime to see your full setup at a glance."
+            "4 commands: /setup • /post • /status • /settings"
         ));
 
     ctx.send(poise::CreateReply::default().embed(embed)).await?;

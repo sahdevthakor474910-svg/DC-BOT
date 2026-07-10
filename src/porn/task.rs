@@ -14,7 +14,7 @@ pub async fn run_once(data: &Data, http: &Arc<serenity::Http>) -> Result<usize> 
     tick(data, http).await
 }
 
-/// Background task — runs every 45 minutes.
+/// Background task — runs every 20 minutes.
 pub async fn run(data: Data, http: Arc<serenity::Http>) {
     info!("🔞 Porn video task started (RedTube API — NaughtyAmerica, Brazzers, etc.)");
 
@@ -44,7 +44,7 @@ pub async fn run(data: Data, http: Arc<serenity::Http>) {
         }
 
         // Run every 45 minutes
-        tokio::time::sleep(Duration::from_secs(45 * 60)).await;
+        tokio::time::sleep(Duration::from_secs(20 * 60)).await;
     }
 }
 
@@ -106,8 +106,8 @@ async fn post_videos(
                 error!("DB error marking porn video seen: {}", e);
             }
 
-            // Spam prevention — max 2 per tick per guild
-            if posted_this_tick >= 2 {
+            // Limit to 5 per tick per guild to keep channels active.
+            if posted_this_tick >= 5 {
                 continue;
             }
 

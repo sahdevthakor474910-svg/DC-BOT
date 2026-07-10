@@ -180,14 +180,14 @@ pub async fn remove_emoji(
 // /config interval
 // ────────────────────────────────────────────────────────────────────────────
 
-/// Set the meme posting interval in seconds (minimum 60).
+/// Set how often memes are auto-posted (in seconds). Lower = faster posting. Minimum 60s.
 #[poise::command(slash_command, guild_only)]
 pub async fn interval(
     ctx: Context<'_>,
-    #[description = "Interval in seconds (min 60, default 300)"] seconds: i64,
+    #[description = "Interval in seconds between meme posts (min 60, default 60)"] seconds: i64,
 ) -> Result<(), Error> {
     if seconds < 60 {
-        ctx.say("❌ Interval must be at least **60 seconds**.").await?;
+        ctx.say("❌ Interval must be at least **60 seconds** to avoid rate-limiting.").await?;
         return Ok(());
     }
 
@@ -196,8 +196,9 @@ pub async fn interval(
 
     let minutes = seconds as f64 / 60.0;
     ctx.say(format!(
-        "✅ Meme posting interval set to **{} seconds** ({:.1} minutes).",
-        seconds, minutes
+        "✅ Meme auto-post interval set to **{} seconds** ({:.1} minutes).\n\
+        ⚡ The bot will now post memes every {}s. Use `/admin force-refresh` to post immediately!",
+        seconds, minutes, seconds
     ))
     .await?;
 

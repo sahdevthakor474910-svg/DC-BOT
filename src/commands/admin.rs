@@ -323,7 +323,7 @@ pub async fn status(ctx: Context<'_>) -> Result<(), Error> {
         .field("📢 React Channels", ch_list,                                               false)
         .field("👤 React Users",    user_list,                                             false)
         .footer(serenity::CreateEmbedFooter::new(
-            "Memes: 5min • News: 15min • Free Games: 30min • JAV: 30min • Porn Videos: 45min"
+            "Memes: 60s (customizable via /config interval) • News: 5min • Free Games: 15min • JAV: 15min • Porn Videos: 20min"
         ));
 
     ctx.send(poise::CreateReply::default().embed(embed)).await?;

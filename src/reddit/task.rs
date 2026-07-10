@@ -16,14 +16,25 @@ pub async fn run_once(data: &Data, http: &Arc<serenity::Http>) -> Result<usize> 
 
 /// Entry point for the background meme-fetching task.
 /// Spawned once on bot startup; runs indefinitely.
+/// The sleep interval is read from each guild's `posting_interval_secs` DB field
+/// (set via `/config interval`), defaulting to 60 seconds if no guilds are configured.
 pub async fn run(data: Data, http: Arc<serenity::Http>) {
     info!("🚀 Meme background task started");
 
     loop {
+        // Determine the shortest interval across all configured guilds, falling back to 60s
+        let interval_secs: u64 = queries::get_all_guild_configs(&data.db)
+            .await
+            .unwrap_or_default()
+            .iter()
+            .map(|cfg| cfg.posting_interval_secs.max(60) as u64)
+            .min()
+            .unwrap_or(60);
+
         match tick(&data, &http).await {
             Ok(posted) => {
                 if posted > 0 {
-                    info!("✅ Posted {} new meme(s) this tick", posted);
+                    info!("✅ Posted {} new meme(s) this tick (next in {}s)", posted, interval_secs);
                 }
             }
             Err(e) => {
@@ -36,7 +47,7 @@ pub async fn run(data: Data, http: Arc<serenity::Http>) {
             warn!("Could not prune seen_posts: {}", e);
         }
 
-        tokio::time::sleep(Duration::from_secs(300)).await;
+        tokio::time::sleep(Duration::from_secs(interval_secs)).await;
     }
 }
 
@@ -86,10 +97,8 @@ async fn post_subreddit(
                     error!("DB error marking post seen: {}", e);
                 }
 
-                // SPAM PREVENTION: Only post a maximum of 2 items per subreddit per tick.
-                // We still mark the other 13 fetched items as 'seen' above, so they won't 
-                // be posted later either. This safely handles database resets/redeploys.
-                if posted >= 2 {
+                // Limit to 5 posts per subreddit per tick to keep channels active without spamming.
+                if posted >= 5 {
                     continue;
                 }
 

@@ -14,7 +14,7 @@ pub async fn run_once(data: &Data, http: &Arc<serenity::Http>) -> Result<usize> 
     tick(data, http).await
 }
 
-/// Background task — runs every 30 minutes.
+/// Background task — runs every 15 minutes.
 pub async fn run(data: Data, http: Arc<serenity::Http>) {
     info!("🎁 Free-games task started");
 
@@ -29,7 +29,7 @@ pub async fn run(data: Data, http: Arc<serenity::Http>) {
             warn!("Could not prune seen_giveaways: {}", e);
         }
 
-        tokio::time::sleep(Duration::from_secs(30 * 60)).await;
+        tokio::time::sleep(Duration::from_secs(15 * 60)).await;
     }
 }
 

@@ -149,35 +149,35 @@ async fn main() -> Result<()> {
                     let h = Arc::clone(&http);
                     tokio::spawn(async move { reddit::task::run(d, h).await });
                 }
-                info!("⏱️  Reddit meme task spawned (every 5 min)");
+                info!("⏱️  Reddit meme task spawned (interval from DB, default 60s)");
 
                 {
                     let d = bot_data.clone();
                     let h = Arc::clone(&http);
                     tokio::spawn(async move { news::task::run(d, h).await });
                 }
-                info!("⏱️  Gaming-news task spawned (every 15 min)");
+                info!("⏱️  Gaming-news task spawned (every 5 min)");
 
                 {
                     let d = bot_data.clone();
                     let h = Arc::clone(&http);
                     tokio::spawn(async move { freegames::task::run(d, h).await });
                 }
-                info!("⏱️  Free-games task spawned (every 30 min)");
+                info!("⏱️  Free-games task spawned (every 15 min)");
 
                 {
                     let d = bot_data.clone();
                     let h = Arc::clone(&http);
                     tokio::spawn(async move { jav::task::run(d, h).await });
                 }
-                info!("⏱️  JAV task spawned (every 30 min)");
+                info!("⏱️  JAV task spawned (every 15 min)");
 
                 {
                     let d = bot_data.clone();
                     let h = Arc::clone(&http);
                     tokio::spawn(async move { porn::task::run(d, h).await });
                 }
-                info!("⏱️  Porn video task spawned (every 45 min — RedTube API)");
+                info!("⏱️  Porn video task spawned (every 20 min — RedTube API)");
 
                 // ── Web Server for Render Health Check ───────────────────
                 tokio::spawn(async move {

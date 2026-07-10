@@ -14,7 +14,7 @@ pub async fn run_once(data: &Data, http: &Arc<serenity::Http>) -> Result<usize> 
     tick(data, http).await
 }
 
-/// Background task — runs every 30 minutes.
+/// Background task — runs every 15 minutes.
 pub async fn run(data: Data, http: Arc<serenity::Http>) {
     info!("🎌 JAV task started (r/jav + r/javonline via meme-api)");
 
@@ -30,7 +30,7 @@ pub async fn run(data: Data, http: Arc<serenity::Http>) {
         }
 
         // Run every 30 minutes — same cadence as free games
-        tokio::time::sleep(Duration::from_secs(30 * 60)).await;
+        tokio::time::sleep(Duration::from_secs(15 * 60)).await;
     }
 }
 
@@ -74,8 +74,8 @@ async fn tick(data: &Data, http: &Arc<serenity::Http>) -> Result<usize> {
                             error!("DB error marking jav seen: {}", e);
                         }
 
-                        // SPAM PREVENTION: Only post a maximum of 2 items per subreddit per tick.
-                        if posted_this_subreddit >= 2 {
+                        // Limit to 5 posts per subreddit per tick to keep channels active.
+                        if posted_this_subreddit >= 5 {
                             continue;
                         }
 
