@@ -8,6 +8,7 @@ ALTER TABLE guild_config ADD COLUMN shitposting_channel_id  TEXT;
 ALTER TABLE guild_config ADD COLUMN instagram_channel_id    TEXT;
 ALTER TABLE guild_config ADD COLUMN news_channel_id         TEXT;
 ALTER TABLE guild_config ADD COLUMN free_games_channel_id   TEXT;
+ALTER TABLE guild_config ADD COLUMN nsfw_channel_id         TEXT;
 ALTER TABLE guild_config ADD COLUMN auto_react_enabled      INTEGER NOT NULL DEFAULT 1;
 
 CREATE TABLE IF NOT EXISTS seen_news (

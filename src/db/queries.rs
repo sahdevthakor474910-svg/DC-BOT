@@ -35,7 +35,7 @@ pub async fn get_or_create_guild(db: &SqlitePool, guild_id: &str) -> Result<Guil
     let row = sqlx::query(
         "SELECT guild_id, meme_channel_id, posting_interval_secs, \
                 brainrot_channel_id, shitposting_channel_id, instagram_channel_id, \
-                news_channel_id, free_games_channel_id, auto_react_enabled \
+                news_channel_id, free_games_channel_id, nsfw_channel_id, auto_react_enabled \
          FROM guild_config WHERE guild_id = ?",
     )
     .bind(guild_id)
@@ -51,7 +51,7 @@ pub async fn get_or_create_guild(db: &SqlitePool, guild_id: &str) -> Result<Guil
         instagram_channel_id: row.get("instagram_channel_id"),
         news_channel_id: row.get("news_channel_id"),
         free_games_channel_id: row.get("free_games_channel_id"),
-        nsfw_channel_id: None,  // populated after migration 003 is applied
+        nsfw_channel_id: row.get("nsfw_channel_id"),
         auto_react_enabled: row.get::<i64, _>("auto_react_enabled") != 0,
     })
 }
@@ -170,7 +170,7 @@ pub async fn get_all_guild_configs(db: &SqlitePool) -> Result<Vec<GuildConfig>> 
     let rows = sqlx::query(
         "SELECT guild_id, meme_channel_id, posting_interval_secs, \
                 brainrot_channel_id, shitposting_channel_id, instagram_channel_id, \
-                news_channel_id, free_games_channel_id, auto_react_enabled \
+                news_channel_id, free_games_channel_id, nsfw_channel_id, auto_react_enabled \
          FROM guild_config",
     )
     .fetch_all(db)
@@ -187,7 +187,7 @@ pub async fn get_all_guild_configs(db: &SqlitePool) -> Result<Vec<GuildConfig>> 
             instagram_channel_id: r.get("instagram_channel_id"),
             news_channel_id: r.get("news_channel_id"),
             free_games_channel_id: r.get("free_games_channel_id"),
-            nsfw_channel_id: None,  // populated after migration 003 is applied
+            nsfw_channel_id: r.get("nsfw_channel_id"),
             auto_react_enabled: r.get::<i64, _>("auto_react_enabled") != 0,
         })
         .collect())
