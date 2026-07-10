@@ -72,22 +72,34 @@ impl RedditClient {
 
         let posts: Vec<RedditPost> = response.memes
             .into_iter()
-            .map(|m| RedditPost {
-                id: m.postLink.split('/').nth(6).unwrap_or("").to_string(),
-                title: m.title,
-                author: m.author,
-                score: m.ups as i64,
-                url: m.url.clone(),
-                url_overridden_by_dest: Some(m.url),
-                is_video: false,
-                over_18: m.nsfw,
-                spoiler: m.spoiler,
-                stickied: false,
-                post_hint: Some("image".to_string()),
-                media: None,
-                preview: None,
-                subreddit: m.subreddit,
-                permalink: m.postLink,
+            .filter(|m| !m.url.is_empty())
+            .map(|m| {
+                // postLink is like "https://redd.it/1uskdj5" — the ID is the last path segment
+                let id = m.postLink
+                    .trim_end_matches('/')
+                    .rsplit('/')
+                    .next()
+                    .unwrap_or(&m.postLink)
+                    .to_string();
+
+                RedditPost {
+                    id,
+                    title: m.title,
+                    author: m.author,
+                    score: m.ups as i64,
+                    url: m.url.clone(),
+                    url_overridden_by_dest: Some(m.url),
+                    is_video: false,
+                    over_18: m.nsfw,
+                    spoiler: m.spoiler,
+                    stickied: false,
+                    post_hint: Some("image".to_string()),
+                    media: None,
+                    preview: None,
+                    subreddit: m.subreddit,
+                    // store the full postLink as permalink so embed URL works
+                    permalink: m.postLink,
+                }
             })
             .collect();
 

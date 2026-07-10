@@ -97,7 +97,7 @@ async fn post_subreddit(
                 // Build Discord Embed
                 let embed = serenity::CreateEmbed::new()
                     .title(&post.title)
-                    .url(format!("https://reddit.com{}", post.permalink))
+                    .url(&post.permalink)   // already a full URL from meme-api
                     .image(&media_url)
                     .footer(serenity::CreateEmbedFooter::new(format!(
                         "r/{} • 👍 {} • by u/{}",
