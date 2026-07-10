@@ -31,6 +31,7 @@ use crate::jav;
         "set_porn_channel",
         "set_hentai_channel",
         "set_jav_channel",
+        "set_porn_video_channel",
         "toggle_auto_react",
         "add_reaction_user",
         "remove_reaction_user",
@@ -198,7 +199,27 @@ pub async fn set_jav_channel(
         return Ok(());
     }
     queries::set_jav_channel(&ctx.data().db, &guild_id, Some(channel.id.to_string().as_str())).await?;
-    ctx.say(format!("✅ JAV channel → {} (posts latest releases + popular titles every 2 hours)", channel.id.mention())).await?;
+    ctx.say(format!("✅ JAV channel → {} (posts from r/jav + r/javonline every 30 min)", channel.id.mention())).await?;
+    Ok(())
+}
+
+/// Set a 🔞 Porn Video channel (RedTube: NaughtyAmerica, Brazzers, MILF, etc.)
+#[poise::command(slash_command, guild_only, rename = "set-porn-video-channel")]
+pub async fn set_porn_video_channel(
+    ctx: Context<'_>,
+    #[description = "Age-restricted channel for real porn videos from RedTube"] channel: serenity::GuildChannel,
+) -> Result<(), Error> {
+    let guild_id = ctx.guild_id().unwrap().to_string();
+    if !channel.nsfw {
+        ctx.say("❌ That channel is **not** marked as Age-Restricted in Discord!\n\
+            Go to **Channel Settings → Overview → Age-Restricted Channel** and enable it first.").await?;
+        return Ok(());
+    }
+    queries::set_porn_video_channel(&ctx.data().db, &guild_id, Some(channel.id.to_string().as_str())).await?;
+    ctx.say(format!(
+        "✅ Porn Video channel → {}\n🔥 Posts studio videos (NaughtyAmerica, Brazzers, MILF etc.) every 45 min from RedTube!",
+        channel.id.mention()
+    )).await?;
     Ok(())
 }
 
@@ -293,14 +314,15 @@ pub async fn status(ctx: Context<'_>) -> Result<(), Error> {
         .field("🔞 NSFW (Other)",   ch_mention(cfg.nsfw_channel_id.as_ref()),        true)
         .field("🔞 Rule34",         ch_mention(cfg.rule34_channel_id.as_ref()),      true)
         .field("🔞 Porn",           ch_mention(cfg.porn_channel_id.as_ref()),        true)
-        .field("🔞 Hentai",         ch_mention(cfg.hentai_channel_id.as_ref()),      true)
-        .field("🎌 JAV Videos",     ch_mention(cfg.jav_channel_id.as_ref()),         true)
-        .field("⚡ Auto-React",     react_status,                                    true)
-        .field("😄 Emojis",         emoji_list,                                      false)
-        .field("📢 React Channels", ch_list,                                         false)
-        .field("👤 React Users",    user_list,                                       false)
+        .field("🔞 Hentai",         ch_mention(cfg.hentai_channel_id.as_ref()),           true)
+        .field("🎌 JAV Videos",     ch_mention(cfg.jav_channel_id.as_ref()),               true)
+        .field("🔥 Porn Videos",    ch_mention(cfg.porn_video_channel_id.as_ref()),        true)
+        .field("⚡ Auto-React",     react_status,                                          true)
+        .field("😄 Emojis",         emoji_list,                                            false)
+        .field("📢 React Channels", ch_list,                                               false)
+        .field("👤 React Users",    user_list,                                             false)
         .footer(serenity::CreateEmbedFooter::new(
-            "Memes: 5min • News: 15min • Free Games: 30min • JAV: 2hr"
+            "Memes: 5min • News: 15min • Free Games: 30min • JAV: 30min • Porn Videos: 45min"
         ));
 
     ctx.send(poise::CreateReply::default().embed(embed)).await?;

@@ -8,6 +8,7 @@ mod events;
 mod freegames;
 mod jav;
 mod news;
+mod porn;
 mod reddit;
 
 use std::sync::Arc;
@@ -169,7 +170,14 @@ async fn main() -> Result<()> {
                     let h = Arc::clone(&http);
                     tokio::spawn(async move { jav::task::run(d, h).await });
                 }
-                info!("⏱️  JAV task spawned (every 2 hours)");
+                info!("⏱️  JAV task spawned (every 30 min)");
+
+                {
+                    let d = bot_data.clone();
+                    let h = Arc::clone(&http);
+                    tokio::spawn(async move { porn::task::run(d, h).await });
+                }
+                info!("⏱️  Porn video task spawned (every 45 min — RedTube API)");
 
                 // ── Web Server for Render Health Check ───────────────────
                 tokio::spawn(async move {

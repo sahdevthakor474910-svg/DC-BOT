@@ -29,6 +29,10 @@ pub async fn run_migrations(db: &SqlitePool) -> Result<()> {
     let m4 = include_str!("../../migrations/004_jav_channel.sql");
     run_migration_alter(db, m4, "004").await?;
 
+    // ── Migration 005: Porn video channel (RedTube) + seen_porn_videos table ─────────
+    let m5 = include_str!("../../migrations/005_porn_videos.sql");
+    run_migration_alter(db, m5, "005").await?;
+
     info!("Database migrations complete");
     Ok(())
 }
