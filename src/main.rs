@@ -6,6 +6,7 @@ mod data;
 mod db;
 mod events;
 mod freegames;
+mod jav;
 mod news;
 mod reddit;
 
@@ -162,6 +163,13 @@ async fn main() -> Result<()> {
                     tokio::spawn(async move { freegames::task::run(d, h).await });
                 }
                 info!("⏱️  Free-games task spawned (every 30 min)");
+
+                {
+                    let d = bot_data.clone();
+                    let h = Arc::clone(&http);
+                    tokio::spawn(async move { jav::task::run(d, h).await });
+                }
+                info!("⏱️  JAV task spawned (every 2 hours)");
 
                 // ── Web Server for Render Health Check ───────────────────
                 tokio::spawn(async move {

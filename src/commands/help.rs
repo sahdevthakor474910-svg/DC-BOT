@@ -45,7 +45,8 @@ pub async fn help(ctx: Context<'_>) -> Result<(), Error> {
              `/admin set-rule34-channel` `#channel`\n→ Dedicated channel for r/rule34\n\n\
              `/admin set-porn-channel` `#channel`\n→ Dedicated channel for r/porn\n\n\
              `/admin set-hentai-channel` `#channel`\n→ Dedicated channel for r/hentai\n\n\
-             💡 **Tip:** If you only set `/admin set-nsfw-channel`, all NSFW content goes there.\n\
+             `/admin set-jav-channel` `#channel`\n→ Dedicated channel for 🎌 JAV Videos (popular and latest releases from R18.dev)\n\n\
+             💡 **Tip:** If you only set `/admin set-nsfw-channel`, all NSFW content goes there (except JAV which requires a dedicated channel or won't post).\n\
              Set the others only if you want to split them into separate channels.",
             false,
         )
@@ -54,7 +55,7 @@ pub async fn help(ctx: Context<'_>) -> Result<(), Error> {
         .field(
             "⚙️ /admin — Utilities",
             "`/admin status`\n→ Shows all configured channels and settings in a dashboard\n\n\
-             `/admin force-refresh`\n→ Immediately posts new memes, news & free games right now\n\n\
+             `/admin force-refresh`\n→ Immediately posts new memes, news, free games & JAV videos right now\n\n\
              `/admin toggle-auto-react`\n→ Turn automatic emoji reactions ON or OFF for this server\n\n\
              `/admin add-reaction-user` `@user`\n→ Bot will always react to this user's messages\n\n\
              `/admin remove-reaction-user` `@user`\n→ Remove a user from auto-react list",
@@ -94,13 +95,14 @@ pub async fn help(ctx: Context<'_>) -> Result<(), Error> {
 
         // ── What the bot watches ─────────────────────────────────────────────
         .field(
-            "📡 What Subreddits Does the Bot Watch?",
+            "📡 What Subreddits and Sources Does the Bot Watch?",
             "**SFW Memes:** r/memes • r/dankmemes • r/shitposting • r/brainrot • r/196 • r/whenthe\n\
              **NSFW General:** r/nsfw • r/gonewild\n\
              **NSFW Rule34:** r/rule34\n\
              **NSFW Porn:** r/porn\n\
-             **NSFW Hentai:** r/hentai\n\n\
-             🕐 **Post frequency:** Memes every ~5 min • News every 15 min • Free Games every 30 min",
+             **NSFW Hentai:** r/hentai\n\
+             **🎌 JAV Videos:** Popular & latest releases from R18.dev\n\n\
+             🕐 **Post frequency:** Memes every ~5 min • News every 15 min • Free Games every 30 min • JAV every 2 hours",
             false,
         )
 
@@ -108,7 +110,7 @@ pub async fn help(ctx: Context<'_>) -> Result<(), Error> {
         .field(
             "⚠️ How to Make an Age-Restricted Channel",
             "Right-click the channel → **Edit Channel** → **Overview** → Enable **Age-Restricted Channel**\n\
-             The bot will refuse to post NSFW content in non-age-restricted channels.",
+             The bot will refuse to post NSFW/JAV content in non-age-restricted channels.",
             false,
         )
 

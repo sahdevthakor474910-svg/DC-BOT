@@ -15,10 +15,11 @@ pub struct GuildConfig {
     pub instagram_channel_id: Option<String>,
     pub news_channel_id: Option<String>,
     pub free_games_channel_id: Option<String>,
-    pub nsfw_channel_id: Option<String>,  // added via migration 003
+    pub nsfw_channel_id: Option<String>,
     pub rule34_channel_id: Option<String>,
     pub porn_channel_id: Option<String>,
     pub hentai_channel_id: Option<String>,
+    pub jav_channel_id: Option<String>,   // added via migration 004
     pub auto_react_enabled: bool,
 }
 
@@ -39,7 +40,7 @@ pub async fn get_or_create_guild(db: &SqlitePool, guild_id: &str) -> Result<Guil
         "SELECT guild_id, meme_channel_id, posting_interval_secs, \
                 brainrot_channel_id, shitposting_channel_id, instagram_channel_id, \
                 news_channel_id, free_games_channel_id, nsfw_channel_id, rule34_channel_id, \
-                porn_channel_id, hentai_channel_id, auto_react_enabled \
+                porn_channel_id, hentai_channel_id, jav_channel_id, auto_react_enabled \
          FROM guild_config WHERE guild_id = ?",
     )
     .bind(guild_id)
@@ -59,6 +60,7 @@ pub async fn get_or_create_guild(db: &SqlitePool, guild_id: &str) -> Result<Guil
         rule34_channel_id: row.get("rule34_channel_id"),
         porn_channel_id: row.get("porn_channel_id"),
         hentai_channel_id: row.get("hentai_channel_id"),
+        jav_channel_id: row.get("jav_channel_id"),
         auto_react_enabled: row.get::<i64, _>("auto_react_enabled") != 0,
     })
 }
@@ -183,6 +185,18 @@ pub async fn set_hentai_channel(db: &SqlitePool, guild_id: &str, channel_id: Opt
     Ok(())
 }
 
+pub async fn set_jav_channel(db: &SqlitePool, guild_id: &str, channel_id: Option<&str>) -> Result<()> {
+    sqlx::query(
+        "INSERT INTO guild_config (guild_id, jav_channel_id) VALUES (?, ?) \
+         ON CONFLICT(guild_id) DO UPDATE SET jav_channel_id = excluded.jav_channel_id",
+    )
+    .bind(guild_id)
+    .bind(channel_id)
+    .execute(db)
+    .await?;
+    Ok(())
+}
+
 pub async fn set_auto_react_enabled(db: &SqlitePool, guild_id: &str, enabled: bool) -> Result<()> {
     sqlx::query(
         "INSERT INTO guild_config (guild_id, auto_react_enabled) VALUES (?, ?) \
@@ -214,7 +228,7 @@ pub async fn get_all_guild_configs(db: &SqlitePool) -> Result<Vec<GuildConfig>> 
         "SELECT guild_id, meme_channel_id, posting_interval_secs, \
                 brainrot_channel_id, shitposting_channel_id, instagram_channel_id, \
                 news_channel_id, free_games_channel_id, nsfw_channel_id, rule34_channel_id, \
-                porn_channel_id, hentai_channel_id, auto_react_enabled \
+                porn_channel_id, hentai_channel_id, jav_channel_id, auto_react_enabled \
          FROM guild_config",
     )
     .fetch_all(db)
@@ -235,6 +249,7 @@ pub async fn get_all_guild_configs(db: &SqlitePool) -> Result<Vec<GuildConfig>> 
             rule34_channel_id: r.get("rule34_channel_id"),
             porn_channel_id: r.get("porn_channel_id"),
             hentai_channel_id: r.get("hentai_channel_id"),
+            jav_channel_id: r.get("jav_channel_id"),
             auto_react_enabled: r.get::<i64, _>("auto_react_enabled") != 0,
         })
         .collect())
@@ -529,6 +544,42 @@ pub async fn mark_giveaway_seen(db: &SqlitePool, guild_id: &str, giveaway_id: &s
 pub async fn prune_old_seen_giveaways(db: &SqlitePool, days: i64) -> Result<u64> {
     let result = sqlx::query(
         "DELETE FROM seen_giveaways WHERE seen_at < datetime('now', ? || ' days')",
+    )
+    .bind(format!("-{}", days))
+    .execute(db)
+    .await?;
+    Ok(result.rows_affected())
+}
+
+// ────────────────────────────────────────────────────────────────────────────
+// Seen JAV (deduplication)
+// ────────────────────────────────────────────────────────────────────────────
+
+pub async fn is_jav_seen(db: &SqlitePool, guild_id: &str, content_id: &str) -> Result<bool> {
+    let row = sqlx::query(
+        "SELECT 1 FROM seen_jav WHERE guild_id = ? AND content_id = ? LIMIT 1",
+    )
+    .bind(guild_id)
+    .bind(content_id)
+    .fetch_optional(db)
+    .await?;
+    Ok(row.is_some())
+}
+
+pub async fn mark_jav_seen(db: &SqlitePool, guild_id: &str, content_id: &str) -> Result<()> {
+    sqlx::query(
+        "INSERT OR IGNORE INTO seen_jav (guild_id, content_id) VALUES (?, ?)",
+    )
+    .bind(guild_id)
+    .bind(content_id)
+    .execute(db)
+    .await?;
+    Ok(())
+}
+
+pub async fn prune_old_seen_jav(db: &SqlitePool, days: i64) -> Result<u64> {
+    let result = sqlx::query(
+        "DELETE FROM seen_jav WHERE seen_at < datetime('now', ? || ' days')",
     )
     .bind(format!("-{}", days))
     .execute(db)

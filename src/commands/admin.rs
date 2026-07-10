@@ -8,6 +8,7 @@ use crate::db::queries;
 use crate::reddit;
 use crate::news;
 use crate::freegames;
+use crate::jav;
 
 // ────────────────────────────────────────────────────────────────────────────
 // /admin parent (admin-only)
@@ -29,6 +30,7 @@ use crate::freegames;
         "set_rule34_channel",
         "set_porn_channel",
         "set_hentai_channel",
+        "set_jav_channel",
         "toggle_auto_react",
         "add_reaction_user",
         "remove_reaction_user",
@@ -183,6 +185,23 @@ pub async fn set_hentai_channel(
     Ok(())
 }
 
+/// Set a dedicated 🎌 JAV channel (latest releases + popular titles). Must be Age-Restricted.
+#[poise::command(slash_command, guild_only, rename = "set-jav-channel")]
+pub async fn set_jav_channel(
+    ctx: Context<'_>,
+    #[description = "Age-restricted channel to post JAV titles"] channel: serenity::GuildChannel,
+) -> Result<(), Error> {
+    let guild_id = ctx.guild_id().unwrap().to_string();
+    if !channel.nsfw {
+        ctx.say("❌ That channel is **not** marked as Age-Restricted in Discord!\n\
+            Go to **Channel Settings → Overview → Age-Restricted Channel** and enable it first.").await?;
+        return Ok(());
+    }
+    queries::set_jav_channel(&ctx.data().db, &guild_id, Some(channel.id.to_string().as_str())).await?;
+    ctx.say(format!("✅ JAV channel → {} (posts latest releases + popular titles every 2 hours)", channel.id.mention())).await?;
+    Ok(())
+}
+
 // ── Auto-react toggle ────────────────────────────────────────────────────────
 
 /// Toggle automatic reactions on or off for this server.
@@ -275,12 +294,13 @@ pub async fn status(ctx: Context<'_>) -> Result<(), Error> {
         .field("🔞 Rule34",         ch_mention(cfg.rule34_channel_id.as_ref()),      true)
         .field("🔞 Porn",           ch_mention(cfg.porn_channel_id.as_ref()),        true)
         .field("🔞 Hentai",         ch_mention(cfg.hentai_channel_id.as_ref()),      true)
+        .field("🎌 JAV Videos",     ch_mention(cfg.jav_channel_id.as_ref()),         true)
         .field("⚡ Auto-React",     react_status,                                    true)
         .field("😄 Emojis",         emoji_list,                                      false)
         .field("📢 React Channels", ch_list,                                         false)
         .field("👤 React Users",    user_list,                                       false)
         .footer(serenity::CreateEmbedFooter::new(
-            "Memes: 5min • News: 15min • Free Games: 30min"
+            "Memes: 5min • News: 15min • Free Games: 30min • JAV: 2hr"
         ));
 
     ctx.send(poise::CreateReply::default().embed(embed)).await?;
@@ -297,23 +317,26 @@ pub async fn force_refresh(ctx: Context<'_>) -> Result<(), Error> {
     let data = ctx.data().clone();
     let http: Arc<serenity::Http> = Arc::clone(&ctx.serenity_context().http);
 
-    // Run all three tasks concurrently
-    let (meme_res, news_res, fg_res) = tokio::join!(
+    // Run all tasks concurrently
+    let (meme_res, news_res, fg_res, jav_res) = tokio::join!(
         reddit::task::run_once(&data, &http),
         news::task::run_once(&data, &http),
         freegames::task::run_once(&data, &http),
+        jav::task::run_once(&data, &http),
     );
 
     let meme_n = meme_res.unwrap_or_else(|e| { tracing::error!("Meme refresh: {:#}", e); 0 });
     let news_n = news_res.unwrap_or_else(|e| { tracing::error!("News refresh: {:#}", e); 0 });
     let fg_n   = fg_res.unwrap_or_else(|e|   { tracing::error!("FG refresh: {:#}", e);   0 });
+    let jav_n  = jav_res.unwrap_or_else(|e|  { tracing::error!("JAV refresh: {:#}", e);  0 });
 
     ctx.say(format!(
         "✅ Force refresh complete!\n\
         📸 Memes posted: **{}**\n\
         📰 News articles posted: **{}**\n\
-        🎁 Free game alerts posted: **{}**",
-        meme_n, news_n, fg_n
+        🎁 Free game alerts posted: **{}**\n\
+        🎌 JAV titles posted: **{}**",
+        meme_n, news_n, fg_n, jav_n
     ))
     .await?;
 
