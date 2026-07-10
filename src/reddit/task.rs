@@ -152,8 +152,8 @@ async fn tick(data: &Data, http: &Arc<serenity::Http>) -> Result<usize> {
         for subreddit in NSFW_SUBREDDITS {
             let target_channel = match *subreddit {
                 "rule34" => cfg.rule34_channel_id.as_ref().or(cfg.nsfw_channel_id.as_ref()),
-                "porn" => cfg.porn_channel_id.as_ref().or(cfg.nsfw_channel_id.as_ref()),
                 "hentai" => cfg.hentai_channel_id.as_ref().or(cfg.nsfw_channel_id.as_ref()),
+                "RealGirls" | "milf" | "boobs" | "amateur" => cfg.porn_channel_id.as_ref().or(cfg.nsfw_channel_id.as_ref()),
                 _ => cfg.nsfw_channel_id.as_ref(),
             };
 
