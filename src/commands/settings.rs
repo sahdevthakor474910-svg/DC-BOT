@@ -21,7 +21,8 @@ use crate::db::queries;
         "add_react_user",
         "remove_react_user",
         "add_emoji",
-        "remove_emoji"
+        "remove_emoji",
+        "clear_cache"
     )
 )]
 pub async fn settings(_ctx: Context<'_>) -> Result<(), Error> {
@@ -151,5 +152,16 @@ pub async fn remove_emoji(
     let guild_id = ctx.guild_id().unwrap().to_string();
     queries::remove_emoji(&ctx.data().db, &guild_id, &emoji).await?;
     ctx.say(format!("✅ Removed {} from the reaction pool.", emoji)).await?;
+    Ok(())
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+
+/// 🧹 Clear history cache to re-post the same hot entries again for testing.
+#[poise::command(slash_command, guild_only, rename = "clear-cache")]
+pub async fn clear_cache(ctx: Context<'_>) -> Result<(), Error> {
+    let guild_id = ctx.guild_id().unwrap().to_string();
+    queries::clear_guild_seen_cache(&ctx.data().db, &guild_id).await?;
+    ctx.say("✅ **Cache cleared successfully!** The bot's post history memory has been wiped. Run `/post` now to instantly post all top/hot items!").await?;
     Ok(())
 }

@@ -49,7 +49,8 @@ pub async fn help(ctx: Context<'_>) -> Result<(), Error> {
              `/settings auto-react` → Toggle auto-reactions ON/OFF\n\
              `/settings add-react-channel #ch` → React to all messages in a channel\n\
              `/settings add-react-user @user` → Always react to someone's messages\n\
-             `/settings add-emoji 🔥` → Add emoji to the reaction pool",
+             `/settings add-emoji 🔥` → Add emoji to the reaction pool\n\
+             `/settings clear-cache` → Clear already-seen memory (forces immediate re-posting of hot feeds)",
             false,
         )
 

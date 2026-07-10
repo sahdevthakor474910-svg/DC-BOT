@@ -641,3 +641,12 @@ pub async fn prune_old_seen_porn_videos(db: &SqlitePool, days: i64) -> Result<u6
     .await?;
     Ok(result.rows_affected())
 }
+
+pub async fn clear_guild_seen_cache(db: &SqlitePool, guild_id: &str) -> Result<()> {
+    sqlx::query("DELETE FROM seen_posts WHERE guild_id = ?").bind(guild_id).execute(db).await?;
+    sqlx::query("DELETE FROM seen_news WHERE guild_id = ?").bind(guild_id).execute(db).await?;
+    sqlx::query("DELETE FROM seen_giveaways WHERE guild_id = ?").bind(guild_id).execute(db).await?;
+    sqlx::query("DELETE FROM seen_jav WHERE guild_id = ?").bind(guild_id).execute(db).await?;
+    sqlx::query("DELETE FROM seen_porn_videos WHERE guild_id = ?").bind(guild_id).execute(db).await?;
+    Ok(())
+}
