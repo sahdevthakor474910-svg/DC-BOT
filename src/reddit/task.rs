@@ -86,6 +86,13 @@ async fn post_subreddit(
                     error!("DB error marking post seen: {}", e);
                 }
 
+                // SPAM PREVENTION: Only post a maximum of 2 items per subreddit per tick.
+                // We still mark the other 13 fetched items as 'seen' above, so they won't 
+                // be posted later either. This safely handles database resets/redeploys.
+                if posted >= 2 {
+                    continue;
+                }
+
                 // Resolve embeddable media URL
                 let media_url = match RedditClient::media_url(&post) {
                     Some(u) => u,

@@ -61,6 +61,7 @@ async fn tick(data: &Data, http: &Arc<serenity::Http>) -> Result<usize> {
         for subreddit in JAV_SUBREDDITS {
             match data.reddit.fetch_hot_posts(subreddit, 10).await {
                 Ok(posts) => {
+                    let mut posted_this_subreddit = 0usize;
                     for post in posts {
                         // Dedup using seen_jav table
                         match queries::is_jav_seen(&data.db, &cfg.guild_id, &post.id).await {
@@ -71,6 +72,11 @@ async fn tick(data: &Data, http: &Arc<serenity::Http>) -> Result<usize> {
 
                         if let Err(e) = queries::mark_jav_seen(&data.db, &cfg.guild_id, &post.id).await {
                             error!("DB error marking jav seen: {}", e);
+                        }
+
+                        // SPAM PREVENTION: Only post a maximum of 2 items per subreddit per tick.
+                        if posted_this_subreddit >= 2 {
+                            continue;
                         }
 
                         let media_url = match RedditClient::media_url(&post) {
@@ -94,6 +100,7 @@ async fn tick(data: &Data, http: &Arc<serenity::Http>) -> Result<usize> {
                             Ok(_) => {
                                 info!("🎌 Posted JAV post {} to guild {}", post.id, cfg.guild_id);
                                 total += 1;
+                                posted_this_subreddit += 1;
                             }
                             Err(e) => {
                                 error!("Failed to post JAV to channel {}: {}", channel_id_str, e);
