@@ -163,6 +163,26 @@ async fn main() -> Result<()> {
                 }
                 info!("⏱️  Free-games task spawned (every 30 min)");
 
+                // ── Web Server for Render Health Check ───────────────────
+                tokio::spawn(async move {
+                    let app = axum::Router::new().route("/", axum::routing::get(|| async { "Bot is active!" }));
+                    let port = std::env::var("PORT").unwrap_or_else(|_| "10000".to_string());
+                    let addr = format!("0.0.0.0:{}", port);
+                    info!("📡 Attempting to start web server on {}...", addr);
+                    
+                    match tokio::net::TcpListener::bind(&addr).await {
+                        Ok(listener) => {
+                            info!("📡 Web server listening on http://{}", addr);
+                            if let Err(e) = axum::serve(listener, app).await {
+                                error!("❌ Web server failed to serve: {}", e);
+                            }
+                        }
+                        Err(e) => {
+                            error!("❌ Web server failed to bind to {}: {}", addr, e);
+                        }
+                    }
+                });
+
                 Ok(bot_data)
             })
         })
