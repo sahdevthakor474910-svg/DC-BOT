@@ -122,6 +122,16 @@ async fn main() -> Result<()> {
                                 .say(format!("❌ Error: {}", error))
                                 .await;
                         }
+                        poise::FrameworkError::CommandCheckFailed { error, ctx, .. } => {
+                            if let Some(err) = error {
+                                error!("Check for command '{}' failed with error: {:#}", ctx.command().name, err);
+                                let _ = ctx.say(format!("❌ Error running permission check: {}", err)).await;
+                            } else {
+                                let _ = ctx
+                                    .say("❌ You need the **Manage Server** permission to run this command.")
+                                    .await;
+                            }
+                        }
                         poise::FrameworkError::Setup { error, .. } => {
                             error!("Setup error: {:#}", error);
                         }

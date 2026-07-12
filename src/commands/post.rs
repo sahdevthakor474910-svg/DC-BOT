@@ -17,7 +17,7 @@ use crate::porn;
 #[poise::command(
     slash_command,
     guild_only,
-    required_permissions = "MANAGE_GUILD"
+    check = "crate::commands::checks::is_admin_check"
 )]
 pub async fn post(ctx: Context<'_>) -> Result<(), Error> {
     ctx.defer().await?;

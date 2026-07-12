@@ -11,7 +11,8 @@ use crate::db::queries;
 /// 🛠️ Set up the bot — pick which channels to post in. All fields are optional.
 #[poise::command(
     slash_command,
-    guild_only
+    guild_only,
+    check = "crate::commands::checks::is_admin_check"
 )]
 pub async fn setup(
     ctx: Context<'_>,
@@ -36,28 +37,9 @@ pub async fn setup(
     #[description = "🌶️ OK.XXX channel — must be Age-Restricted! (ok.xxx: top studio videos — every 25 min)"]
     okxxx: Option<serenity::GuildChannel>,
 ) -> Result<(), Error> {
-    let guild_id = ctx.guild_id().unwrap();
+    let guild_id = ctx.guild_id().unwrap().to_string();
     let db = &ctx.data().db;
 
-    // ── Permission check: must be server owner or have Manage Server ──────
-    let is_owner = ctx
-        .guild()
-        .map(|g| g.owner_id == ctx.author().id)
-        .unwrap_or(false);
-
-    let has_manage_guild = ctx
-        .author_member()
-        .await
-        .and_then(|m| m.permissions)
-        .map(|p| p.manage_guild() || p.administrator())
-        .unwrap_or(false);
-
-    if !is_owner && !has_manage_guild {
-        ctx.say("❌ You need the **Manage Server** permission to run `/setup`.").await?;
-        return Ok(());
-    }
-
-    let guild_id = guild_id.to_string();
     let mut lines: Vec<String> = Vec::new();
     let mut warnings: Vec<String> = Vec::new();
 
