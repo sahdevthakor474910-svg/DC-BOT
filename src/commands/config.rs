@@ -12,7 +12,7 @@ use crate::db::queries;
 #[poise::command(
     slash_command,
     guild_only,
-    required_permissions = "MANAGE_GUILD",
+    check = "crate::commands::checks::is_admin_check",
     subcommands(
         "meme_channel",
         "add_reaction_channel",

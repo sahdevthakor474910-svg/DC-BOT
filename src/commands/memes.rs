@@ -71,7 +71,7 @@ pub async fn status(ctx: Context<'_>) -> Result<(), Error> {
     slash_command,
     guild_only,
     rename = "fetch-now",
-    required_permissions = "MANAGE_GUILD"
+    check = "crate::commands::checks::is_admin_check"
 )]
 pub async fn fetch_now(ctx: Context<'_>) -> Result<(), Error> {
     ctx.defer().await?;

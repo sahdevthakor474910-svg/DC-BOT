@@ -19,7 +19,7 @@ use crate::porn;
 #[poise::command(
     slash_command,
     guild_only,
-    required_permissions = "MANAGE_GUILD",
+    check = "crate::commands::checks::is_admin_check",
     subcommands(
         "set_meme_channel",
         "set_brainrot_channel",
