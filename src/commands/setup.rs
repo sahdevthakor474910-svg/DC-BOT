@@ -32,6 +32,9 @@ pub async fn setup(
 
     #[description = "🔥 Porn Video channel — must be Age-Restricted! (RedTube: Brazzers, MILF etc — every 20 min)"]
     porn_videos: Option<serenity::GuildChannel>,
+
+    #[description = "🌶️ OK.XXX channel — must be Age-Restricted! (ok.xxx: top studio videos — every 25 min)"]
+    okxxx: Option<serenity::GuildChannel>,
 ) -> Result<(), Error> {
     let guild_id = ctx.guild_id().unwrap();
     let db = &ctx.data().db;
@@ -119,6 +122,19 @@ pub async fn setup(
         } else {
             queries::set_porn_video_channel(db, &guild_id, Some(ch.id.to_string().as_str())).await?;
             lines.push(format!("🔥  **Porn Videos** → {} *(RedTube: Brazzers, MILF, NaughtyAmerica…)*", ch.id.mention()));
+        }
+    }
+
+    // ── OK.XXX ─────────────────────────────────────────────────────────────
+    if let Some(ch) = &okxxx {
+        if !ch.nsfw {
+            warnings.push(format!(
+                "⚠️  **OK.XXX** skipped — {} is **not Age-Restricted**!",
+                ch.id.mention()
+            ));
+        } else {
+            queries::set_okxxx_channel(db, &guild_id, Some(ch.id.to_string().as_str())).await?;
+            lines.push(format!("🌶️  **OK.XXX** → {} *(top studio videos — Brazzers, Reality Kings…)*", ch.id.mention()));
         }
     }
 

@@ -8,6 +8,7 @@ mod events;
 mod freegames;
 mod jav;
 mod news;
+mod okxxx;
 mod porn;
 mod reddit;
 
@@ -178,6 +179,13 @@ async fn main() -> Result<()> {
                     tokio::spawn(async move { porn::task::run(d, h).await });
                 }
                 info!("⏱️  Porn video task spawned (every 20 min — RedTube API)");
+
+                {
+                    let d = bot_data.clone();
+                    let h = Arc::clone(&http);
+                    tokio::spawn(async move { okxxx::task::run(d, h).await });
+                }
+                info!("⏱️  OK.XXX task spawned (every 25 min — ok.xxx scraper)");
 
                 // ── Web Server for Render Health Check ───────────────────
                 tokio::spawn(async move {
