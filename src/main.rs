@@ -328,5 +328,20 @@ mod tests {
             }
         }
     }
+
+    #[tokio::test]
+    async fn test_gamerpower_fetch() {
+        let client = reqwest::Client::builder()
+            .user_agent("Mozilla/5.0")
+            .build()
+            .unwrap();
+        let games = freegames::gamerpower::fetch_free_games(&client).await;
+        println!("Fetched GamerPower games count: {}", games.len());
+        for g in &games {
+            println!("  - {} from {}", g.title, g.store);
+        }
+        assert!(!games.is_empty(), "GamerPower games list should not be empty");
+    }
 }
+
 
