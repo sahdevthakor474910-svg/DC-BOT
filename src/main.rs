@@ -154,19 +154,20 @@ async fn main() -> Result<()> {
             let http     = Arc::clone(&ctx.http);
 
             Box::pin(async move {
-                // Register slash commands globally
+                // Register slash commands globally (single source of truth — no guild duplicates)
                 poise::builtins::register_globally(ctx, &framework.options().commands).await?;
                 info!("📋 Slash commands registered globally");
 
-                // Also register command updates instantly in guilds stored in database
+                // Clean up any stale guild-level commands that cause duplicates in Discord
                 if let Ok(configs) = crate::db::queries::get_all_guild_configs(&bot_data.db).await {
                     for cfg in configs {
                         if let Ok(guild_id_num) = cfg.guild_id.parse::<u64>() {
                             let guild_id = serenity::GuildId::new(guild_id_num);
-                            if let Err(e) = poise::builtins::register_in_guild(ctx, &framework.options().commands, guild_id).await {
-                                tracing::warn!("Failed to register commands instantly in guild {}: {:?}", cfg.guild_id, e);
+                            // Overwrite guild commands with empty list to clear any old duplicates
+                            if let Err(e) = guild_id.set_commands(&ctx.http, vec![]).await {
+                                tracing::warn!("Could not clear guild commands for {}: {:?}", cfg.guild_id, e);
                             } else {
-                                info!("📋 Slash commands registered instantly in guild {}", cfg.guild_id);
+                                info!("🧹 Cleared stale guild commands for guild {}", cfg.guild_id);
                             }
                         }
                     }
