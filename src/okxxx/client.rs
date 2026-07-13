@@ -52,6 +52,57 @@ impl OkXxxClient {
         let page = (tick % MAX_PAGE as u64) as u32 + 1;
         self.fetch_videos(page).await
     }
+
+    /// Fetch the OK.XXX video page and parse the direct HTML `<source>` URL.
+    pub async fn get_mp4_url(&self, video_page_url: &str) -> Result<String> {
+        let html = self
+            .http
+            .get(video_page_url)
+            .send()
+            .await?
+            .error_for_status()?
+            .text()
+            .await?;
+
+        // 1. Try matching with scraper
+        let doc = scraper::Html::parse_document(&html);
+        let source_sel = scraper::Selector::parse("source").unwrap();
+        
+        let mut best: Option<(u32, String)> = None;
+        for el in doc.select(&source_sel) {
+            if let Some(src) = el.value().attr("src") {
+                if src.contains(".mp4") {
+                    let mut q = 360;
+                    if src.contains("720p") {
+                        q = 720;
+                    } else if src.contains("1080p") {
+                        q = 1080;
+                    } else if src.contains("480p") {
+                        q = 480;
+                    } else if src.contains("360p") {
+                        q = 360;
+                    }
+                    if q <= 720 {
+                        if best.as_ref().map_or(true, |(bq, _)| q > *bq) {
+                            best = Some((q, src.to_string()));
+                        }
+                    }
+                }
+            }
+        }
+
+        if let Some((_, u)) = best {
+            return Ok(u);
+        }
+
+        // 2. Regex fallback
+        let re = regex::Regex::new(r#"<source[^>]+src=["']([^"']+\.mp4[^"']*)["']"#)?;
+        if let Some(cap) = re.captures(&html) {
+            return Ok(cap[1].to_string());
+        }
+
+        Err(anyhow::anyhow!("No direct MP4 URL found on OK.XXX video page: {}", video_page_url))
+    }
 }
 
 // ─────────────────────────────────────────────────────────────────────────────

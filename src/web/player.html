@@ -1,0 +1,250 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Stream Player - {title}</title>
+    <!-- Outfit Font -->
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Outfit:wght@300;400;600;800&display=swap" rel="stylesheet">
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+        body {
+            font-family: 'Outfit', sans-serif;
+            background: radial-gradient(circle at center, #181824 0%, #0b0b10 100%);
+            color: #f3f4f6;
+            height: 100vh;
+            overflow: hidden;
+            display: flex;
+            flex-direction: column;
+            justify-content: center;
+            align-items: center;
+        }
+        .container {
+            width: 90%;
+            max-width: 960px;
+            background: rgba(255, 255, 255, 0.02);
+            backdrop-filter: blur(20px);
+            -webkit-backdrop-filter: blur(20px);
+            border: 1px solid rgba(255, 255, 255, 0.06);
+            border-radius: 20px;
+            padding: 24px;
+            box-shadow: 0 20px 50px rgba(0, 0, 0, 0.5);
+            display: flex;
+            flex-direction: column;
+            gap: 16px;
+            position: relative;
+            z-index: 2;
+        }
+        .header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            border-bottom: 1px solid rgba(255, 255, 255, 0.05);
+            padding-bottom: 12px;
+        }
+        .logo {
+            font-weight: 800;
+            font-size: 1.4rem;
+            color: #ff2a5f;
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            letter-spacing: 1px;
+            text-transform: uppercase;
+        }
+        .logo span {
+            color: #ffffff;
+        }
+        .title {
+            font-weight: 600;
+            font-size: 1.1rem;
+            color: #e5e7eb;
+            white-space: nowrap;
+            overflow: hidden;
+            text-overflow: ellipsis;
+            max-width: 60%;
+        }
+        .player-wrapper {
+            width: 100%;
+            aspect-ratio: 16/9;
+            background: #000000;
+            border-radius: 12px;
+            overflow: hidden;
+            border: 1px solid rgba(255, 255, 255, 0.04);
+            box-shadow: inset 0 0 20px rgba(0,0,0,0.8);
+            position: relative;
+        }
+        video {
+            width: 100%;
+            height: 100%;
+            object-fit: contain;
+        }
+        
+        /* NSFW WARNING OVERLAY */
+        .warning-overlay {
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100vw;
+            height: 100vh;
+            background: rgba(5, 5, 8, 0.85);
+            backdrop-filter: blur(35px);
+            -webkit-backdrop-filter: blur(35px);
+            z-index: 999;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            transition: opacity 0.5s cubic-bezier(0.4, 0, 0.2, 1), visibility 0.5s;
+        }
+        .warning-overlay.hidden {
+            opacity: 0;
+            visibility: hidden;
+            pointer-events: none;
+        }
+        .warning-card {
+            width: 90%;
+            max-width: 450px;
+            background: rgba(255, 255, 255, 0.03);
+            border: 1px solid rgba(255, 255, 255, 0.08);
+            border-radius: 24px;
+            padding: 40px 32px;
+            text-align: center;
+            box-shadow: 0 30px 60px rgba(0, 0, 0, 0.6), inset 0 1px 0 rgba(255,255,255,0.1);
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            gap: 24px;
+            transform: scale(1);
+            transition: transform 0.4s cubic-bezier(0.175, 0.885, 0.32, 1.275);
+        }
+        .warning-overlay.hidden .warning-card {
+            transform: scale(0.9);
+        }
+        .warning-icon {
+            font-size: 3rem;
+            color: #ff2a5f;
+            background: rgba(255, 42, 95, 0.1);
+            width: 80px;
+            height: 80px;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            border-radius: 50%;
+            border: 1px solid rgba(255, 42, 95, 0.3);
+            box-shadow: 0 0 20px rgba(255, 42, 95, 0.2);
+            animation: pulse 2s infinite;
+        }
+        .warning-title {
+            font-size: 1.6rem;
+            font-weight: 800;
+            color: #ffffff;
+            letter-spacing: 0.5px;
+        }
+        .warning-text {
+            color: #9ca3af;
+            font-size: 0.95rem;
+            line-height: 1.6;
+        }
+        .btn-group {
+            display: flex;
+            gap: 16px;
+            width: 100%;
+            margin-top: 8px;
+        }
+        .btn {
+            flex: 1;
+            padding: 14px 20px;
+            border-radius: 12px;
+            font-family: 'Outfit', sans-serif;
+            font-size: 1rem;
+            font-weight: 600;
+            cursor: pointer;
+            border: none;
+            transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+        }
+        .btn-primary {
+            background: linear-gradient(135deg, #ff2a5f 0%, #d91b48 100%);
+            color: #ffffff;
+            box-shadow: 0 4px 15px rgba(255, 42, 95, 0.3);
+        }
+        .btn-primary:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 6px 20px rgba(255, 42, 95, 0.5);
+            background: linear-gradient(135deg, #ff4171 0%, #ee2556 100%);
+        }
+        .btn-secondary {
+            background: rgba(255, 255, 255, 0.05);
+            color: #9ca3af;
+            border: 1px solid rgba(255, 255, 255, 0.08);
+        }
+        .btn-secondary:hover {
+            background: rgba(255, 255, 255, 0.1);
+            color: #ffffff;
+        }
+        
+        @keyframes pulse {
+            0% { transform: scale(1); box-shadow: 0 0 0 0 rgba(255, 42, 95, 0.4); }
+            70% { transform: scale(1.05); box-shadow: 0 0 0 15px rgba(255, 42, 95, 0); }
+            100% { transform: scale(1); box-shadow: 0 0 0 0 rgba(255, 42, 95, 0); }
+        }
+    </style>
+</head>
+<body>
+
+    <!-- NSFW Warning Screen -->
+    <div id="warningOverlay" class="warning-overlay">
+        <div class="warning-card">
+            <div class="warning-icon">🔞</div>
+            <div class="warning-title">Age Restricted</div>
+            <div class="warning-text">
+                This channel's video stream contains adult-only content (18+). You must be at least 18 years of age to enter and view this video.
+            </div>
+            <div class="btn-group">
+                <button class="btn btn-secondary" onclick="declineAccess()">Cancel</button>
+                <button class="btn btn-primary" onclick="acceptAccess()">Enter Playback</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Main Player Card -->
+    <div class="container">
+        <div class="header">
+            <div class="logo">🎥 DC<span>BOT</span> Player</div>
+            <div class="title" id="videoTitle">{title}</div>
+        </div>
+        <div class="player-wrapper">
+            <video id="webVideo" controls preload="metadata" playsinline>
+                <source src="{stream_url}" type="video/mp4">
+                Your browser does not support the HTML5 video tag.
+            </video>
+        </div>
+    </div>
+
+    <script>
+        function acceptAccess() {
+            const overlay = document.getElementById('warningOverlay');
+            overlay.classList.add('hidden');
+            
+            // Try to play the video automatically once warning is accepted
+            const video = document.getElementById('webVideo');
+            if (video) {
+                video.focus();
+                video.play().catch(err => {
+                    console.log("Autoplay was blocked by browser, user needs to click play button manually.", err);
+                });
+            }
+        }
+
+        function declineAccess() {
+            // Redirect to a safe page or simply close the window
+            window.location.href = "https://www.google.com";
+        }
+    </script>
+</body>
+</html>

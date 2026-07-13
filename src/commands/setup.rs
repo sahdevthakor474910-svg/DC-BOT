@@ -69,57 +69,83 @@ pub async fn setup(
 
     // ── NSFW (general) ─────────────────────────────────────────────────────
     if let Some(ch) = &nsfw {
-        if !ch.nsfw {
-            warnings.push(format!(
-                "⚠️  **NSFW** skipped — {} is **not Age-Restricted**! \
-                Enable it via: Channel Settings → Overview → Age-Restricted Channel.",
-                ch.id.mention()
-            ));
-        } else {
-            queries::set_nsfw_channel(db, &guild_id, Some(ch.id.to_string().as_str())).await?;
-            queries::set_rule34_channel(db, &guild_id, Some(ch.id.to_string().as_str())).await?;
-            queries::set_porn_channel(db, &guild_id, Some(ch.id.to_string().as_str())).await?;
-            queries::set_hentai_channel(db, &guild_id, Some(ch.id.to_string().as_str())).await?;
-            lines.push(format!("🔞  **NSFW** → {} *(r/nsfw, r/gonewild, r/rule34, r/hentai, r/porn)*", ch.id.mention()));
+        match ensure_nsfw(ctx, ch).await {
+            Ok(auto_configured) => {
+                queries::set_nsfw_channel(db, &guild_id, Some(ch.id.to_string().as_str())).await?;
+                queries::set_rule34_channel(db, &guild_id, Some(ch.id.to_string().as_str())).await?;
+                queries::set_porn_channel(db, &guild_id, Some(ch.id.to_string().as_str())).await?;
+                queries::set_hentai_channel(db, &guild_id, Some(ch.id.to_string().as_str())).await?;
+                if auto_configured {
+                    lines.push(format!("🔞  **NSFW** → {} [Automatically Set Age-Restricted]", ch.id.mention()));
+                } else {
+                    lines.push(format!("🔞  **NSFW** → {} *(r/nsfw, r/gonewild, r/rule34, r/hentai, r/porn)*", ch.id.mention()));
+                }
+            }
+            Err(warn_msg) => {
+                warnings.push(format!("⚠️  **NSFW** warning: {}", warn_msg));
+                queries::set_nsfw_channel(db, &guild_id, Some(ch.id.to_string().as_str())).await?;
+                queries::set_rule34_channel(db, &guild_id, Some(ch.id.to_string().as_str())).await?;
+                queries::set_porn_channel(db, &guild_id, Some(ch.id.to_string().as_str())).await?;
+                queries::set_hentai_channel(db, &guild_id, Some(ch.id.to_string().as_str())).await?;
+                lines.push(format!("🔞  **NSFW** → {} *(not Age-Restricted yet!)*", ch.id.mention()));
+            }
         }
     }
 
     // ── JAV ────────────────────────────────────────────────────────────────
     if let Some(ch) = &jav {
-        if !ch.nsfw {
-            warnings.push(format!(
-                "⚠️  **JAV** skipped — {} is **not Age-Restricted**!",
-                ch.id.mention()
-            ));
-        } else {
-            queries::set_jav_channel(db, &guild_id, Some(ch.id.to_string().as_str())).await?;
-            lines.push(format!("🎌  **JAV Videos** → {} *(eporner: Japanese & Asian JAV)*", ch.id.mention()));
+        match ensure_nsfw(ctx, ch).await {
+            Ok(auto_configured) => {
+                queries::set_jav_channel(db, &guild_id, Some(ch.id.to_string().as_str())).await?;
+                if auto_configured {
+                    lines.push(format!("🎌  **JAV Videos** → {} [Automatically Set Age-Restricted]", ch.id.mention()));
+                } else {
+                    lines.push(format!("🎌  **JAV Videos** → {} *(eporner: Japanese & Asian JAV)*", ch.id.mention()));
+                }
+            }
+            Err(warn_msg) => {
+                warnings.push(format!("⚠️  **JAV** warning: {}", warn_msg));
+                queries::set_jav_channel(db, &guild_id, Some(ch.id.to_string().as_str())).await?;
+                lines.push(format!("🎌  **JAV Videos** → {} *(not Age-Restricted yet!)*", ch.id.mention()));
+            }
         }
     }
 
     // ── Porn Videos ────────────────────────────────────────────────────────
     if let Some(ch) = &porn_videos {
-        if !ch.nsfw {
-            warnings.push(format!(
-                "⚠️  **Porn Videos** skipped — {} is **not Age-Restricted**!",
-                ch.id.mention()
-            ));
-        } else {
-            queries::set_porn_video_channel(db, &guild_id, Some(ch.id.to_string().as_str())).await?;
-            lines.push(format!("🔥  **Porn Videos** → {} *(RedTube: Brazzers, MILF, NaughtyAmerica…)*", ch.id.mention()));
+        match ensure_nsfw(ctx, ch).await {
+            Ok(auto_configured) => {
+                queries::set_porn_video_channel(db, &guild_id, Some(ch.id.to_string().as_str())).await?;
+                if auto_configured {
+                    lines.push(format!("🔥  **Porn Videos** → {} [Automatically Set Age-Restricted]", ch.id.mention()));
+                } else {
+                    lines.push(format!("🔥  **Porn Videos** → {} *(RedTube: Brazzers, MILF, NaughtyAmerica…)*", ch.id.mention()));
+                }
+            }
+            Err(warn_msg) => {
+                warnings.push(format!("⚠️  **Porn Videos** warning: {}", warn_msg));
+                queries::set_porn_video_channel(db, &guild_id, Some(ch.id.to_string().as_str())).await?;
+                lines.push(format!("🔥  **Porn Videos** → {} *(not Age-Restricted yet!)*", ch.id.mention()));
+            }
         }
     }
 
     // ── OK.XXX ─────────────────────────────────────────────────────────────
     if let Some(ch) = &okxxx {
-        if !ch.nsfw {
-            warnings.push(format!(
-                "⚠️  **OK.XXX** skipped — {} is **not Age-Restricted**!",
-                ch.id.mention()
-            ));
-        } else {
-            queries::set_okxxx_channel(db, &guild_id, Some(ch.id.to_string().as_str())).await?;
-            lines.push(format!("🌶️  **OK.XXX** → {} *(top studio videos — Brazzers, Reality Kings…)*", ch.id.mention()));
+        match ensure_nsfw(ctx, ch).await {
+            Ok(auto_configured) => {
+                queries::set_okxxx_channel(db, &guild_id, Some(ch.id.to_string().as_str())).await?;
+                if auto_configured {
+                    lines.push(format!("🌶️  **OK.XXX** → {} [Automatically Set Age-Restricted]", ch.id.mention()));
+                } else {
+                    lines.push(format!("🌶️  **OK.XXX** → {} *(top studio videos — Brazzers, Reality Kings…)*", ch.id.mention()));
+                }
+            }
+            Err(warn_msg) => {
+                warnings.push(format!("⚠️  **OK.XXX** warning: {}", warn_msg));
+                queries::set_okxxx_channel(db, &guild_id, Some(ch.id.to_string().as_str())).await?;
+                lines.push(format!("🌶️  **OK.XXX** → {} *(not Age-Restricted yet!)*", ch.id.mention()));
+            }
         }
     }
 
@@ -166,3 +192,28 @@ pub async fn setup(
     ctx.say(response).await?;
     Ok(())
 }
+
+/// Helper to ensure a channel is marked as Age-Restricted (NSFW).
+/// Returns Ok(true) if it had to be automatically configured as NSFW.
+/// Returns Ok(false) if it was already NSFW.
+/// Returns Err(String) with a warning message if it is not NSFW and we failed to edit it.
+async fn ensure_nsfw(
+    ctx: Context<'_>,
+    ch: &serenity::GuildChannel,
+) -> Result<bool, String> {
+    if ch.nsfw {
+        return Ok(false);
+    }
+
+    // Try to update channel to NSFW
+    let builder = serenity::EditChannel::new().nsfw(true);
+    match ch.id.edit(&ctx.serenity_context().http, builder).await {
+        Ok(_) => Ok(true),
+        Err(e) => Err(format!(
+            "{} is not Age-Restricted and the bot failed to enable it automatically: {}. Please enable it manually in Channel Settings.",
+            ch.id.mention(),
+            e
+        )),
+    }
+}
+

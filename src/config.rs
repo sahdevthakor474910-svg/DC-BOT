@@ -14,6 +14,8 @@ pub struct AppConfig {
     pub reddit_user_agent: String,
     /// Tracing log level filter (e.g. "info", "debug").
     pub log_level: String,
+    /// Public base URL of the bot server for rendering web-stream links.
+    pub public_url: String,
 }
 
 impl AppConfig {
@@ -32,6 +34,8 @@ impl AppConfig {
             reddit_user_agent: env::var("REDDIT_USER_AGENT")
                 .unwrap_or_else(|_| "discord-meme-bot/1.0".to_string()),
             log_level: env::var("LOG_LEVEL").unwrap_or_else(|_| "info".to_string()),
+            public_url: env::var("PUBLIC_URL")
+                .unwrap_or_else(|_| "http://localhost:10000".to_string()),
         })
     }
 }

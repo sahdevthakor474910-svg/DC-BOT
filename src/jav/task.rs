@@ -126,9 +126,17 @@ async fn post_videos(
                 video.duration, views_str
             );
 
+            let play_url = format!(
+                "{}/play?url={}&source=jav&title={}",
+                data.config.public_url,
+                crate::web::encode_hex(&video.page_url),
+                url::form_urlencoded::byte_serialize(video.title.as_bytes()).collect::<String>()
+            );
+
             let embed = serenity::CreateEmbed::new()
                 .title(&video.title)
                 .url(&video.page_url)
+                .description(format!("🌐 **[Web Stream Player]({})**", play_url))
                 .color(0xFF3366) // Hot pink for JAV
                 .footer(serenity::CreateEmbedFooter::new(footer));
 

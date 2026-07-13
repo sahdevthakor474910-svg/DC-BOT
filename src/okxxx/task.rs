@@ -113,10 +113,18 @@ async fn post_videos(
                 format!(" • ⏱️ {}", video.duration)
             };
 
+            let play_url = format!(
+                "{}/play?url={}&source=okxxx&title={}",
+                data.config.public_url,
+                crate::web::encode_hex(&video.url),
+                url::form_urlencoded::byte_serialize(video.title.as_bytes()).collect::<String>()
+            );
+
             let embed = serenity::CreateEmbed::new()
                 .title(&video.title)
                 .url(&video.url)
                 .image(&video.thumbnail)
+                .description(format!("🌐 **[Web Stream Player]({})**", play_url))
                 .color(0xFF4500) // Deep orange-red
                 .footer(serenity::CreateEmbedFooter::new(format!(
                     "🔥 OK.XXX{}{}",

@@ -76,6 +76,33 @@ pub async fn handle(
     for emoji_str in emoji_set {
         let reaction = parse_reaction(&emoji_str);
         if let Err(e) = message.react(&ctx.http, reaction).await {
+            let err_str = e.to_string();
+
+            // Unknown/deleted custom emoji — fall back to 👍 and continue
+            if err_str.contains("Unknown Emoji") || err_str.contains("10014") {
+                tracing::warn!(
+                    "Custom emoji '{}' is unknown/deleted, falling back to 👍 (msg {})",
+                    emoji_str, message.id
+                );
+                let _ = message.react(&ctx.http, serenity::ReactionType::Unicode("👍".to_string())).await;
+                continue;
+            }
+
+            // User blocked bot or bot lacks permissions for THIS reaction — skip, try next
+            if err_str.contains("50007")
+                || err_str.contains("blocked")
+                || err_str.contains("Missing Permissions")
+                || err_str.contains("Missing Access")
+                || err_str.contains("50013")
+            {
+                tracing::warn!(
+                    "Skipping reaction '{}' on msg {} (blocked/no perms: {})",
+                    emoji_str, message.id, err_str
+                );
+                continue;
+            }
+
+            // Any other error — log and still continue with remaining emojis
             error!(
                 "Failed to react with '{}' to message {}: {}",
                 emoji_str, message.id, e

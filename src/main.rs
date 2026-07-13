@@ -12,6 +12,7 @@ mod news;
 mod okxxx;
 mod porn;
 mod reddit;
+mod web;
 
 use std::sync::Arc;
 
@@ -224,9 +225,10 @@ async fn main() -> Result<()> {
                 }
                 info!("⏱️  CoC update task spawned (every 10 min — r/ClashOfClans + YouTube)");
 
-                // ── Web Server for Render Health Check ───────────────────
+                // ── Web Server for Health Check + Media Stream Player ────
+                let server_data = bot_data.clone();
                 tokio::spawn(async move {
-                    let app = axum::Router::new().route("/", axum::routing::get(|| async { "Bot is active!" }));
+                    let app = web::create_router(server_data);
                     let port = std::env::var("PORT").unwrap_or_else(|_| "10000".to_string());
                     let addr = format!("0.0.0.0:{}", port);
                     info!("📡 Attempting to start web server on {}...", addr);
