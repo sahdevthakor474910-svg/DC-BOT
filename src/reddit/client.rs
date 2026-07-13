@@ -48,84 +48,92 @@ impl RedditClient {
         Ok(Self { client })
     }
 
-    /// Fetch the top posts from a subreddit using meme-api.com with direct Reddit JSON fallback.
+    /// Fetch the top posts from a subreddit.
+    /// Strategy:
+    ///   1. Try meme-api.com (fast, easy, no auth)
+    ///   2. On any failure, try direct Reddit hot.json (works for SFW subreddits)
+    ///   3. If both fail (e.g. NSFW subreddits that require login), return Ok(empty) silently
     pub async fn fetch_hot_posts(&self, subreddit: &str, limit: u32) -> Result<Vec<RedditPost>> {
         debug!("Fetching r/{} via meme-api.com (limit {})", subreddit, limit);
 
         let url = format!("https://meme-api.com/gimme/{}/{}", subreddit, limit);
 
-        match self.client.get(&url).send().await {
-            Ok(resp) => {
-                if let Ok(resp) = resp.error_for_status() {
-                    if let Ok(response) = resp.json::<MemeApiResponse>().await {
-                        let posts: Vec<RedditPost> = response.memes
-                            .into_iter()
-                            .filter(|m| !m.url.is_empty())
-                            .map(|m| {
-                                let id = m.post_link
-                                    .trim_end_matches('/')
-                                    .rsplit('/')
-                                    .next()
-                                    .unwrap_or(&m.post_link)
-                                    .to_string();
+        // ── 1. Try meme-api.com ───────────────────────────────────────────────────
+        let meme_api_result = async {
+            let resp = self.client.get(&url).send().await?.error_for_status()?;
+            resp.json::<MemeApiResponse>().await
+        }.await;
 
-                                RedditPost {
-                                    id,
-                                    title: m.title,
-                                    author: m.author,
-                                    score: m.ups as i64,
-                                    url: m.url.clone(),
-                                    url_overridden_by_dest: Some(m.url),
-                                    is_video: false,
-                                    over_18: m.nsfw,
-                                    spoiler: m.spoiler,
-                                    stickied: false,
-                                    post_hint: Some("image".to_string()),
-                                    media: None,
-                                    preview: None,
-                                    subreddit: m.subreddit,
-                                    permalink: m.post_link,
-                                }
-                            })
-                            .collect();
-
-                        debug!("Got {} posts from r/{} via meme-api", posts.len(), subreddit);
-                        return Ok(posts);
+        if let Ok(response) = meme_api_result {
+            let posts: Vec<RedditPost> = response.memes
+                .into_iter()
+                .filter(|m| !m.url.is_empty())
+                .map(|m| {
+                    let id = m.post_link
+                        .trim_end_matches('/')
+                        .rsplit('/')
+                        .next()
+                        .unwrap_or(&m.post_link)
+                        .to_string();
+                    RedditPost {
+                        id,
+                        title: m.title,
+                        author: m.author,
+                        score: m.ups as i64,
+                        url: m.url.clone(),
+                        url_overridden_by_dest: Some(m.url),
+                        is_video: false,
+                        over_18: m.nsfw,
+                        spoiler: m.spoiler,
+                        stickied: false,
+                        post_hint: Some("image".to_string()),
+                        media: None,
+                        preview: None,
+                        subreddit: m.subreddit,
+                        permalink: m.post_link,
                     }
+                })
+                .collect();
+            debug!("Got {} posts from r/{} via meme-api", posts.len(), subreddit);
+            return Ok(posts);
+        }
+
+        // ── 2. Fall back to direct Reddit hot.json ───────────────────────────────
+        // Note: NSFW subreddits (nsfw, gonewild, etc.) require Reddit login and will
+        // return 403 — handled gracefully below.
+        debug!("meme-api unavailable for r/{}, trying Reddit hot.json...", subreddit);
+        let reddit_url = format!("https://www.reddit.com/r/{}/hot.json?limit={}&raw_json=1", subreddit, limit);
+
+        let reddit_result = async {
+            let resp = self.client
+                .get(&reddit_url)
+                .header("Accept", "application/json")
+                .send()
+                .await?
+                .error_for_status()?;
+            resp.json::<RedditResponse>().await
+        }.await;
+
+        match reddit_result {
+            Ok(response) => {
+                let mut posts = Vec::new();
+                for child in response.data.children {
+                    let mut post = child.data;
+                    if post.url.is_empty() { continue; }
+                    if !post.permalink.starts_with("http") {
+                        post.permalink = format!("https://www.reddit.com{}", post.permalink);
+                    }
+                    posts.push(post);
                 }
+                debug!("Got {} posts from r/{} via Reddit hot.json", posts.len(), subreddit);
+                Ok(posts)
             }
+            // ── 3. Both sources failed (e.g. NSFW 403) — return empty silently ──
             Err(e) => {
-                warn!("Meme-api request error for r/{}: {}", subreddit, e);
+                debug!("r/{} unavailable from all sources ({}), skipping this cycle", subreddit, e);
+                Ok(vec![])
             }
         }
-
-        // ── Direct Reddit hot.json fallback ──────────────────────────────────────
-        warn!("meme-api.com failed or returned 503 for r/{}. Falling back to direct Reddit hot.json API...", subreddit);
-        let reddit_url = format!("https://www.reddit.com/r/{}/hot.json?limit={}", subreddit, limit);
-
-        let response = self.client
-            .get(&reddit_url)
-            .send()
-            .await?
-            .error_for_status()?
-            .json::<RedditResponse>()
-            .await?;
-
-        let mut posts = Vec::new();
-        for child in response.data.children {
-            let mut post = child.data;
-            if post.url.is_empty() {
-                continue;
-            }
-            // Ensure permalink is a full URL:
-            if !post.permalink.starts_with("http") {
-                post.permalink = format!("https://www.reddit.com{}", post.permalink);
-            }
-            posts.push(post);
-        }
-
-        debug!("Got {} posts from r/{} via direct Reddit fallback", posts.len(), subreddit);
-        Ok(posts)
     }
 
 
