@@ -158,6 +158,20 @@ async fn main() -> Result<()> {
                 poise::builtins::register_globally(ctx, &framework.options().commands).await?;
                 info!("📋 Slash commands registered globally");
 
+                // Also register command updates instantly in guilds stored in database
+                if let Ok(configs) = crate::db::queries::get_all_guild_configs(&bot_data.db).await {
+                    for cfg in configs {
+                        if let Ok(guild_id_num) = cfg.guild_id.parse::<u64>() {
+                            let guild_id = serenity::GuildId::new(guild_id_num);
+                            if let Err(e) = poise::builtins::register_in_guild(ctx, &framework.options().commands, guild_id).await {
+                                tracing::warn!("Failed to register commands instantly in guild {}: {:?}", cfg.guild_id, e);
+                            } else {
+                                info!("📋 Slash commands registered instantly in guild {}", cfg.guild_id);
+                            }
+                        }
+                    }
+                }
+
                 // ── Spawn background tasks ──────────────────────────────
                 {
                     let d = bot_data.clone();
