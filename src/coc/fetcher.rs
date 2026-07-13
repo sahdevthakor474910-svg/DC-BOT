@@ -49,37 +49,37 @@ const MAX_AGE_HOURS: i64 = 48;
 fn classify(title: &str) -> Option<&'static str> {
     let t = title.to_lowercase();
 
+    // Free reward / gifts / store freebies
     if t.contains("free") || t.contains("reward") || t.contains("gift")
         || t.contains("magic item") || t.contains("code") || t.contains("redeem")
         || t.contains("giveaway") || t.contains("gem") || t.contains("free gift")
-        || t.contains("clan games") || t.contains("magic items")
+        || t.contains("special offer") || t.contains("store")
     {
         return Some("🎁 Free Reward");
     }
-    if t.contains("cwl") || t.contains("clan war league") || t.contains("war league") {
-        return Some("🏆 Clan War League");
-    }
-    if t.contains("event") || t.contains("challenge") || t.contains("championship")
-        || t.contains("esport") || t.contains("qualifier") || t.contains("legend league")
-        || t.contains("gold pass") || t.contains("spotlight") || t.contains("calendar")
-    {
-        return Some("🏅 Event");
-    }
+
+    // Season updates, Sneak Peeks, Maintenance, balance changes, Town Hall updates
     if t.contains("update") || t.contains("patch") || t.contains("season")
         || t.contains("sneak peek") || t.contains("balance") || t.contains("maintenance")
         || t.contains("new hero") || t.contains("new troop") || t.contains("new spell")
         || t.contains("town hall") || t.contains("builder hall") || t.contains("changes")
         || t.contains("teaser") || t.contains("coming soon") || t.contains("new feature")
+        || t.contains("trailer") || t.contains("reveal") || t.contains("dev update")
+        || t.contains("developer update") || t.contains("sneak peak")
     {
         return Some("⚔️ Update");
     }
-    if t.contains("announcement") || t.contains("reveal") || t.contains("official")
-        || t.contains("developer") || t.contains("community")
+
+    // Clan Games, Gold Pass, Events, Challenges (e.g. spotlight etc)
+    if t.contains("event") || t.contains("challenge") || t.contains("championship")
+        || t.contains("esport") || t.contains("qualifier") || t.contains("legend league")
+        || t.contains("gold pass") || t.contains("spotlight") || t.contains("calendar")
+        || t.contains("clan games") || t.contains("war league") || t.contains("cwl")
     {
-        return Some("📢 Announcement");
+        return Some("🏅 Event");
     }
 
-    Some("📰 News")
+    None
 }
 
 // =============================================================================
@@ -131,13 +131,11 @@ fn is_recent(ts: Option<chrono::DateTime<chrono::Utc>>) -> bool {
 
 /// Fetch one RSS/Atom feed and map entries to CocUpdate.
 ///
-/// * `is_youtube`         — skip keyword filter, always tag as "📺 Update Video"
 /// * `is_supercell_inbox` — ALL items are official; bypass date gate & accept all keywords
 async fn fetch_rss(
     client: &reqwest::Client,
     url: &str,
     source: &str,
-    is_youtube: bool,
     is_supercell_inbox: bool,
 ) -> Vec<CocUpdate> {
     let result: anyhow::Result<Vec<CocUpdate>> = async {
@@ -162,19 +160,14 @@ async fn fetch_rss(
             let published = entry.published;
             let media     = entry.media;
 
-            // For Supercell Inbox: accept all (it's the official CMS, always relevant)
-            // For others: enforce 48-hour recency gate
-            if !is_supercell_inbox && !is_youtube && !is_recent(published) {
+            // For Supercell Inbox: accept all without date gate (it represents the official game inbox)
+            // For others (Reddit/YouTube): enforce 48-hour recency gate
+            if !is_supercell_inbox && !is_recent(published) {
                 return None;
             }
 
-            let tag: &str = if is_youtube {
-                "📺 Update Video"
-            } else if is_supercell_inbox {
-                classify(&title).unwrap_or("📰 News")
-            } else {
-                classify(&title)?
-            };
+            let tag = classify(&title)?;
+
 
             let description = summary
                 .or(content)
@@ -222,11 +215,11 @@ async fn fetch_rss(
 pub async fn fetch_all_updates(client: &reqwest::Client) -> Vec<CocUpdate> {
     // All five sources fetched concurrently
     let (mut sc_news, mut sc_events, mut sc_community, mut youtube, mut reddit) = tokio::join!(
-        fetch_rss(client, SUPERCELL_NEWS_RSS,      "Supercell News",      false, true),
-        fetch_rss(client, SUPERCELL_EVENTS_RSS,    "Supercell Events",    false, true),
-        fetch_rss(client, SUPERCELL_COMMUNITY_RSS, "Supercell Community", false, true),
-        fetch_rss(client, COC_YOUTUBE_RSS,         "CoC YouTube",         true,  false),
-        fetch_rss(client, REDDIT_OFFICIAL_RSS,     "r/ClashOfClans",      false, false),
+        fetch_rss(client, SUPERCELL_NEWS_RSS,      "Supercell News",      true),
+        fetch_rss(client, SUPERCELL_EVENTS_RSS,    "Supercell Events",    true),
+        fetch_rss(client, SUPERCELL_COMMUNITY_RSS, "Supercell Community", true),
+        fetch_rss(client, COC_YOUTUBE_RSS,         "CoC YouTube",         false),
+        fetch_rss(client, REDDIT_OFFICIAL_RSS,     "r/ClashOfClans",      false),
     );
 
     let mut all: Vec<CocUpdate> = Vec::new();
