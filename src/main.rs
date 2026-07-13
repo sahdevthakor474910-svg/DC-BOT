@@ -2,6 +2,7 @@
 
 mod commands;
 mod config;
+mod coc;
 mod data;
 mod db;
 mod events;
@@ -215,6 +216,13 @@ async fn main() -> Result<()> {
                     tokio::spawn(async move { okxxx::task::run(d, h).await });
                 }
                 info!("⏱️  OK.XXX task spawned (every 25 min — ok.xxx scraper)");
+
+                {
+                    let d = bot_data.clone();
+                    let h = Arc::clone(&http);
+                    tokio::spawn(async move { coc::task::run(d, h).await });
+                }
+                info!("⏱️  CoC update task spawned (every 10 min — r/ClashOfClans + YouTube)");
 
                 // ── Web Server for Render Health Check ───────────────────
                 tokio::spawn(async move {

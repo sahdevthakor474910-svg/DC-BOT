@@ -36,6 +36,9 @@ pub async fn setup(
 
     #[description = "🌶️ OK.XXX channel — must be Age-Restricted! (ok.xxx: top studio videos — every 25 min)"]
     okxxx: Option<serenity::GuildChannel>,
+
+    #[description = "⚔️ Clash of Clans channel — updates, events, free rewards (every 10 min)"]
+    coc: Option<serenity::GuildChannel>,
 ) -> Result<(), Error> {
     let guild_id = ctx.guild_id().unwrap().to_string();
     let db = &ctx.data().db;
@@ -118,6 +121,12 @@ pub async fn setup(
             queries::set_okxxx_channel(db, &guild_id, Some(ch.id.to_string().as_str())).await?;
             lines.push(format!("🌶️  **OK.XXX** → {} *(top studio videos — Brazzers, Reality Kings…)*", ch.id.mention()));
         }
+    }
+
+    // ── Clash of Clans ─────────────────────────────────────────────────────
+    if let Some(ch) = &coc {
+        queries::set_coc_channel(db, &guild_id, Some(ch.id.to_string().as_str())).await?;
+        lines.push(format!("⚔️  **Clash of Clans** → {} *(updates, events & free rewards — every 10 min)*", ch.id.mention()));
     }
 
     // ── Nothing provided ───────────────────────────────────────────────────

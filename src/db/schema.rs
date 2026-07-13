@@ -41,6 +41,10 @@ pub async fn run_migrations(db: &SqlitePool) -> Result<()> {
     let m7 = include_str!("../../migrations/007_blocked_users.sql");
     run_statements(db, m7).await?;
 
+    // ── Migration 008: Clash of Clans channel + seen_coc dedup table ──────────
+    let m8 = include_str!("../../migrations/008_coc_channel.sql");
+    run_migration_alter(db, m8, "008").await?;
+
     info!("Database migrations complete");
     Ok(())
 }
