@@ -19,15 +19,16 @@ use super::models::CocUpdate;
 //    Supercell community managers (u/ClashOfClans) post announcements here.
 // =============================================================================
 
-// Supercell Inbox RSS feeds (correct path format: /rss/<game>/<lang>/<feed>.xml)
+// Supercell Inbox RSS feeds (raw.githubusercontent.com paths)
 const SUPERCELL_NEWS_RSS: &str =
-    "https://skrwo.github.io/supercell-inbox-rss/rss/clashofclans/en/news.xml";
+    "https://raw.githubusercontent.com/skrwo/supercell-inbox-rss/main/rss/clashofclans/en/news.xml";
 
 const SUPERCELL_EVENTS_RSS: &str =
-    "https://skrwo.github.io/supercell-inbox-rss/rss/clashofclans/en/events.xml";
+    "https://raw.githubusercontent.com/skrwo/supercell-inbox-rss/main/rss/clashofclans/en/events.xml";
 
 const SUPERCELL_COMMUNITY_RSS: &str =
-    "https://skrwo.github.io/supercell-inbox-rss/rss/clashofclans/en/community.xml";
+    "https://raw.githubusercontent.com/skrwo/supercell-inbox-rss/main/rss/clashofclans/en/community.xml";
+
 
 // YouTube channel ID verified from https://www.youtube.com/@ClashofClans
 const COC_YOUTUBE_RSS: &str =
