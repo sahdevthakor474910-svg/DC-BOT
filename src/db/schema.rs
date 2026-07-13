@@ -37,6 +37,10 @@ pub async fn run_migrations(db: &SqlitePool) -> Result<()> {
     let m6 = include_str!("../../migrations/006_okxxx_channel.sql");
     run_migration_alter(db, m6, "006").await?;
 
+    // ── Migration 007: per-guild user blocklist ────────────────────────────────
+    let m7 = include_str!("../../migrations/007_blocked_users.sql");
+    run_statements(db, m7).await?;
+
     info!("Database migrations complete");
     Ok(())
 }

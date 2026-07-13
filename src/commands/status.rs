@@ -66,6 +66,7 @@ pub async fn status(ctx: Context<'_>) -> Result<(), Error> {
         .field("🔞 NSFW",             ch(cfg.nsfw_channel_id.as_ref()),          true)
         .field("🎌 JAV Videos",       ch(cfg.jav_channel_id.as_ref()),           true)
         .field("🔥 Porn Videos",      ch(cfg.porn_video_channel_id.as_ref()),    true)
+        .field("🌶️ OK.XXX",           ch(cfg.okxxx_channel_id.as_ref()),         true)
         // ── Extra NSFW splits (collapsed) ────────────────────────────────────
         .field("🔞 Rule34",           ch(cfg.rule34_channel_id.as_ref()),        true)
         .field("🔞 Hentai",           ch(cfg.hentai_channel_id.as_ref()),        true)
@@ -77,7 +78,7 @@ pub async fn status(ctx: Context<'_>) -> Result<(), Error> {
         .field("📢 React Channels",   ch_list,                                   false)
         .field("👤 React Users",      user_list,                                 false)
         .footer(serenity::CreateEmbedFooter::new(
-            "Memes: configurable (default 60s) • News: 5min • Free Games: 15min • JAV: 15min • Porn: 20min   |   /setup to change channels • /post to post now"
+            "Memes: configurable (default 60s) • News: 5min • Free Games: 15min • JAV: 15min • Porn: 20min • OK.XXX: 25min   |   /setup to change channels • /post to post now"
         ));
 
     ctx.send(poise::CreateReply::default().embed(embed)).await?;

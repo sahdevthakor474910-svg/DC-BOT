@@ -143,6 +143,10 @@ async fn main() -> Result<()> {
                     }
                 })
             },
+            // ── Global check: silently block banned users on every command ──
+            command_check: Some(|ctx| {
+                Box::pin(commands::checks::is_not_blocked_check(ctx))
+            }),
             ..Default::default()
         })
         .setup(move |ctx, _ready, framework| {
@@ -281,6 +285,48 @@ mod tests {
         let videos = videos.unwrap();
         println!("Fetched RedTube videos: {:?}", videos);
         assert!(!videos.is_empty(), "RedTube videos list should not be empty");
+    }
+
+    #[tokio::test]
+    async fn test_okxxx_fetch() {
+        let client = okxxx::client::OkXxxClient::new().unwrap();
+        let videos = client.fetch_videos(1).await;
+        assert!(videos.is_ok(), "Failed to fetch OK.XXX videos: {:?}", videos.err());
+        let videos = videos.unwrap();
+        println!("Fetched OK.XXX videos: {:?}", videos);
+        assert!(!videos.is_empty(), "OK.XXX videos list should not be empty");
+    }
+
+    #[tokio::test]
+    async fn test_guild_fetching() {
+        let _ = dotenvy::dotenv();
+        let token = std::env::var("DISCORD_TOKEN").expect("token missing");
+        let http = serenity::Http::new(&token);
+        
+        let db_url = std::env::var("DATABASE_URL").unwrap_or_else(|_| "sqlite://data/bot.db".to_string());
+        use sqlx::sqlite::SqlitePool;
+        let pool = SqlitePool::connect(&db_url).await.unwrap();
+        
+        let rows = sqlx::query("SELECT guild_id FROM guild_config")
+            .fetch_all(&pool)
+            .await
+            .unwrap();
+            
+        use sqlx::Row;
+        for row in rows {
+            let guild_id_str: String = row.get("guild_id");
+            let guild_id: u64 = guild_id_str.parse().unwrap();
+            let guild = serenity::GuildId::new(guild_id);
+            println!("Testing guild: {}", guild_id);
+            match guild.to_partial_guild(&http).await {
+                Ok(partial) => {
+                    println!("  Guild Name: {}, Owner ID: {}", partial.name, partial.owner_id);
+                }
+                Err(e) => {
+                    println!("  Failed to fetch guild details: {:?}", e);
+                }
+            }
+        }
     }
 }
 

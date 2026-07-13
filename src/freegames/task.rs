@@ -36,11 +36,15 @@ pub async fn run(data: Data, http: Arc<serenity::Http>) {
 /// Store-specific embed accent colour.
 fn store_colour(store: &str) -> u32 {
     match store {
-        "Epic Games" => 0x2D2D2D,
-        "Steam"      => 0x1B2838,
-        "GOG"        => 0xA62AA2,
-        "Ubisoft"    => 0x0070FF,
-        _            => 0x5865F2,
+        "Epic Games" => 0x2D2D2D,   // Epic dark
+        "Steam"      => 0x1B2838,   // Steam dark blue
+        "GOG"        => 0xA62AA2,   // GOG purple
+        "Ubisoft"    => 0x0070FF,   // Ubisoft blue
+        "Itch.io"    => 0xFF2449,   // Itch.io red
+        "IndieGala"  => 0xE94D2E,   // IndieGala orange-red
+        "Stove"      => 0x00C896,   // Stove teal
+        "DRM-Free"   => 0x27AE60,   // generic green
+        _            => 0x5865F2,   // Discord blurple fallback
     }
 }
 

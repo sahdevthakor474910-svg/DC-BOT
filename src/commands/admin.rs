@@ -37,7 +37,10 @@ use crate::porn;
         "add_reaction_user",
         "remove_reaction_user",
         "status",
-        "force_refresh"
+        "force_refresh",
+        "block_user",
+        "unblock_user",
+        "blocked_list"
     )
 )]
 pub async fn admin(_ctx: Context<'_>) -> Result<(), Error> {
@@ -366,5 +369,75 @@ pub async fn force_refresh(ctx: Context<'_>) -> Result<(), Error> {
     ))
     .await?;
 
+    Ok(())
+}
+
+// ── User blocklist management ─────────────────────────────────────────────────
+
+/// Block a user from using any bot commands in this server.
+#[poise::command(slash_command, guild_only, rename = "block-user")]
+pub async fn block_user(
+    ctx: Context<'_>,
+    #[description = "User to block from bot commands"] user: serenity::User,
+) -> Result<(), Error> {
+    let guild_id = ctx.guild_id().unwrap().to_string();
+    let user_id  = user.id.to_string();
+
+    // Prevent blocking yourself or the bot
+    if user.id == ctx.author().id {
+        ctx.say("❌ You can't block yourself.").await?;
+        return Ok(());
+    }
+    if user.bot {
+        ctx.say("❌ You can't block a bot.").await?;
+        return Ok(());
+    }
+
+    queries::block_user(&ctx.data().db, &guild_id, &user_id).await?;
+    ctx.say(format!("🚫 {} has been **blocked** from using bot commands in this server.", user.mention())).await?;
+    Ok(())
+}
+
+/// Unblock a previously blocked user, restoring their access to bot commands.
+#[poise::command(slash_command, guild_only, rename = "unblock-user")]
+pub async fn unblock_user(
+    ctx: Context<'_>,
+    #[description = "User to unblock"] user: serenity::User,
+) -> Result<(), Error> {
+    let guild_id = ctx.guild_id().unwrap().to_string();
+    let user_id  = user.id.to_string();
+
+    queries::unblock_user(&ctx.data().db, &guild_id, &user_id).await?;
+    ctx.say(format!("✅ {} has been **unblocked** and can use bot commands again.", user.mention())).await?;
+    Ok(())
+}
+
+/// Show all users currently blocked from bot commands in this server.
+#[poise::command(slash_command, guild_only, rename = "blocked-list")]
+pub async fn blocked_list(ctx: Context<'_>) -> Result<(), Error> {
+    let guild_id = ctx.guild_id().unwrap().to_string();
+    let blocked  = queries::get_blocked_users(&ctx.data().db, &guild_id).await?;
+
+    if blocked.is_empty() {
+        ctx.say("✅ No users are currently blocked from bot commands.").await?;
+        return Ok(());
+    }
+
+    let list = blocked
+        .iter()
+        .filter_map(|id| id.parse::<u64>().ok())
+        .map(|id| format!("• {}", serenity::UserId::new(id).mention()))
+        .collect::<Vec<_>>()
+        .join("\n");
+
+    let embed = serenity::CreateEmbed::new()
+        .title("🚫 Blocked Users")
+        .description(format!("The following users are blocked from using bot commands:\n\n{}", list))
+        .color(0xED4245) // Discord red
+        .footer(serenity::CreateEmbedFooter::new(
+            "Use /admin unblock-user @user to restore access"
+        ));
+
+    ctx.send(poise::CreateReply::default().embed(embed)).await?;
     Ok(())
 }

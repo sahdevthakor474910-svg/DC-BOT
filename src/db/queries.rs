@@ -704,3 +704,46 @@ pub async fn clear_guild_seen_cache(db: &SqlitePool, guild_id: &str) -> Result<(
     sqlx::query("DELETE FROM seen_okxxx WHERE guild_id = ?").bind(guild_id).execute(db).await?;
     Ok(())
 }
+
+// ────────────────────────────────────────────────────────────────────────────
+// Blocked users (per-guild command ban)
+// ────────────────────────────────────────────────────────────────────────────
+
+pub async fn block_user(db: &SqlitePool, guild_id: &str, user_id: &str) -> Result<()> {
+    sqlx::query(
+        "INSERT OR IGNORE INTO blocked_users (guild_id, user_id) VALUES (?, ?)",
+    )
+    .bind(guild_id)
+    .bind(user_id)
+    .execute(db)
+    .await?;
+    Ok(())
+}
+
+pub async fn unblock_user(db: &SqlitePool, guild_id: &str, user_id: &str) -> Result<()> {
+    sqlx::query("DELETE FROM blocked_users WHERE guild_id = ? AND user_id = ?")
+        .bind(guild_id)
+        .bind(user_id)
+        .execute(db)
+        .await?;
+    Ok(())
+}
+
+pub async fn is_user_blocked(db: &SqlitePool, guild_id: &str, user_id: &str) -> Result<bool> {
+    let row = sqlx::query(
+        "SELECT 1 FROM blocked_users WHERE guild_id = ? AND user_id = ? LIMIT 1",
+    )
+    .bind(guild_id)
+    .bind(user_id)
+    .fetch_optional(db)
+    .await?;
+    Ok(row.is_some())
+}
+
+pub async fn get_blocked_users(db: &SqlitePool, guild_id: &str) -> Result<Vec<String>> {
+    let rows = sqlx::query("SELECT user_id FROM blocked_users WHERE guild_id = ?")
+        .bind(guild_id)
+        .fetch_all(db)
+        .await?;
+    Ok(rows.into_iter().map(|r| r.get("user_id")).collect())
+}
