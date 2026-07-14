@@ -93,14 +93,19 @@
             left: 0;
             width: 100vw;
             height: 100vh;
-            background: rgba(5, 5, 8, 0.85);
-            backdrop-filter: blur(35px);
-            -webkit-backdrop-filter: blur(35px);
-            z-index: 999;
+            /* Solid dark base so the layer is always painted, even if backdrop-filter is unsupported */
+            background: rgba(5, 5, 8, 0.92);
+            backdrop-filter: blur(24px);
+            -webkit-backdrop-filter: blur(24px);
+            z-index: 9999;
             display: flex;
             justify-content: center;
             align-items: center;
-            transition: opacity 0.5s cubic-bezier(0.4, 0, 0.2, 1), visibility 0.5s;
+            /* Explicit starting state — required for CSS opacity transitions to work */
+            opacity: 1;
+            visibility: visible;
+            pointer-events: all;
+            transition: opacity 0.45s cubic-bezier(0.4, 0, 0.2, 1), visibility 0.45s;
         }
         .warning-overlay.hidden {
             opacity: 0;
