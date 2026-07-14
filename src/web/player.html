@@ -85,137 +85,9 @@
             height: 100%;
             object-fit: contain;
         }
-        
-        /* NSFW WARNING OVERLAY */
-        .warning-overlay {
-            position: fixed;
-            top: 0;
-            left: 0;
-            width: 100vw;
-            height: 100vh;
-            /* Solid dark base so the layer is always painted, even if backdrop-filter is unsupported */
-            background: rgba(5, 5, 8, 0.92);
-            backdrop-filter: blur(24px);
-            -webkit-backdrop-filter: blur(24px);
-            z-index: 9999;
-            display: flex;
-            justify-content: center;
-            align-items: center;
-            /* Explicit starting state — required for CSS opacity transitions to work */
-            opacity: 1;
-            visibility: visible;
-            pointer-events: all;
-            transition: opacity 0.45s cubic-bezier(0.4, 0, 0.2, 1), visibility 0.45s;
-        }
-        .warning-overlay.hidden {
-            opacity: 0;
-            visibility: hidden;
-            pointer-events: none;
-        }
-        .warning-card {
-            width: 90%;
-            max-width: 450px;
-            background: rgba(255, 255, 255, 0.03);
-            border: 1px solid rgba(255, 255, 255, 0.08);
-            border-radius: 24px;
-            padding: 40px 32px;
-            text-align: center;
-            box-shadow: 0 30px 60px rgba(0, 0, 0, 0.6), inset 0 1px 0 rgba(255,255,255,0.1);
-            display: flex;
-            flex-direction: column;
-            align-items: center;
-            gap: 24px;
-            transform: scale(1);
-            transition: transform 0.4s cubic-bezier(0.175, 0.885, 0.32, 1.275);
-        }
-        .warning-overlay.hidden .warning-card {
-            transform: scale(0.9);
-        }
-        .warning-icon {
-            font-size: 3rem;
-            color: #ff2a5f;
-            background: rgba(255, 42, 95, 0.1);
-            width: 80px;
-            height: 80px;
-            display: flex;
-            justify-content: center;
-            align-items: center;
-            border-radius: 50%;
-            border: 1px solid rgba(255, 42, 95, 0.3);
-            box-shadow: 0 0 20px rgba(255, 42, 95, 0.2);
-            animation: pulse 2s infinite;
-        }
-        .warning-title {
-            font-size: 1.6rem;
-            font-weight: 800;
-            color: #ffffff;
-            letter-spacing: 0.5px;
-        }
-        .warning-text {
-            color: #9ca3af;
-            font-size: 0.95rem;
-            line-height: 1.6;
-        }
-        .btn-group {
-            display: flex;
-            gap: 16px;
-            width: 100%;
-            margin-top: 8px;
-        }
-        .btn {
-            flex: 1;
-            padding: 14px 20px;
-            border-radius: 12px;
-            font-family: 'Outfit', sans-serif;
-            font-size: 1rem;
-            font-weight: 600;
-            cursor: pointer;
-            border: none;
-            transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
-        }
-        .btn-primary {
-            background: linear-gradient(135deg, #ff2a5f 0%, #d91b48 100%);
-            color: #ffffff;
-            box-shadow: 0 4px 15px rgba(255, 42, 95, 0.3);
-        }
-        .btn-primary:hover {
-            transform: translateY(-2px);
-            box-shadow: 0 6px 20px rgba(255, 42, 95, 0.5);
-            background: linear-gradient(135deg, #ff4171 0%, #ee2556 100%);
-        }
-        .btn-secondary {
-            background: rgba(255, 255, 255, 0.05);
-            color: #9ca3af;
-            border: 1px solid rgba(255, 255, 255, 0.08);
-        }
-        .btn-secondary:hover {
-            background: rgba(255, 255, 255, 0.1);
-            color: #ffffff;
-        }
-        
-        @keyframes pulse {
-            0% { transform: scale(1); box-shadow: 0 0 0 0 rgba(255, 42, 95, 0.4); }
-            70% { transform: scale(1.05); box-shadow: 0 0 0 15px rgba(255, 42, 95, 0); }
-            100% { transform: scale(1); box-shadow: 0 0 0 0 rgba(255, 42, 95, 0); }
-        }
     </style>
 </head>
 <body>
-
-    <!-- NSFW Warning Screen -->
-    <div id="warningOverlay" class="warning-overlay">
-        <div class="warning-card">
-            <div class="warning-icon">🔞</div>
-            <div class="warning-title">Age Restricted</div>
-            <div class="warning-text">
-                This channel's video stream contains adult-only content (18+). You must be at least 18 years of age to enter and view this video.
-            </div>
-            <div class="btn-group">
-                <button class="btn btn-secondary" onclick="declineAccess()">Cancel</button>
-                <button class="btn btn-primary" onclick="acceptAccess()">Enter Playback</button>
-            </div>
-        </div>
-    </div>
 
     <!-- Main Player Card -->
     <div class="container">
@@ -224,7 +96,7 @@
             <div class="title" id="videoTitle">{title}</div>
         </div>
         <div class="player-wrapper">
-            <video id="webVideo" controls preload="metadata" playsinline>
+            <video id="webVideo" controls autoplay preload="metadata" playsinline>
                 <source src="{stream_url}" type="video/mp4">
                 Your browser does not support the HTML5 video tag.
             </video>
@@ -232,24 +104,16 @@
     </div>
 
     <script>
-        function acceptAccess() {
-            const overlay = document.getElementById('warningOverlay');
-            overlay.classList.add('hidden');
-            
-            // Try to play the video automatically once warning is accepted
+        // Autofocus the video and attempt to play automatically on load
+        window.addEventListener('DOMContentLoaded', () => {
             const video = document.getElementById('webVideo');
             if (video) {
                 video.focus();
                 video.play().catch(err => {
-                    console.log("Autoplay was blocked by browser, user needs to click play button manually.", err);
+                    console.log("Autoplay blocked by browser. User must click play.", err);
                 });
             }
-        }
-
-        function declineAccess() {
-            // Redirect to a safe page or simply close the window
-            window.location.href = "https://www.google.com";
-        }
+        });
     </script>
 </body>
 </html>
