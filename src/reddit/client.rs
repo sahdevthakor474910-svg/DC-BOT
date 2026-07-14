@@ -10,7 +10,18 @@ use super::models::{RedditPost, RedditResponse};
 pub const SUBREDDITS: &[&str] = &["memes", "dankmemes", "shitposting", "brainrot", "196", "whenthe"];
 
 /// NSFW subreddits — only posted to age-restricted NSFW channels.
-pub const NSFW_SUBREDDITS: &[&str] = &["nsfw", "gonewild", "rule34", "hentai", "RealGirls", "milf", "boobs", "amateur"];
+pub const NSFW_SUBREDDITS: &[&str] = &[
+    "nsfw",
+    "gonewild",
+    "rule34",
+    "hentai",
+    "RealGirls",
+    "milf",
+    "boobs",
+    "amateur",
+    "curvy",
+    "BustyPetite",
+];
 
 
 // ─── Meme API response ────────────────────────────────────────────────────────

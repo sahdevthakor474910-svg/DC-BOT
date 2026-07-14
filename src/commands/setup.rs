@@ -40,6 +40,9 @@ pub async fn setup(
     #[description = "⚔️ Clash of Clans channel — updates, events, free rewards (every 10 min)"]
     coc: Option<serenity::GuildChannel>,
 
+    #[description = "📸 Hot Photos channel — must be Age-Restricted! (naked girls, curvy bodies, amateur photos — every 1 min)"]
+    hot_photos: Option<serenity::GuildChannel>,
+
     #[description = "🌍 X / Twitter Global updates — @dmc_poc every 10 min"]
     twitter_global: Option<serenity::GuildChannel>,
 
@@ -159,6 +162,25 @@ pub async fn setup(
     if let Some(ch) = &coc {
         queries::set_coc_channel(db, &guild_id, Some(ch.id.to_string().as_str())).await?;
         lines.push(format!("⚔️  **Clash of Clans** → {} *(updates, events & free rewards — every 10 min)*", ch.id.mention()));
+    }
+
+    // ── Hot Photos ─────────────────────────────────────────────────────────
+    if let Some(ch) = &hot_photos {
+        match ensure_nsfw(ctx, ch).await {
+            Ok(auto_configured) => {
+                queries::set_porn_channel(db, &guild_id, Some(ch.id.to_string().as_str())).await?;
+                if auto_configured {
+                    lines.push(format!("📸  **Hot Photos** → {} [Automatically Set Age-Restricted]", ch.id.mention()));
+                } else {
+                    lines.push(format!("📸  **Hot Photos** → {} *(amateurs, curves, naked girls — every minute)*", ch.id.mention()));
+                }
+            }
+            Err(warn_msg) => {
+                warnings.push(format!("⚠️  **Hot Photos** warning: {}", warn_msg));
+                queries::set_porn_channel(db, &guild_id, Some(ch.id.to_string().as_str())).await?;
+                lines.push(format!("📸  **Hot Photos** → {} *(not Age-Restricted yet!)*", ch.id.mention()));
+            }
+        }
     }
 
     // ── Twitter / X (Global) ───────────────────────────────────────────────
