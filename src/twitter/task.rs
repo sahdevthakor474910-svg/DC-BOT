@@ -32,6 +32,12 @@ pub async fn run(data: Data, http: Arc<serenity::Http>) {
     }
 }
 
+/// Dynamic run_once wrapper for slash command /post.
+pub async fn run_once(data: &Data, http: &Arc<serenity::Http>) -> Result<usize> {
+    let client = TwitterClient::new()?;
+    tick(data, http, &client).await
+}
+
 async fn tick(
     data: &Data,
     http: &Arc<serenity::Http>,

@@ -27,7 +27,7 @@ pub async fn post(ctx: Context<'_>) -> Result<(), Error> {
     let data = ctx.data().clone();
     let http: Arc<serenity::Http> = Arc::clone(&ctx.serenity_context().http);
 
-    let (meme_res, news_res, fg_res, jav_res, porn_res, okxxx_res, coc_res) = tokio::join!(
+    let (meme_res, news_res, fg_res, jav_res, porn_res, okxxx_res, coc_res, twitter_res) = tokio::join!(
         reddit::task::run_once(&data, &http),
         news::task::run_once(&data, &http),
         freegames::task::run_once(&data, &http),
@@ -35,17 +35,19 @@ pub async fn post(ctx: Context<'_>) -> Result<(), Error> {
         porn::task::run_once(&data, &http),
         okxxx::task::run_once(&data, &http),
         coc::task::run_once(&data, &http),
+        crate::twitter::task::run_once(&data, &http),
     );
 
-    let meme_n  = meme_res.unwrap_or_else(|e| { tracing::error!("Meme refresh: {:#}", e); 0 });
-    let news_n  = news_res.unwrap_or_else(|e| { tracing::error!("News refresh: {:#}", e); 0 });
-    let fg_n    = fg_res.unwrap_or_else(|e|   { tracing::error!("FG refresh: {:#}", e);   0 });
-    let jav_n   = jav_res.unwrap_or_else(|e|  { tracing::error!("JAV refresh: {:#}", e);  0 });
-    let porn_n  = porn_res.unwrap_or_else(|e| { tracing::error!("Porn refresh: {:#}", e); 0 });
-    let okxxx_n = okxxx_res.unwrap_or_else(|e| { tracing::error!("OK.XXX refresh: {:#}", e); 0 });
-    let coc_n   = coc_res.unwrap_or_else(|e| { tracing::error!("CoC refresh: {:#}", e); 0 });
+    let meme_n    = meme_res.unwrap_or_else(|e| { tracing::error!("Meme refresh: {:#}", e); 0 });
+    let news_n    = news_res.unwrap_or_else(|e| { tracing::error!("News refresh: {:#}", e); 0 });
+    let fg_n      = fg_res.unwrap_or_else(|e|   { tracing::error!("FG refresh: {:#}", e);   0 });
+    let jav_n     = jav_res.unwrap_or_else(|e|  { tracing::error!("JAV refresh: {:#}", e);  0 });
+    let porn_n    = porn_res.unwrap_or_else(|e| { tracing::error!("Porn refresh: {:#}", e); 0 });
+    let okxxx_n   = okxxx_res.unwrap_or_else(|e| { tracing::error!("OK.XXX refresh: {:#}", e); 0 });
+    let coc_n     = coc_res.unwrap_or_else(|e| { tracing::error!("CoC refresh: {:#}", e); 0 });
+    let twitter_n = twitter_res.unwrap_or_else(|e| { tracing::error!("Twitter refresh: {:#}", e); 0 });
 
-    let total = meme_n + news_n + fg_n + jav_n + porn_n + okxxx_n + coc_n;
+    let total = meme_n + news_n + fg_n + jav_n + porn_n + okxxx_n + coc_n + twitter_n;
 
     if total == 0 {
         ctx.say(
@@ -66,6 +68,7 @@ pub async fn post(ctx: Context<'_>) -> Result<(), Error> {
         .field("🔥 Porn Videos",   porn_n.to_string(), true)
         .field("🌶️ OK.XXX Videos", okxxx_n.to_string(), true)
         .field("⚔️ CoC Updates",    coc_n.to_string(),   true)
+        .field("📣 X/Twitter",     twitter_n.to_string(), true)
         .field("📬 Total",         total.to_string(),  true)
         .footer(serenity::CreateEmbedFooter::new(
             "New content posts automatically — use /post anytime to force it!"
