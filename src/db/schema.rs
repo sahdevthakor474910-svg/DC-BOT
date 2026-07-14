@@ -49,6 +49,10 @@ pub async fn run_migrations(db: &SqlitePool) -> Result<()> {
     let m9 = include_str!("../../migrations/009_twitter_channel.sql");
     run_migration_alter(db, m9, "009").await?;
 
+    // ── Migration 010: Split X/Twitter channels into Global and Asia ──────────
+    let m10 = include_str!("../../migrations/010_twitter_split.sql");
+    run_migration_alter(db, m10, "010").await?;
+
     info!("Database migrations complete");
     Ok(())
 }

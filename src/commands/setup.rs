@@ -40,8 +40,11 @@ pub async fn setup(
     #[description = "⚔️ Clash of Clans channel — updates, events, free rewards (every 10 min)"]
     coc: Option<serenity::GuildChannel>,
 
-    #[description = "📣 X / Twitter updates — @dmc_poc (Global) & @dmc_poc_jp (Asia) every 10 min"]
-    twitter: Option<serenity::GuildChannel>,
+    #[description = "🌍 X / Twitter Global updates — @dmc_poc every 10 min"]
+    twitter_global: Option<serenity::GuildChannel>,
+
+    #[description = "🌏 X / Twitter Asia updates — @dmc_poc_jp every 10 min"]
+    twitter_asia: Option<serenity::GuildChannel>,
 ) -> Result<(), Error> {
     let guild_id = ctx.guild_id().unwrap().to_string();
     let db = &ctx.data().db;
@@ -158,10 +161,16 @@ pub async fn setup(
         lines.push(format!("⚔️  **Clash of Clans** → {} *(updates, events & free rewards — every 10 min)*", ch.id.mention()));
     }
 
-    // ── Twitter / X ────────────────────────────────────────────────────────
-    if let Some(ch) = &twitter {
-        queries::set_twitter_channel(db, &guild_id, Some(ch.id.to_string().as_str())).await?;
-        lines.push(format!("📣  **X Updates** → {} *(@dmc_poc Global & @dmc_poc_jp Asia — every 10 min)*", ch.id.mention()));
+    // ── Twitter / X (Global) ───────────────────────────────────────────────
+    if let Some(ch) = &twitter_global {
+        queries::set_twitter_global_channel(db, &guild_id, Some(ch.id.to_string().as_str())).await?;
+        lines.push(format!("🌍  **X Global Updates** → {} *(@dmc_poc — every 10 min)*", ch.id.mention()));
+    }
+
+    // ── Twitter / X (Asia) ─────────────────────────────────────────────────
+    if let Some(ch) = &twitter_asia {
+        queries::set_twitter_asia_channel(db, &guild_id, Some(ch.id.to_string().as_str())).await?;
+        lines.push(format!("🌏  **X Asia Updates** → {} *(@dmc_poc_jp — every 10 min)*", ch.id.mention()));
     }
 
     // ── Nothing provided ───────────────────────────────────────────────────

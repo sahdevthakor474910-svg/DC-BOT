@@ -38,17 +38,6 @@ async fn tick(
     client: &TwitterClient,
 ) -> Result<usize> {
     let configs = queries::get_all_guild_configs(&data.db).await?;
-
-    // Only process guilds that have a twitter channel configured
-    let relevant: Vec<_> = configs
-        .into_iter()
-        .filter(|c| c.twitter_channel_id.is_some())
-        .collect();
-
-    if relevant.is_empty() {
-        return Ok(0);
-    }
-
     let mut total = 0usize;
 
     for (username, label) in ACCOUNTS {
@@ -61,12 +50,25 @@ async fn tick(
             }
         };
 
-        for cfg in &relevant {
-            let channel_id_str = cfg.twitter_channel_id.as_ref().unwrap();
+        for cfg in &configs {
+            // Determine target channel for this username
+            let target_channel_id = if *username == "dmc_poc" {
+                cfg.twitter_global_channel_id.as_ref().or(cfg.twitter_channel_id.as_ref())
+            } else if *username == "dmc_poc_jp" {
+                cfg.twitter_asia_channel_id.as_ref().or(cfg.twitter_channel_id.as_ref())
+            } else {
+                None
+            };
+
+            let channel_id_str = match target_channel_id {
+                Some(id) => id,
+                None => continue,
+            };
+
             let channel_id_u64: u64 = match channel_id_str.parse() {
                 Ok(id) => id,
                 Err(_) => {
-                    warn!("Invalid twitter_channel_id for guild {}", cfg.guild_id);
+                    warn!("Invalid channel id {} for guild {}", channel_id_str, cfg.guild_id);
                     continue;
                 }
             };

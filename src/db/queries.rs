@@ -24,6 +24,8 @@ pub struct GuildConfig {
     pub okxxx_channel_id: Option<String>,         // added via migration 006 (ok.xxx)
     pub coc_channel_id: Option<String>,           // added via migration 008 (CoC)
     pub twitter_channel_id: Option<String>,       // added via migration 009 (X/Twitter)
+    pub twitter_global_channel_id: Option<String>,// added via migration 010 (X Global)
+    pub twitter_asia_channel_id: Option<String>,  // added via migration 010 (X Asia)
     pub auto_react_enabled: bool,
 }
 
@@ -45,7 +47,8 @@ pub async fn get_or_create_guild(db: &SqlitePool, guild_id: &str) -> Result<Guil
                 brainrot_channel_id, shitposting_channel_id, instagram_channel_id, \
                 news_channel_id, free_games_channel_id, nsfw_channel_id, rule34_channel_id, \
                 porn_channel_id, hentai_channel_id, jav_channel_id, porn_video_channel_id, \
-                okxxx_channel_id, coc_channel_id, twitter_channel_id, auto_react_enabled \
+                okxxx_channel_id, coc_channel_id, twitter_channel_id, twitter_global_channel_id, \
+                twitter_asia_channel_id, auto_react_enabled \
          FROM guild_config WHERE guild_id = ?",
     )
     .bind(guild_id)
@@ -70,6 +73,8 @@ pub async fn get_or_create_guild(db: &SqlitePool, guild_id: &str) -> Result<Guil
         okxxx_channel_id: row.get("okxxx_channel_id"),
         coc_channel_id: row.get("coc_channel_id"),
         twitter_channel_id: row.get("twitter_channel_id"),
+        twitter_global_channel_id: row.get("twitter_global_channel_id"),
+        twitter_asia_channel_id: row.get("twitter_asia_channel_id"),
         auto_react_enabled: row.get::<i64, _>("auto_react_enabled") != 0,
     })
 }
@@ -250,7 +255,8 @@ pub async fn get_all_guild_configs(db: &SqlitePool) -> Result<Vec<GuildConfig>> 
                 brainrot_channel_id, shitposting_channel_id, instagram_channel_id, \
                 news_channel_id, free_games_channel_id, nsfw_channel_id, rule34_channel_id, \
                 porn_channel_id, hentai_channel_id, jav_channel_id, porn_video_channel_id, \
-                okxxx_channel_id, coc_channel_id, twitter_channel_id, auto_react_enabled \
+                okxxx_channel_id, coc_channel_id, twitter_channel_id, twitter_global_channel_id, \
+                twitter_asia_channel_id, auto_react_enabled \
          FROM guild_config",
     )
     .fetch_all(db)
@@ -276,6 +282,8 @@ pub async fn get_all_guild_configs(db: &SqlitePool) -> Result<Vec<GuildConfig>> 
             okxxx_channel_id: r.get("okxxx_channel_id"),
             coc_channel_id: r.get("coc_channel_id"),
             twitter_channel_id: r.get("twitter_channel_id"),
+            twitter_global_channel_id: r.get("twitter_global_channel_id"),
+            twitter_asia_channel_id: r.get("twitter_asia_channel_id"),
             auto_react_enabled: r.get::<i64, _>("auto_react_enabled") != 0,
         })
         .collect())
@@ -769,6 +777,38 @@ pub async fn set_twitter_channel(
     sqlx::query(
         "INSERT INTO guild_config (guild_id, twitter_channel_id) VALUES (?, ?) \
          ON CONFLICT(guild_id) DO UPDATE SET twitter_channel_id = excluded.twitter_channel_id",
+    )
+    .bind(guild_id)
+    .bind(channel_id)
+    .execute(db)
+    .await?;
+    Ok(())
+}
+
+pub async fn set_twitter_global_channel(
+    db: &SqlitePool,
+    guild_id: &str,
+    channel_id: Option<&str>,
+) -> Result<()> {
+    sqlx::query(
+        "INSERT INTO guild_config (guild_id, twitter_global_channel_id) VALUES (?, ?) \
+         ON CONFLICT(guild_id) DO UPDATE SET twitter_global_channel_id = excluded.twitter_global_channel_id",
+    )
+    .bind(guild_id)
+    .bind(channel_id)
+    .execute(db)
+    .await?;
+    Ok(())
+}
+
+pub async fn set_twitter_asia_channel(
+    db: &SqlitePool,
+    guild_id: &str,
+    channel_id: Option<&str>,
+) -> Result<()> {
+    sqlx::query(
+        "INSERT INTO guild_config (guild_id, twitter_asia_channel_id) VALUES (?, ?) \
+         ON CONFLICT(guild_id) DO UPDATE SET twitter_asia_channel_id = excluded.twitter_asia_channel_id",
     )
     .bind(guild_id)
     .bind(channel_id)
