@@ -12,6 +12,7 @@ mod news;
 mod okxxx;
 mod porn;
 mod reddit;
+mod twitter;
 mod web;
 
 use std::sync::Arc;
@@ -224,6 +225,13 @@ async fn main() -> Result<()> {
                     tokio::spawn(async move { coc::task::run(d, h).await });
                 }
                 info!("⏱️  CoC update task spawned (every 10 min — r/ClashOfClans + YouTube)");
+
+                {
+                    let d = bot_data.clone();
+                    let h = Arc::clone(&http);
+                    tokio::spawn(async move { twitter::task::run(d, h).await });
+                }
+                info!("⏱️  Twitter/X task spawned (every 10 min — @dmc_poc & @dmc_poc_jp via Nitter RSS)");
 
                 // ── Web Server for Health Check + Media Stream Player ────
                 let server_data = bot_data.clone();

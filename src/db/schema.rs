@@ -45,6 +45,10 @@ pub async fn run_migrations(db: &SqlitePool) -> Result<()> {
     let m8 = include_str!("../../migrations/008_coc_channel.sql");
     run_migration_alter(db, m8, "008").await?;
 
+    // ── Migration 009: X / Twitter channel + seen_tweets dedup table ──────────
+    let m9 = include_str!("../../migrations/009_twitter_channel.sql");
+    run_migration_alter(db, m9, "009").await?;
+
     info!("Database migrations complete");
     Ok(())
 }
