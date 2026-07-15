@@ -1,5 +1,6 @@
 pub mod checks;
 pub mod setup;
+pub mod unset;
 pub mod post;
 pub mod status;
 pub mod settings;
@@ -16,8 +17,9 @@ use crate::data::{Data, Error};
 /// Returns all registered top-level slash commands.
 pub fn all() -> Vec<poise::Command<Data, Error>> {
     vec![
-        // ── Core 4 commands (simple) ───────────────────────────────────────
+        // ── Core commands ──────────────────────────────────────────────────
         setup::setup(),
+        unset::unset(),
         post::post(),
         status::status(),
         settings::settings(),
