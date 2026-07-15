@@ -130,6 +130,7 @@ impl TwitterClient {
                 text,
                 link: tweet_link,
                 pub_date,
+                translated_text: None,
             });
         }
 

@@ -48,13 +48,23 @@ async fn tick(
 
     for (username, label) in ACCOUNTS {
         // Fetch up to 10 latest tweets per account
-        let tweets = match client.fetch_tweets(username, 10).await {
+        let mut tweets = match client.fetch_tweets(username, 10).await {
             Ok(t) => t,
             Err(e) => {
                 warn!("Failed to fetch tweets for @{}: {}", username, e);
                 continue;
             }
         };
+
+        // Translate Japanese tweets once before broadcasting to keep translation API usage low
+        for tweet in &mut tweets {
+            if super::translate::is_japanese(&tweet.text) {
+                let translated = super::translate::translate_ja_to_en(client.http(), &tweet.text).await;
+                if translated != tweet.text {
+                    tweet.translated_text = Some(translated);
+                }
+            }
+        }
 
         for cfg in &configs {
             // Determine target channel for this username
@@ -95,28 +105,19 @@ async fn tick(
                     error!("DB error marking tweet seen: {}", e);
                 }
 
-                // Build a clean embed
-                let description = if super::translate::is_japanese(&tweet.text) {
+                // Build a clean embed using pre-translated text if present
+                let description = if let Some(translated) = &tweet.translated_text {
                     let original = if tweet.text.len() > 900 {
                         format!("{}…", &tweet.text[..900])
                     } else {
                         tweet.text.clone()
                     };
-                    let translated = super::translate::translate_ja_to_en(client.http(), &tweet.text).await;
-                    if translated != tweet.text {
-                        let english = if translated.len() > 900 {
-                            format!("{}…", &translated[..900])
-                        } else {
-                            translated
-                        };
-                        format!("{}\n\n─── **English Translation** ───\n{}", original, english)
+                    let english = if translated.len() > 900 {
+                        format!("{}…", &translated[..900])
                     } else {
-                        if tweet.text.len() > 1800 {
-                            format!("{}…", &tweet.text[..1800])
-                        } else {
-                            tweet.text.clone()
-                        }
-                    }
+                        translated.clone()
+                    };
+                    format!("{}\n\n─── **English Translation** ───\n{}", original, english)
                 } else {
                     if tweet.text.len() > 1800 {
                         format!("{}…", &tweet.text[..1800])

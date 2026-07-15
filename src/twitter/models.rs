@@ -11,4 +11,6 @@ pub struct Tweet {
     pub link: String,
     /// Human-readable publish date/time string (may be empty).
     pub pub_date: String,
+    /// Cached English translation (if the original text was Japanese).
+    pub translated_text: Option<String>,
 }
