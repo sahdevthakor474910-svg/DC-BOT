@@ -8,5 +8,10 @@ restartPolicyType = "on_failure"
 restartPolicyMaxRetries = 10
 healthcheckPath = "/"
 
-[[services]]
-name = "dc-bot"
+# ── Persistent volume ────────────────────────────────────────────────────────
+# Mount a Railway Volume at /data so bot.db survives every redeploy.
+# In the Railway dashboard you MUST create a Volume named "data" and
+# attach it to this service with the mount path "/data".
+[[volumes]]
+name   = "data"
+mountPath = "/data"
