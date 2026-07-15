@@ -36,6 +36,11 @@ impl TwitterClient {
         Ok(Self { http })
     }
 
+    /// Expose the inner HTTP client for translation or other HTTP queries.
+    pub fn http(&self) -> &Client {
+        &self.http
+    }
+
     /// Fetch the latest tweets for `username` by trying each Nitter instance
     /// until one succeeds. Returns at most `limit` tweets.
     pub async fn fetch_tweets(&self, username: &str, limit: usize) -> Result<Vec<Tweet>> {

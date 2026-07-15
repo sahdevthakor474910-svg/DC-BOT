@@ -96,10 +96,33 @@ async fn tick(
                 }
 
                 // Build a clean embed
-                let description = if tweet.text.len() > 1800 {
-                    format!("{}…", &tweet.text[..1800])
+                let description = if super::translate::is_japanese(&tweet.text) {
+                    let original = if tweet.text.len() > 900 {
+                        format!("{}…", &tweet.text[..900])
+                    } else {
+                        tweet.text.clone()
+                    };
+                    let translated = super::translate::translate_ja_to_en(client.http(), &tweet.text).await;
+                    if translated != tweet.text {
+                        let english = if translated.len() > 900 {
+                            format!("{}…", &translated[..900])
+                        } else {
+                            translated
+                        };
+                        format!("{}\n\n─── **English Translation** ───\n{}", original, english)
+                    } else {
+                        if tweet.text.len() > 1800 {
+                            format!("{}…", &tweet.text[..1800])
+                        } else {
+                            tweet.text.clone()
+                        }
+                    }
                 } else {
-                    tweet.text.clone()
+                    if tweet.text.len() > 1800 {
+                        format!("{}…", &tweet.text[..1800])
+                    } else {
+                        tweet.text.clone()
+                    }
                 };
 
                 let footer_text = if tweet.pub_date.is_empty() {

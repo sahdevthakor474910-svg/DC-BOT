@@ -375,6 +375,31 @@ mod tests {
         }
         assert!(!games.is_empty(), "GamerPower games list should not be empty");
     }
+
+    #[tokio::test]
+    async fn test_scrolller_fetch() {
+        let reddit_client = reddit::client::RedditClient::new("discord-meme-bot/1.0 (by /u/SahdevXD)").unwrap();
+        let posts = reddit_client.fetch_hot_posts("nsfw", 3).await;
+        assert!(posts.is_ok(), "Failed to fetch NSFW posts from Scrolller: {:?}", posts.err());
+        let posts = posts.unwrap();
+        println!("Fetched NSFW posts from Scrolller: {:?}", posts);
+        assert!(!posts.is_empty(), "Scrolller posts list should not be empty");
+    }
+
+    #[tokio::test]
+    async fn test_japanese_translation() {
+        let client = reqwest::Client::new();
+        
+        let jp_text = "こんにちは、世界！";
+        assert!(twitter::translate::is_japanese(jp_text), "Should detect Japanese text");
+
+        let en_text = "Hello, world!";
+        assert!(!twitter::translate::is_japanese(en_text), "Should detect SFW/non-Japanese text as false");
+
+        let translated = twitter::translate::translate_ja_to_en(&client, jp_text).await;
+        println!("Translated '{}' -> '{}'", jp_text, translated);
+        assert!(!translated.is_empty());
+    }
 }
 
 
