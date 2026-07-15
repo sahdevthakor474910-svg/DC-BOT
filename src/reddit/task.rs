@@ -208,10 +208,8 @@ async fn tick(data: &Data, http: &Arc<serenity::Http>, force: bool) -> Result<us
                 "rule34" => cfg.rule34_channel_id.as_ref().or(cfg.nsfw_channel_id.as_ref()),
                 "hentai" => cfg.hentai_channel_id.as_ref().or(cfg.nsfw_channel_id.as_ref()),
                 // ── Hot Photos: 18+ aesthetic, slim, petite, cosplay ──────────
-                "RealGirls" | "realgirls" | "milf" | "boobs" | "amateur"
-                | "nsfw" | "gonewild" | "curvy" | "BustyPetite"
-                | "PetiteGoneWild" | "slimgirls" | "altgonewild"
-                | "cosplaygirls" | "TwentyPlus" | "GoneWildCurvy"
+                "PetiteGoneWild" | "slimgirls" | "altgonewild"
+                | "cosplaygirls" | "realgirls" | "TwentyPlus" | "GoneWildCurvy"
                 | "FitNakedGirls" | "girlsinyogapants" | "collegesluts" => {
                     cfg.porn_channel_id.as_ref().or(cfg.nsfw_channel_id.as_ref())
                 }

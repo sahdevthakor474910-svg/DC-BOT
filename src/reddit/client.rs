@@ -11,12 +11,6 @@ pub const SUBREDDITS: &[&str] = &["memes", "dankmemes", "shitposting", "brainrot
 
 /// NSFW subreddits — only posted to age-restricted NSFW channels.
 pub const NSFW_SUBREDDITS: &[&str] = &[
-    // ── General NSFW ─────────────────────────────────────────────────────────
-    "nsfw",
-    "gonewild",
-    "RealGirls",
-    "amateur",
-    "boobs",
     // ── Hot Photos — 18+ aesthetic, slim, petite, cosplay ────────────────────
     "PetiteGoneWild",      // slim / petite 18+ women
     "slimgirls",           // slim aesthetic
@@ -25,15 +19,12 @@ pub const NSFW_SUBREDDITS: &[&str] = &[
     "realgirls",           // everyday 18+ girls
     "TwentyPlus",          // 18-29 age range
     "GoneWildCurvy",       // curvy but young 18+
-    "BustyPetite",         // busty + petite combo
-    "curvy",
     "FitNakedGirls",       // fit / slim body aesthetic
     "girlsinyogapants",    // aesthetic / tease
     "collegesluts",        // college-aged 18+
     // ── Hentai / Art ─────────────────────────────────────────────────────────
     "rule34",
     "hentai",
-    "milf",
 ];
 
 
