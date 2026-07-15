@@ -40,7 +40,7 @@ pub async fn setup(
     #[description = "⚔️ Clash of Clans channel — updates, events, free rewards (every 10 min)"]
     coc: Option<serenity::GuildChannel>,
 
-    #[description = "📸 Hot Photos channel — must be Age-Restricted! (naked girls, curvy bodies, amateur photos — every 1 min)"]
+    #[description = "📸 Hot Photos (NSFW 18+ amateurs, curves, naked girls — every 1 min)"]
     hot_photos: Option<serenity::GuildChannel>,
 
     #[description = "🌍 X / Twitter Global updates — @dmc_poc every 10 min"]
