@@ -13,10 +13,10 @@ pub const ACCOUNTS: &[(&str, &str)] = &[
 /// Nitter instances tried in order. If one fails, the next is attempted.
 /// Public instances come and go; this list covers the most stable ones.
 const NITTER_INSTANCES: &[&str] = &[
-    "https://nitter.privacydev.net",
-    "https://nitter.poast.org",
-    "https://nitter.1d4.us",
     "https://nitter.net",
+    "https://nitter.poast.org",
+    "https://nitter.cz",
+    "https://nitter.it",
 ];
 
 pub struct TwitterClient {
