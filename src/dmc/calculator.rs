@@ -69,18 +69,14 @@ fn calc_stats(
 }
 
 /// For a results screen where DMG PTS is directly provided.
+/// The Results screen always displays the raw base points, so we do not divide by the 1.20x bonus factor here.
 fn calc_stats_results(
     dmg_pts: i64,
     boss_pts: i64,
-    has_bonus: bool,
+    _has_bonus: bool,
     time_limit: f64,
 ) -> (f64, f64, f64, f64) {
-    let reward_pts = if has_bonus {
-        let pre_bonus = boss_pts as f64 / 1.20;
-        pre_bonus - dmg_pts as f64
-    } else {
-        boss_pts as f64 - dmg_pts as f64
-    };
+    let reward_pts = boss_pts as f64 - dmg_pts as f64;
 
     let secs_remaining = (reward_pts * 10.0) / 489_530.0;
     let kill_time = time_limit - secs_remaining;
@@ -92,6 +88,7 @@ fn calc_stats_results(
 
     (reward_pts, secs_remaining, kill_time, dps)
 }
+
 
 // ─────────────────────────────────────────────────────────────────────────────
 // Time formatting

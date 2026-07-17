@@ -427,11 +427,11 @@ mod tests {
         use crate::dmc::calculator::build_discord_message;
         use crate::dmc::gemini::{LeaderboardPlayer, ScreenshotData};
 
-        // Test case 1: Results screen – Hell Commander with X120% bonus
+        // Test case 1: Results screen – Hell Commander with X120% bonus (results screen displays raw boss_pts)
         let results = ScreenshotData::Results {
             boss_name: "Hell Commander".to_string(),
             dmg_pts: 2_892_440_140,
-            boss_pts: 3_487_570_993, // (2892440140 + 13869021) * 1.2
+            boss_pts: 2_906_309_161, // 2892440140 + 13869021 (raw base points)
             has_bonus: true,
         };
         let msg = build_discord_message(&results);
