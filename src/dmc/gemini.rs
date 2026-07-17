@@ -167,13 +167,11 @@ BONUS BOSSES (X120%):
 Hell Shade, Beowulf, Plutone, Vergil, Dante"#;
 
 // ─────────────────────────────────────────────────────────────────────────────
-// Models tried in order — first one to succeed wins.
-// gemini-2.0-flash has the generous free quota (15 RPM / 1500 RPD).
-// gemini-1.5-flash is a reliable fallback; gemini-3.5-flash is last resort.
+// gemini-3.1-flash-lite is the modern free-tier model (15 RPM / 1500 RPD) that supports vision.
+// gemini-3.5-flash is our fallback model (10 RPM / 250 RPD).
 // ─────────────────────────────────────────────────────────────────────────────
 const GEMINI_MODELS: &[&str] = &[
-    "gemini-2.0-flash",
-    "gemini-1.5-flash",
+    "gemini-3.1-flash-lite",
     "gemini-3.5-flash",
 ];
 
@@ -235,11 +233,24 @@ pub async fn analyze_screenshot(
                 tokio::time::sleep(wait).await;
             }
             let http_resp = http.post(&url).json(&body).send().await?;
-            if http_resp.status() == reqwest::StatusCode::TOO_MANY_REQUESTS {
+            let status = http_resp.status();
+            if status == reqwest::StatusCode::TOO_MANY_REQUESTS {
                 last_err = anyhow!("Rate-limited on model {}", model);
                 continue; // retry same model
             }
-            let resp: GeminiResponse = http_resp.error_for_status()?.json().await?;
+            if !status.is_success() {
+                let err_text = http_resp.text().await.unwrap_or_else(|_| "Unknown error".to_string());
+                last_err = anyhow!("HTTP error {} on model {}: {}", status, model, err_text);
+                continue 'models; // try next model
+            }
+
+            let resp: GeminiResponse = match http_resp.json().await {
+                Ok(r) => r,
+                Err(e) => {
+                    last_err = anyhow!("JSON decode failed on model {}: {}", model, e);
+                    continue 'models; // try next model
+                }
+            };
 
             if let Some(err) = resp.error {
                 last_err = anyhow!("Gemini API error on {}: {}", model, err.message);
