@@ -167,6 +167,17 @@ BONUS BOSSES (X120%):
 Hell Shade, Beowulf, Plutone, Vergil, Dante"#;
 
 // ─────────────────────────────────────────────────────────────────────────────
+// Models tried in order — first one to succeed wins.
+// gemini-2.0-flash has the generous free quota (15 RPM / 1500 RPD).
+// gemini-1.5-flash is a reliable fallback; gemini-3.5-flash is last resort.
+// ─────────────────────────────────────────────────────────────────────────────
+const GEMINI_MODELS: &[&str] = &[
+    "gemini-2.0-flash",
+    "gemini-1.5-flash",
+    "gemini-3.5-flash",
+];
+
+// ─────────────────────────────────────────────────────────────────────────────
 // Public API
 // ─────────────────────────────────────────────────────────────────────────────
 
@@ -209,62 +220,55 @@ pub async fn analyze_screenshot(
         }],
     };
 
-    // 5. Call Gemini API
-    let url = format!(
-        "https://generativelanguage.googleapis.com/v1beta/models/gemini-3.5-flash:generateContent?key={}",
-        api_key
-    );
+    // 5. Try each model in order; retry up to 2× on 429 with backoff
+    let mut last_err = anyhow::anyhow!("No Gemini models available");
+    'models: for model in GEMINI_MODELS {
+        let url = format!(
+            "https://generativelanguage.googleapis.com/v1beta/models/{}:generateContent?key={}",
+            model, api_key
+        );
+        for attempt in 0u32..3 {
+            if attempt > 0 {
+                // Exponential backoff: 5s, 15s
+                let wait = std::time::Duration::from_secs(5 * (3u64.pow(attempt - 1)));
+                tracing::warn!("Gemini 429 on {model}, waiting {wait:?} before retry {attempt}/2…");
+                tokio::time::sleep(wait).await;
+            }
+            let http_resp = http.post(&url).json(&body).send().await?;
+            if http_resp.status() == reqwest::StatusCode::TOO_MANY_REQUESTS {
+                last_err = anyhow!("Rate-limited on model {}", model);
+                continue; // retry same model
+            }
+            let resp: GeminiResponse = http_resp.error_for_status()?.json().await?;
 
-    let resp: GeminiResponse = http
-        .post(&url)
-        .json(&body)
-        .send()
-        .await?
-        .error_for_status()?
-        .json()
-        .await?;
+            if let Some(err) = resp.error {
+                last_err = anyhow!("Gemini API error on {}: {}", model, err.message);
+                continue 'models; // try next model
+            }
 
-    // 6. Handle API-level errors
-    if let Some(err) = resp.error {
-        return Err(anyhow!("Gemini API error: {}", err.message));
+            // ── success path ──────────────────────────────────────────────────
+            let raw_text = resp
+                .candidates
+                .and_then(|c| c.into_iter().next())
+                .and_then(|c| c.content.parts.into_iter().next())
+                .map(|p| p.text)
+                .ok_or_else(|| anyhow!("No content from Gemini model {}", model))?;
+
+            let json_str = strip_json_fences(&raw_text);
+            let raw: RawScreenshot = serde_json::from_str(json_str)
+                .map_err(|e| anyhow!("JSON parse failed ({}): {}", e, raw_text))?;
+
+            tracing::info!("✅ DMC analysis succeeded via {model}");
+            return Ok(match raw {
+                RawScreenshot::Results { boss_name, dmg_pts, boss_pts, has_bonus } =>
+                    ScreenshotData::Results { boss_name, dmg_pts, boss_pts, has_bonus },
+                RawScreenshot::Leaderboard { boss_name, has_bonus, players } =>
+                    ScreenshotData::Leaderboard { boss_name, has_bonus, players },
+            });
+        }
+        // all retries exhausted for this model — try next
     }
-
-    // 7. Extract raw text
-    let raw_text = resp
-        .candidates
-        .and_then(|c| c.into_iter().next())
-        .and_then(|c| c.content.parts.into_iter().next())
-        .map(|p| p.text)
-        .ok_or_else(|| anyhow!("No content returned from Gemini"))?;
-
-    // 8. Strip markdown fences and parse JSON
-    let json_str = strip_json_fences(&raw_text);
-    let raw: RawScreenshot = serde_json::from_str(json_str)
-        .map_err(|e| anyhow!("Failed to parse Gemini JSON ({}): {}", e, raw_text))?;
-
-    // 9. Convert to our public enum
-    Ok(match raw {
-        RawScreenshot::Results {
-            boss_name,
-            dmg_pts,
-            boss_pts,
-            has_bonus,
-        } => ScreenshotData::Results {
-            boss_name,
-            dmg_pts,
-            boss_pts,
-            has_bonus,
-        },
-        RawScreenshot::Leaderboard {
-            boss_name,
-            has_bonus,
-            players,
-        } => ScreenshotData::Leaderboard {
-            boss_name,
-            has_bonus,
-            players,
-        },
-    })
+    Err(last_err)
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
