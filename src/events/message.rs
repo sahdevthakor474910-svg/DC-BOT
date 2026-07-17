@@ -1,6 +1,6 @@
 use anyhow::Result;
 use poise::serenity_prelude as serenity;
-use tracing::{debug, error, info};
+use tracing::{debug, error, info, warn};
 
 use crate::data::Data;
 use crate::db::queries;
@@ -82,11 +82,7 @@ pub async fn handle(
                         }
                     }
                     Err(e) => {
-                        error!("DMC analysis failed: {:#}", e);
-                        // Reply visibly so you can see what went wrong while testing
-                        let _ = message
-                            .reply(&ctx.http, format!("❌ DMC analysis error: `{}`", e))
-                            .await;
+                        warn!("DMC screenshot analysis failed: {:#}", e);
                     }
                 }
             }

@@ -38,15 +38,45 @@ pub struct BossStats {
     pub boss_time_limit: u64,
 }
 
+fn boss_max_hp(name: &str) -> i64 {
+    let limit = boss_time_limit(name);
+    if limit == 300 {
+        2_892_440_140
+    } else {
+        1_022_497_809
+    }
+}
+
 impl BossStats {
     pub fn compute(result: &BossResult) -> Self {
+        // 1. Infer has_bonus if not provided
+        let has_bonus = result.has_bonus.unwrap_or_else(|| {
+            let max_hp = boss_max_hp(&result.boss_name);
+            result.boss_pts > (max_hp as f64 * 1.1).round() as i64
+        });
+
+        // 2. Infer dmg_pts if not provided (e.g. from a leaderboard)
+        let total_damage = result.dmg_pts.unwrap_or_else(|| {
+            let max_hp = boss_max_hp(&result.boss_name);
+            let score_to_check = if has_bonus {
+                (result.boss_pts as f64 / 1.20).round() as i64
+            } else {
+                result.boss_pts
+            };
+            if score_to_check >= max_hp {
+                max_hp
+            } else {
+                score_to_check
+            }
+        });
+
         // ── Reward PTS ───────────────────────────────────────────────────────
-        let (reward_pts, base_boss_pts) = if result.has_bonus {
+        let (reward_pts, base_boss_pts) = if has_bonus {
             // Strip the 20 % bonus to recover the pre-bonus total
             let pre_bonus = (result.boss_pts as f64 / 1.20).round() as i64;
-            (pre_bonus - result.dmg_pts, pre_bonus)
+            (pre_bonus - total_damage, pre_bonus)
         } else {
-            (result.boss_pts - result.dmg_pts, result.boss_pts)
+            (result.boss_pts - total_damage, result.boss_pts)
         };
 
         // ── Seconds remaining ────────────────────────────────────────────────
@@ -59,7 +89,7 @@ impl BossStats {
 
         // ── DPS ─────────────────────────────────────────────────────────────
         let dps = if kill_time_secs > 0.0 {
-            result.dmg_pts as f64 / kill_time_secs
+            total_damage as f64 / kill_time_secs
         } else {
             0.0
         };
@@ -69,12 +99,12 @@ impl BossStats {
 
         Self {
             boss_name: result.boss_name.clone(),
-            total_damage: result.dmg_pts,
+            total_damage,
             kill_time_secs,
             kill_time_fmt,
             dps,
             boss_pts: base_boss_pts,
-            has_bonus: result.has_bonus,
+            has_bonus,
             reward_pts,
             secs_remaining,
             boss_time_limit: boss_time_limit(&result.boss_name),

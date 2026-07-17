@@ -421,6 +421,67 @@ mod tests {
             }
         }
     }
+
+    #[test]
+    fn test_dmc_calculator() {
+        use crate::dmc::calculator::BossStats;
+        use crate::dmc::gemini::BossResult;
+
+        // Test case 1: Full results screen with DMG, score, and bonus
+        let result1 = BossResult {
+            boss_name: "Hell Commander".to_string(),
+            dmg_pts: Some(2892440140),
+            boss_pts: 3487570993, // (2892440140 + 13869021) * 1.2
+            has_bonus: Some(true),
+        };
+        let stats1 = BossStats::compute(&result1);
+        assert_eq!(stats1.total_damage, 2892440140);
+        assert!(stats1.has_bonus);
+        assert_eq!(stats1.reward_pts, 13869021);
+        assert!((stats1.secs_remaining - 283.31).abs() < 0.1);
+        assert!((stats1.kill_time_secs - 16.7).abs() < 0.2);
+
+        // Test case 2: Leaderboard screenshot (only name and total score, with bonus implicitly calculated)
+        let result2 = BossResult {
+            boss_name: "Hell Commander".to_string(),
+            dmg_pts: None,
+            boss_pts: 3487570993, // (2892440140 + 13869021) * 1.2
+            has_bonus: None,
+        };
+        let stats2 = BossStats::compute(&result2);
+        assert_eq!(stats2.total_damage, 2892440140);
+        assert!(stats2.has_bonus);
+        assert_eq!(stats2.reward_pts, 13869021);
+        assert!((stats2.secs_remaining - 283.31).abs() < 0.1);
+        assert!((stats2.kill_time_secs - 16.7).abs() < 0.2);
+
+        // Test case 3: Leaderboard screenshot (only name and total score, clear without bonus)
+        let result3 = BossResult {
+            boss_name: "Hell Commander".to_string(),
+            dmg_pts: None,
+            boss_pts: 2906309161, // 2892440140 + 13869021
+            has_bonus: None,
+        };
+        let stats3 = BossStats::compute(&result3);
+        assert_eq!(stats3.total_damage, 2892440140);
+        assert!(!stats3.has_bonus);
+        assert_eq!(stats3.reward_pts, 13869021);
+        assert!((stats3.secs_remaining - 283.31).abs() < 0.1);
+
+        // Test case 4: Leaderboard screenshot (didn't kill the boss, score represents partial damage)
+        let result4 = BossResult {
+            boss_name: "Hell Commander".to_string(),
+            dmg_pts: None,
+            boss_pts: 2000000000,
+            has_bonus: None,
+        };
+        let stats4 = BossStats::compute(&result4);
+        assert_eq!(stats4.total_damage, 2000000000);
+        assert!(!stats4.has_bonus);
+        assert_eq!(stats4.reward_pts, 0);
+        assert_eq!(stats4.secs_remaining, 0.0);
+        assert_eq!(stats4.kill_time_secs, 300.0);
+    }
 }
 
 

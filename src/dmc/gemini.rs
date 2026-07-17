@@ -10,9 +10,9 @@ use serde::{Deserialize, Serialize};
 #[derive(Debug, Deserialize)]
 pub struct BossResult {
     pub boss_name: String,
-    pub dmg_pts: i64,
+    pub dmg_pts: Option<i64>,
     pub boss_pts: i64,
-    pub has_bonus: bool,
+    pub has_bonus: Option<bool>,
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -72,11 +72,11 @@ struct GeminiError {
 // Prompt
 // ─────────────────────────────────────────────────────────────────────────────
 
-const ANALYSIS_PROMPT: &str = r#"You are analyzing a Devil May Cry: Peak of Combat boss battle results screenshot. Extract EXACTLY these values:
+const ANALYSIS_PROMPT: &str = r#"You are analyzing a Devil May Cry: Peak of Combat screen (it could be a boss battle results screen or a leaderboard/rankings screen showing boss names and scores). Extract EXACTLY these values:
 1. Boss name
-2. DMG PTS (large number next to DMG PTS:)
-3. Boss PTS (large number next to Boss PTS)
-4. Has X120% Bonus? (yes or no)
+2. DMG PTS (large number next to DMG PTS:, or null if this is a leaderboard/not found)
+3. Boss PTS (large number next to Boss PTS, or the total score/points listed for the user/leaderboard, or total score on screen)
+4. Has X120% Bonus? (yes or no, or null if not found)
 
 Reply ONLY in this exact JSON format:
 {
@@ -86,7 +86,7 @@ Reply ONLY in this exact JSON format:
   "has_bonus": false
 }
 Numbers must be plain integers, no commas.
-has_bonus is true only if X120% appears on screen."#;
+has_bonus is true only if X120% appears on screen. If any field is not found or not visible, set it to null."#;
 
 // ─────────────────────────────────────────────────────────────────────────────
 // Public API
