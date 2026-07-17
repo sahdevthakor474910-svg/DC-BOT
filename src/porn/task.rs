@@ -10,8 +10,8 @@ use crate::db::queries;
 use super::client::{PornClient, PORN_SEARCHES};
 
 /// Single tick exposed for `/admin force-refresh`.
-pub async fn run_once(data: &Data, http: &Arc<serenity::Http>) -> Result<usize> {
-    tick(data, http, true).await
+pub async fn run_once(data: &Data, http: &Arc<serenity::Http>, force: bool) -> Result<usize> {
+    tick(data, http, force).await
 }
 
 /// Background task — runs every 20 minutes.

@@ -11,10 +11,10 @@ use super::client::OkXxxClient;
 use super::models::OkXxxVideo;
 
 /// Single tick exposed for `/post` force-refresh.
-pub async fn run_once(data: &Data, http: &Arc<serenity::Http>) -> Result<usize> {
+pub async fn run_once(data: &Data, http: &Arc<serenity::Http>, force: bool) -> Result<usize> {
     let client = OkXxxClient::new()?;
     let videos = client.fetch_videos(1).await?;
-    post_videos(data, http, &videos, true).await
+    post_videos(data, http, &videos, force).await
 }
 
 /// Background task — runs every 25 minutes, rotates through listing pages.

@@ -90,7 +90,7 @@ pub async fn fetch_now(ctx: Context<'_>) -> Result<(), Error> {
     let http = ctx.serenity_context().http.clone();
 
     let handle = tokio::spawn(async move {
-        task::run_once(&data, &http).await
+        task::run_once(&data, &http, true).await
     });
 
     match handle.await {

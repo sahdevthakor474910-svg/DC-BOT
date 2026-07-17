@@ -345,11 +345,11 @@ pub async fn force_refresh(ctx: Context<'_>) -> Result<(), Error> {
 
     // Run all tasks concurrently
     let (meme_res, news_res, fg_res, jav_res, porn_res) = tokio::join!(
-        reddit::task::run_once(&data, &http),
-        news::task::run_once(&data, &http),
-        freegames::task::run_once(&data, &http),
-        jav::task::run_once(&data, &http),
-        porn::task::run_once(&data, &http),
+        reddit::task::run_once(&data, &http, true),
+        news::task::run_once(&data, &http, true),
+        freegames::task::run_once(&data, &http, true),
+        jav::task::run_once(&data, &http, true),
+        porn::task::run_once(&data, &http, true),
     );
 
     let meme_n = meme_res.unwrap_or_else(|e| { tracing::error!("Meme refresh: {:#}", e); 0 });

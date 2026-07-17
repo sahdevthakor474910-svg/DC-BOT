@@ -22,7 +22,7 @@ pub async fn run(data: Data, http: Arc<serenity::Http>) {
     };
 
     loop {
-        match tick(&data, &http, &client).await {
+        match tick(&data, &http, &client, false).await {
             Ok(n) if n > 0 => info!("🐦 Twitter: posted {} new tweet(s)", n),
             Ok(_) => {}
             Err(e) => error!("Twitter task error: {:#}", e),
@@ -33,15 +33,16 @@ pub async fn run(data: Data, http: Arc<serenity::Http>) {
 }
 
 /// Dynamic run_once wrapper for slash command /post.
-pub async fn run_once(data: &Data, http: &Arc<serenity::Http>) -> Result<usize> {
+pub async fn run_once(data: &Data, http: &Arc<serenity::Http>, force: bool) -> Result<usize> {
     let client = TwitterClient::new()?;
-    tick(data, http, &client).await
+    tick(data, http, &client, force).await
 }
 
 async fn tick(
     data: &Data,
     http: &Arc<serenity::Http>,
     client: &TwitterClient,
+    force: bool,
 ) -> Result<usize> {
     let configs = queries::get_all_guild_configs(&data.db).await?;
     let mut total = 0usize;
@@ -59,23 +60,25 @@ async fn tick(
         // Translate Japanese tweets once before broadcasting to keep translation API usage low,
         // and ONLY if the tweet is actually new to at least one guild.
         for tweet in &mut tweets {
-            let mut is_new_for_some_guild = false;
-            for cfg in &configs {
-                let target_channel_id = if *username == "dmc_poc" {
-                    cfg.twitter_global_channel_id.as_ref().or(cfg.twitter_channel_id.as_ref())
-                } else if *username == "dmc_poc_jp" {
-                    cfg.twitter_asia_channel_id.as_ref().or(cfg.twitter_channel_id.as_ref())
-                } else {
-                    None
-                };
+            let mut is_new_for_some_guild = force;
+            if !force {
+                for cfg in &configs {
+                    let target_channel_id = if *username == "dmc_poc" {
+                        cfg.twitter_global_channel_id.as_ref().or(cfg.twitter_channel_id.as_ref())
+                    } else if *username == "dmc_poc_jp" {
+                        cfg.twitter_asia_channel_id.as_ref().or(cfg.twitter_channel_id.as_ref())
+                    } else {
+                        None
+                    };
 
-                if target_channel_id.is_some() {
-                    match queries::is_tweet_seen(&data.db, &cfg.guild_id, &tweet.id).await {
-                        Ok(false) => {
-                            is_new_for_some_guild = true;
-                            break;
+                    if target_channel_id.is_some() {
+                        match queries::is_tweet_seen(&data.db, &cfg.guild_id, &tweet.id).await {
+                            Ok(false) => {
+                                is_new_for_some_guild = true;
+                                break;
+                            }
+                            _ => {}
                         }
-                        _ => {}
                     }
                 }
             }
@@ -120,13 +123,15 @@ async fn tick(
 
             for tweet in &tweets {
                 // Deduplication — skip if already posted
-                match queries::is_tweet_seen(&data.db, &cfg.guild_id, &tweet.id).await {
-                    Ok(true) => continue,
-                    Err(e) => {
-                        error!("DB error checking seen_tweets: {}", e);
-                        continue;
+                if !force {
+                    match queries::is_tweet_seen(&data.db, &cfg.guild_id, &tweet.id).await {
+                        Ok(true) => continue,
+                        Err(e) => {
+                            error!("DB error checking seen_tweets: {}", e);
+                            continue;
+                        }
+                        _ => {}
                     }
-                    _ => {}
                 }
 
                 if let Err(e) = queries::mark_tweet_seen(&data.db, &cfg.guild_id, &tweet.id).await {

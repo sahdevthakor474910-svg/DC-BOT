@@ -10,8 +10,8 @@ use crate::db::queries;
 use super::fetcher;
 
 /// Single tick — exposed for `/post`.
-pub async fn run_once(data: &Data, http: &Arc<serenity::Http>) -> Result<usize> {
-    tick(data, http, true).await
+pub async fn run_once(data: &Data, http: &Arc<serenity::Http>, force: bool) -> Result<usize> {
+    tick(data, http, force).await
 }
 
 /// Background loop — runs every 10 minutes.

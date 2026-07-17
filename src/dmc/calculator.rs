@@ -102,10 +102,10 @@ fn format_kill_time(secs: f64) -> String {
         "0s".to_string()
     } else if secs >= 60.0 {
         let mins = (secs / 60.0) as u64;
-        let s = (secs % 60.0) as u64;
-        format!("{}m {}s", mins, s)
+        let s = secs % 60.0;
+        format!("{}m {:.1}s", mins, s)
     } else {
-        format!("{:.0}s", secs)
+        format!("{:.1}s", secs)
     }
 }
 

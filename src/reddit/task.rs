@@ -10,8 +10,8 @@ use crate::db::queries;
 use crate::reddit::client::{RedditClient, SUBREDDITS, NSFW_SUBREDDITS};
 
 /// Run a single fetch-and-post cycle (used by /admin force-refresh).
-pub async fn run_once(data: &Data, http: &Arc<serenity::Http>) -> Result<usize> {
-    tick(data, http, true).await
+pub async fn run_once(data: &Data, http: &Arc<serenity::Http>, force: bool) -> Result<usize> {
+    tick(data, http, force).await
 }
 
 /// Entry point for the background meme-fetching task.
