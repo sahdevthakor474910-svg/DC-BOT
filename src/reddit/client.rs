@@ -18,7 +18,6 @@ pub const NSFW_SUBREDDITS: &[&str] = &[
     "cosplaygirls",        // cosplay 18+
     "realgirls",           // everyday 18+ girls
     "FitNakedGirls",       // fit / slim body aesthetic
-    "girlsinyogapants",    // aesthetic / tease
     "collegesluts",        // college-aged 18-22
     // ── Hentai / Art ─────────────────────────────────────────────────────────
     "rule34",

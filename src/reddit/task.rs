@@ -210,7 +210,7 @@ async fn tick(data: &Data, http: &Arc<serenity::Http>, force: bool) -> Result<us
                 // ── Hot Photos: 18-25 aesthetic, slim, petite, cosplay ─────────
                 "PetiteGoneWild" | "slimgirls" | "altgonewild"
                 | "cosplaygirls" | "realgirls"
-                | "FitNakedGirls" | "girlsinyogapants" | "collegesluts" => {
+                | "FitNakedGirls" | "collegesluts" => {
                     cfg.porn_channel_id.as_ref().or(cfg.nsfw_channel_id.as_ref())
                 }
                 _ => cfg.nsfw_channel_id.as_ref(),
