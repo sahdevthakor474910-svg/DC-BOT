@@ -3,20 +3,58 @@ use base64::{engine::general_purpose, Engine as _};
 use serde::{Deserialize, Serialize};
 
 // ─────────────────────────────────────────────────────────────────────────────
-// Types
+// Public types – what callers receive
 // ─────────────────────────────────────────────────────────────────────────────
 
-/// Extracted data from a DMC: Peak of Combat boss battle screenshot.
+/// A single player entry extracted from a leaderboard screenshot.
 #[derive(Debug, Deserialize)]
-pub struct BossResult {
-    pub boss_name: String,
-    pub dmg_pts: Option<i64>,
-    pub boss_pts: i64,
-    pub has_bonus: Option<bool>,
+pub struct LeaderboardPlayer {
+    pub rank: u32,
+    pub name: String,
+    pub total_pts: i64,
+}
+
+/// The two kinds of screenshots the bot can receive.
+#[derive(Debug)]
+pub enum ScreenshotData {
+    /// Post-battle results screen (shows DMG PTS / Boss PTS).
+    Results {
+        boss_name: String,
+        dmg_pts: i64,
+        boss_pts: i64,
+        has_bonus: bool,
+    },
+    /// Leaderboard / ranking screen.
+    Leaderboard {
+        boss_name: String,
+        has_bonus: bool,
+        players: Vec<LeaderboardPlayer>,
+    },
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
-// Gemini API request / response shapes
+// Raw Gemini JSON shapes (intermediate deserialization)
+// ─────────────────────────────────────────────────────────────────────────────
+
+/// Gemini can return either screen type; we deserialise via a "type" tag.
+#[derive(Debug, Deserialize)]
+#[serde(tag = "type", rename_all = "lowercase")]
+enum RawScreenshot {
+    Results {
+        boss_name: String,
+        dmg_pts: i64,
+        boss_pts: i64,
+        has_bonus: bool,
+    },
+    Leaderboard {
+        boss_name: String,
+        has_bonus: bool,
+        players: Vec<LeaderboardPlayer>,
+    },
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Gemini API request / response wire shapes
 // ─────────────────────────────────────────────────────────────────────────────
 
 #[derive(Serialize)]
@@ -72,33 +110,73 @@ struct GeminiError {
 // Prompt
 // ─────────────────────────────────────────────────────────────────────────────
 
-const ANALYSIS_PROMPT: &str = r#"You are analyzing a Devil May Cry: Peak of Combat screen (it could be a boss battle results screen or a leaderboard/rankings screen showing boss names and scores). Extract EXACTLY these values:
-1. Boss name
-2. DMG PTS (large number next to DMG PTS:, or null if this is a leaderboard/not found)
-3. Boss PTS (large number next to Boss PTS, or the total score/points listed for the user/leaderboard, or total score on screen)
-4. Has X120% Bonus? (yes or no, or null if not found)
+const ANALYSIS_PROMPT: &str = r#"You are analyzing Devil May Cry: Peak of Combat screenshots.
 
-Reply ONLY in this exact JSON format:
+First identify the screenshot type:
+- "results"     = shows DMG PTS, Reward PTS, Boss PTS after a battle
+- "leaderboard" = shows Ranking, Player Name, Total PTS
+
+═══════════════════════════════════
+RESULTS SCREENSHOT
+═══════════════════════════════════
+Extract:
+1. Boss name
+2. DMG PTS (large number next to "DMG PTS:")
+3. Boss PTS (large number next to "Boss PTS")
+4. Has X120% bonus? (true/false)
+
+Reply in this JSON:
 {
+  "type": "results",
   "boss_name": "Devil Mite",
   "dmg_pts": 1022497809,
   "boss_pts": 1033793224,
   "has_bonus": false
 }
-Numbers must be plain integers, no commas.
-has_bonus is true only if X120% appears on screen. If any field is not found or not visible, set it to null."#;
+
+═══════════════════════════════════
+LEADERBOARD SCREENSHOT
+═══════════════════════════════════
+Extract:
+1. Boss name (shown on left side tab that is highlighted/selected)
+2. Has X120% bonus? (true/false - check if this boss has bonus)
+3. All visible players with rank, name, total pts
+
+Reply in this JSON:
+{
+  "type": "leaderboard",
+  "boss_name": "Calibur",
+  "has_bonus": false,
+  "players": [
+    {"rank": 1, "name": "中國台灣省", "total_pts": 1033499653},
+    {"rank": 2, "name": "KèLiêuMạng.VN", "total_pts": 1033179794},
+    {"rank": 3, "name": "Desuwyy!", "total_pts": 1032576203},
+    {"rank": 4, "name": "★PinjamDulu`Seratus★", "total_pts": 1030632084}
+  ]
+}
+
+═══════════════════════════════════
+RULES FOR BOTH
+═══════════════════════════════════
+- Numbers must be plain integers, no commas
+- has_bonus is true only if boss is in bonus list below
+- Extract ALL visible players in leaderboard
+- If value unclear, use 0
+
+BONUS BOSSES (X120%):
+Hell Shade, Beowulf, Plutone, Vergil, Dante"#;
 
 // ─────────────────────────────────────────────────────────────────────────────
 // Public API
 // ─────────────────────────────────────────────────────────────────────────────
 
-/// Download `image_url`, encode it to base64, send it to Gemini 1.5 Flash,
-/// and return the extracted `BossResult`.
+/// Download `image_url`, encode it as base64, send it to Gemini, and return
+/// the extracted [`ScreenshotData`].
 pub async fn analyze_screenshot(
     http: &reqwest::Client,
     api_key: &str,
     image_url: &str,
-) -> Result<BossResult> {
+) -> Result<ScreenshotData> {
     // 1. Download the image bytes
     let img_bytes = http
         .get(image_url)
@@ -151,7 +229,7 @@ pub async fn analyze_screenshot(
         return Err(anyhow!("Gemini API error: {}", err.message));
     }
 
-    // 7. Extract the raw text from the first candidate
+    // 7. Extract raw text
     let raw_text = resp
         .candidates
         .and_then(|c| c.into_iter().next())
@@ -159,12 +237,34 @@ pub async fn analyze_screenshot(
         .map(|p| p.text)
         .ok_or_else(|| anyhow!("No content returned from Gemini"))?;
 
-    // 8. Strip potential markdown code fences and parse JSON
+    // 8. Strip markdown fences and parse JSON
     let json_str = strip_json_fences(&raw_text);
-    let result: BossResult = serde_json::from_str(json_str)
+    let raw: RawScreenshot = serde_json::from_str(json_str)
         .map_err(|e| anyhow!("Failed to parse Gemini JSON ({}): {}", e, raw_text))?;
 
-    Ok(result)
+    // 9. Convert to our public enum
+    Ok(match raw {
+        RawScreenshot::Results {
+            boss_name,
+            dmg_pts,
+            boss_pts,
+            has_bonus,
+        } => ScreenshotData::Results {
+            boss_name,
+            dmg_pts,
+            boss_pts,
+            has_bonus,
+        },
+        RawScreenshot::Leaderboard {
+            boss_name,
+            has_bonus,
+            players,
+        } => ScreenshotData::Leaderboard {
+            boss_name,
+            has_bonus,
+            players,
+        },
+    })
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -185,10 +285,9 @@ fn detect_mime(bytes: &[u8]) -> &'static str {
     }
 }
 
-/// Remove ```json ... ``` or ``` ... ``` wrappers if Gemini wraps its output.
+/// Remove ```json ... ``` or ``` ... ``` wrappers that Gemini sometimes adds.
 fn strip_json_fences(s: &str) -> &str {
     let s = s.trim();
-    // Try stripping ```json\n...\n```
     if let Some(inner) = s
         .strip_prefix("```json")
         .or_else(|| s.strip_prefix("```"))

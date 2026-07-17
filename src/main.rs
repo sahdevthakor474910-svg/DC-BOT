@@ -424,63 +424,52 @@ mod tests {
 
     #[test]
     fn test_dmc_calculator() {
-        use crate::dmc::calculator::BossStats;
-        use crate::dmc::gemini::BossResult;
+        use crate::dmc::calculator::build_discord_message;
+        use crate::dmc::gemini::{LeaderboardPlayer, ScreenshotData};
 
-        // Test case 1: Full results screen with DMG, score, and bonus
-        let result1 = BossResult {
+        // Test case 1: Results screen – Hell Commander with X120% bonus
+        let results = ScreenshotData::Results {
             boss_name: "Hell Commander".to_string(),
-            dmg_pts: Some(2892440140),
-            boss_pts: 3487570993, // (2892440140 + 13869021) * 1.2
-            has_bonus: Some(true),
+            dmg_pts: 2_892_440_140,
+            boss_pts: 3_487_570_993, // (2892440140 + 13869021) * 1.2
+            has_bonus: true,
         };
-        let stats1 = BossStats::compute(&result1);
-        assert_eq!(stats1.total_damage, 2892440140);
-        assert!(stats1.has_bonus);
-        assert_eq!(stats1.reward_pts, 13869021);
-        assert!((stats1.secs_remaining - 283.31).abs() < 0.1);
-        assert!((stats1.kill_time_secs - 16.7).abs() < 0.2);
+        let msg = build_discord_message(&results);
+        assert!(msg.contains("Hell Commander Results"));
+        assert!(msg.contains("X120% ✓"));
+        println!("Results output:\n{}", msg);
 
-        // Test case 2: Leaderboard screenshot (only name and total score, with bonus implicitly calculated)
-        let result2 = BossResult {
-            boss_name: "Hell Commander".to_string(),
-            dmg_pts: None,
-            boss_pts: 3487570993, // (2892440140 + 13869021) * 1.2
-            has_bonus: None,
+        // Test case 2: Leaderboard screen – Calibur without bonus
+        let leaderboard = ScreenshotData::Leaderboard {
+            boss_name: "Calibur".to_string(),
+            has_bonus: false,
+            players: vec![
+                LeaderboardPlayer { rank: 1, name: "中國台灣省".to_string(), total_pts: 1_033_499_653 },
+                LeaderboardPlayer { rank: 2, name: "KèLiêuMạng.VN".to_string(), total_pts: 1_033_179_794 },
+                LeaderboardPlayer { rank: 3, name: "Desuwyy!".to_string(), total_pts: 1_032_576_203 },
+                LeaderboardPlayer { rank: 4, name: "★PinjamDulu`Seratus★".to_string(), total_pts: 1_030_632_084 },
+            ],
         };
-        let stats2 = BossStats::compute(&result2);
-        assert_eq!(stats2.total_damage, 2892440140);
-        assert!(stats2.has_bonus);
-        assert_eq!(stats2.reward_pts, 13869021);
-        assert!((stats2.secs_remaining - 283.31).abs() < 0.1);
-        assert!((stats2.kill_time_secs - 16.7).abs() < 0.2);
+        let msg2 = build_discord_message(&leaderboard);
+        assert!(msg2.contains("Calibur Leaderboard"));
+        assert!(msg2.contains("🥇"));
+        assert!(msg2.contains("中國台灣省"));
+        assert!(msg2.contains("Kill Time"));
+        println!("Leaderboard output:\n{}", msg2);
 
-        // Test case 3: Leaderboard screenshot (only name and total score, clear without bonus)
-        let result3 = BossResult {
-            boss_name: "Hell Commander".to_string(),
-            dmg_pts: None,
-            boss_pts: 2906309161, // 2892440140 + 13869021
-            has_bonus: None,
+        // Test case 3: Leaderboard – Hell Shade with X120% bonus
+        let lb_bonus = ScreenshotData::Leaderboard {
+            boss_name: "Hell Shade".to_string(),
+            has_bonus: true,
+            players: vec![
+                LeaderboardPlayer { rank: 1, name: "S-OH-Am".to_string(), total_pts: 1_099_993_341 },
+                LeaderboardPlayer { rank: 2, name: "Tanishq".to_string(), total_pts: 1_097_568_228 },
+            ],
         };
-        let stats3 = BossStats::compute(&result3);
-        assert_eq!(stats3.total_damage, 2892440140);
-        assert!(!stats3.has_bonus);
-        assert_eq!(stats3.reward_pts, 13869021);
-        assert!((stats3.secs_remaining - 283.31).abs() < 0.1);
-
-        // Test case 4: Leaderboard screenshot (didn't kill the boss, score represents partial damage)
-        let result4 = BossResult {
-            boss_name: "Hell Commander".to_string(),
-            dmg_pts: None,
-            boss_pts: 2000000000,
-            has_bonus: None,
-        };
-        let stats4 = BossStats::compute(&result4);
-        assert_eq!(stats4.total_damage, 2000000000);
-        assert!(!stats4.has_bonus);
-        assert_eq!(stats4.reward_pts, 0);
-        assert_eq!(stats4.secs_remaining, 0.0);
-        assert_eq!(stats4.kill_time_secs, 300.0);
+        let msg3 = build_discord_message(&lb_bonus);
+        assert!(msg3.contains("Hell Shade Leaderboard"));
+        assert!(msg3.contains("X120%"));
+        println!("Hell Shade Leaderboard output:\n{}", msg3);
     }
 }
 

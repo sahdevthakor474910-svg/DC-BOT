@@ -4,7 +4,7 @@ use tracing::{debug, error, info, warn};
 
 use crate::data::Data;
 use crate::db::queries;
-use crate::dmc::{calculator::BossStats, gemini};
+use crate::dmc::{calculator, gemini};
 
 /// Called for every new message received by the bot.
 ///
@@ -73,16 +73,15 @@ pub async fn handle(
                 )
                 .await
                 {
-                    Ok(boss_result) => {
-                        let stats = BossStats::compute(&boss_result);
-                        let reply = stats.discord_message();
+                    Ok(screenshot_data) => {
+                        let reply = calculator::build_discord_message(&screenshot_data);
 
                         if let Err(e) = message.reply(&ctx.http, &reply).await {
                             error!("Failed to send DMC analysis reply: {}", e);
                         }
                     }
                     Err(e) => {
-                        warn!("DMC screenshot analysis failed: {:#}", e);
+                        warn!("DMC screenshot analysis failed (likely not a DMC screen): {:#}", e);
                     }
                 }
             }
