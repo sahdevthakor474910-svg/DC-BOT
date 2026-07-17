@@ -26,6 +26,7 @@ pub struct GuildConfig {
     pub twitter_channel_id: Option<String>,       // added via migration 009 (X/Twitter)
     pub twitter_global_channel_id: Option<String>,// added via migration 010 (X Global)
     pub twitter_asia_channel_id: Option<String>,  // added via migration 010 (X Asia)
+    pub dmc_channel_id: Option<String>,           // added via migration 011 (DMC)
     pub auto_react_enabled: bool,
 }
 
@@ -48,7 +49,7 @@ pub async fn get_or_create_guild(db: &SqlitePool, guild_id: &str) -> Result<Guil
                 news_channel_id, free_games_channel_id, nsfw_channel_id, rule34_channel_id, \
                 porn_channel_id, hentai_channel_id, jav_channel_id, porn_video_channel_id, \
                 okxxx_channel_id, coc_channel_id, twitter_channel_id, twitter_global_channel_id, \
-                twitter_asia_channel_id, auto_react_enabled \
+                twitter_asia_channel_id, dmc_channel_id, auto_react_enabled \
          FROM guild_config WHERE guild_id = ?",
     )
     .bind(guild_id)
@@ -75,6 +76,7 @@ pub async fn get_or_create_guild(db: &SqlitePool, guild_id: &str) -> Result<Guil
         twitter_channel_id: row.get("twitter_channel_id"),
         twitter_global_channel_id: row.get("twitter_global_channel_id"),
         twitter_asia_channel_id: row.get("twitter_asia_channel_id"),
+        dmc_channel_id: row.get("dmc_channel_id"),
         auto_react_enabled: row.get::<i64, _>("auto_react_enabled") != 0,
     })
 }
@@ -256,7 +258,7 @@ pub async fn get_all_guild_configs(db: &SqlitePool) -> Result<Vec<GuildConfig>> 
                 news_channel_id, free_games_channel_id, nsfw_channel_id, rule34_channel_id, \
                 porn_channel_id, hentai_channel_id, jav_channel_id, porn_video_channel_id, \
                 okxxx_channel_id, coc_channel_id, twitter_channel_id, twitter_global_channel_id, \
-                twitter_asia_channel_id, auto_react_enabled \
+                twitter_asia_channel_id, dmc_channel_id, auto_react_enabled \
          FROM guild_config",
     )
     .fetch_all(db)
@@ -284,6 +286,7 @@ pub async fn get_all_guild_configs(db: &SqlitePool) -> Result<Vec<GuildConfig>> 
             twitter_channel_id: r.get("twitter_channel_id"),
             twitter_global_channel_id: r.get("twitter_global_channel_id"),
             twitter_asia_channel_id: r.get("twitter_asia_channel_id"),
+            dmc_channel_id: r.get("dmc_channel_id"),
             auto_react_enabled: r.get::<i64, _>("auto_react_enabled") != 0,
         })
         .collect())
@@ -809,6 +812,22 @@ pub async fn set_twitter_asia_channel(
     sqlx::query(
         "INSERT INTO guild_config (guild_id, twitter_asia_channel_id) VALUES (?, ?) \
          ON CONFLICT(guild_id) DO UPDATE SET twitter_asia_channel_id = excluded.twitter_asia_channel_id",
+    )
+    .bind(guild_id)
+    .bind(channel_id)
+    .execute(db)
+    .await?;
+    Ok(())
+}
+
+pub async fn set_dmc_channel(
+    db: &SqlitePool,
+    guild_id: &str,
+    channel_id: Option<&str>,
+) -> Result<()> {
+    sqlx::query(
+        "INSERT INTO guild_config (guild_id, dmc_channel_id) VALUES (?, ?) \
+         ON CONFLICT(guild_id) DO UPDATE SET dmc_channel_id = excluded.dmc_channel_id",
     )
     .bind(guild_id)
     .bind(channel_id)

@@ -48,6 +48,9 @@ pub async fn setup(
 
     #[description = "🌏 X / Twitter Asia updates — @dmc_poc_jp every 10 min"]
     twitter_asia: Option<serenity::GuildChannel>,
+
+    #[description = "🎮 DMC Boss Battle Result screenshot analyzer"]
+    dmc: Option<serenity::GuildChannel>,
 ) -> Result<(), Error> {
     let guild_id = ctx.guild_id().unwrap().to_string();
     let db = &ctx.data().db;
@@ -193,6 +196,12 @@ pub async fn setup(
     if let Some(ch) = &twitter_asia {
         queries::set_twitter_asia_channel(db, &guild_id, Some(ch.id.to_string().as_str())).await?;
         lines.push(format!("🌏  **X Asia Updates** → {} *(@dmc_poc_jp — every 10 min)*", ch.id.mention()));
+    }
+
+    // ── DMC Boss Result Analyzer ───────────────────────────────────────────
+    if let Some(ch) = &dmc {
+        queries::set_dmc_channel(db, &guild_id, Some(ch.id.to_string().as_str())).await?;
+        lines.push(format!("🎮  **DMC Boss Results** → {} *(screenshot analyzer)*", ch.id.mention()));
     }
 
     // ── Nothing provided ───────────────────────────────────────────────────

@@ -71,6 +71,7 @@ pub async fn status(ctx: Context<'_>) -> Result<(), Error> {
         .field("🌍 X Global",         ch(cfg.twitter_global_channel_id.as_ref()),true)
         .field("🌏 X Asia",           ch(cfg.twitter_asia_channel_id.as_ref()),  true)
         .field("📸 Hot Photos",       ch(cfg.porn_channel_id.as_ref()),          true)
+        .field("🎮 DMC Boss Results",  ch(cfg.dmc_channel_id.as_ref()),           true)
         // ── Extra NSFW splits (collapsed) ────────────────────────────────────
         .field("🔞 Rule34",           ch(cfg.rule34_channel_id.as_ref()),        true)
         .field("🔞 Hentai",           ch(cfg.hentai_channel_id.as_ref()),        true)

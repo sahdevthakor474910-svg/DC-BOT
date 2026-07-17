@@ -46,6 +46,9 @@ pub async fn unset(
 
     #[description = "Clear the 🌏 X / Twitter Asia channel"]
     twitter_asia: Option<bool>,
+
+    #[description = "Clear the 🎮 DMC Boss Results channel"]
+    dmc: Option<bool>,
 ) -> Result<(), Error> {
     let guild_id = ctx.guild_id().unwrap().to_string();
     let db = &ctx.data().db;
@@ -110,6 +113,11 @@ pub async fn unset(
     if twitter_asia.unwrap_or(false) {
         queries::set_twitter_asia_channel(db, &guild_id, None).await?;
         cleared.push("🌏 X Asia");
+    }
+
+    if dmc.unwrap_or(false) {
+        queries::set_dmc_channel(db, &guild_id, None).await?;
+        cleared.push("🎮 DMC Boss Results");
     }
 
     if cleared.is_empty() {

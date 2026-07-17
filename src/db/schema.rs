@@ -53,6 +53,10 @@ pub async fn run_migrations(db: &SqlitePool) -> Result<()> {
     let m10 = include_str!("../../migrations/010_twitter_split.sql");
     run_migration_alter(db, m10, "010").await?;
 
+    // ── Migration 011: Add DMC Boss Analyzer channel ──────────────────────────
+    let m11 = include_str!("../../migrations/011_dmc_channel.sql");
+    run_migration_alter(db, m11, "011").await?;
+
     info!("Database migrations complete");
     Ok(())
 }

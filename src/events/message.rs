@@ -20,9 +20,20 @@ pub async fn handle(
         return Ok(());
     }
 
+    // Check if message is in the configured DMC screenshot analysis channel
+    let is_dmc_channel = if let Some(guild_id) = message.guild_id {
+        if let Ok(cfg) = queries::get_or_create_guild(&data.db, &guild_id.to_string()).await {
+            cfg.dmc_channel_id.as_ref().map(|s| s.as_str()) == Some(message.channel_id.to_string().as_str())
+        } else {
+            false
+        }
+    } else {
+        false
+    };
+
     // ── DMC screenshot analysis ───────────────────────────────────────────────
     // Check if the message has any image attachments and we have a Gemini key.
-    if !data.config.gemini_api_key.is_empty() {
+    if is_dmc_channel && !data.config.gemini_api_key.is_empty() {
         let image_attachments: Vec<&serenity::Attachment> = message
             .attachments
             .iter()
