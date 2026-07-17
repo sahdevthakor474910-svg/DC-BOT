@@ -4,30 +4,37 @@ use super::gemini::{LeaderboardPlayer, ScreenshotData};
 // Boss constants
 // ─────────────────────────────────────────────────────────────────────────────
 
+/// Normalizes a boss name by removing all non-alphanumeric characters and converting to lowercase.
+fn normalize_boss_name(name: &str) -> String {
+    name.chars()
+        .filter(|c| c.is_alphanumeric())
+        .collect::<String>()
+        .to_lowercase()
+}
+
 /// Known max damage points per boss (i.e. their HP pool).
 fn boss_dmg_pts(name: &str) -> i64 {
-    let n = name.to_lowercase();
-    if n.contains("devil mite")           { 1_022_497_809 }
-    else if n.contains("cerberus")        { 1_335_976_271 }
-    else if n.contains("minotaur")        { 951_865_962   }
-    else if n.contains("nevan")           { 864_589_190   }
-    else if n.contains("hell shade")      { 905_640_916   }
-    else if n.contains("beowulf")         { 946_374_652   }
-    else if n.contains("plutone")         { 934_691_016   }
-    else if n.contains("calibur")         { 1_022_497_809 }
-    else if n.contains("vergil")          { 2_892_440_140 }
-    else if n.contains("dante")           { 2_892_440_140 }
-    else if n.contains("hell commander") || n.contains("hell·commander") { 2_892_440_140 }
+    let norm = normalize_boss_name(name);
+    if norm.contains("devilmite")           { 1_022_497_809 }
+    else if norm.contains("cerberus")        { 1_335_976_271 }
+    else if norm.contains("minotaur")        { 951_865_962   }
+    else if norm.contains("nevan")           { 864_589_190   }
+    else if norm.contains("hellshade")       { 905_640_916   }
+    else if norm.contains("beowulf")         { 946_374_652   }
+    else if norm.contains("plutone")         { 934_691_016   }
+    else if norm.contains("calibur")         { 1_022_497_809 }
+    else if norm.contains("vergil")          { 2_892_440_140 }
+    else if norm.contains("dante")           { 2_892_440_140 }
+    else if norm.contains("hellcommander")   { 2_892_440_140 }
     else { 1_022_497_809 } // safe fallback
 }
 
 /// Battle time limit in seconds.
 fn boss_time_limit(name: &str) -> f64 {
-    let n = name.to_lowercase();
-    if n.contains("vergil")
-        || n.contains("dante")
-        || n.contains("hell commander")
-        || n.contains("hell·commander")
+    let norm = normalize_boss_name(name);
+    if norm.contains("vergil")
+        || norm.contains("dante")
+        || norm.contains("hellcommander")
     {
         300.0
     } else {
@@ -39,12 +46,7 @@ fn boss_time_limit(name: &str) -> f64 {
 // Core math
 // ─────────────────────────────────────────────────────────────────────────────
 
-/// Given a leaderboard total_pts (and whether the 120% bonus is active),
-/// return (reward_pts, secs_remaining, kill_time_secs, dps).
-///
-/// kill_time_secs is negative when the total_pts is lower than the boss HP
-/// used in our formula (i.e. the player used a different damage cap).
-fn calc_stats(
+fn calc_stats_internal(
     total_pts: i64,
     dmg_pts: i64,
     has_bonus: bool,
@@ -66,6 +68,34 @@ fn calc_stats(
     };
 
     (reward_pts, secs_remaining, kill_time, dps)
+}
+
+/// Given a leaderboard total_pts (and initial assumption of 120% bonus active),
+/// return (reward_pts, secs_remaining, kill_time_secs, dps, resolved_has_bonus).
+///
+/// If our initial assumption yields an impossible kill time (negative or exceeding limit),
+/// it automatically toggles the bonus parameter to find the correct fit.
+fn calc_stats_leaderboard(
+    total_pts: i64,
+    dmg_pts: i64,
+    has_bonus: bool,
+    time_limit: f64,
+) -> (f64, f64, f64, f64, bool) {
+    // 1. Try with the parsed bonus setting
+    let (reward, secs_rem, kill, dps) = calc_stats_internal(total_pts, dmg_pts, has_bonus, time_limit);
+    if kill >= 0.0 && kill <= time_limit {
+        return (reward, secs_rem, kill, dps, has_bonus);
+    }
+
+    // 2. Try the opposite bonus setting
+    let alt_bonus = !has_bonus;
+    let (reward_alt, secs_rem_alt, kill_alt, dps_alt) = calc_stats_internal(total_pts, dmg_pts, alt_bonus, time_limit);
+    if kill_alt >= 0.0 && kill_alt <= time_limit {
+        return (reward_alt, secs_rem_alt, kill_alt, dps_alt, alt_bonus);
+    }
+
+    // 3. Fallback to the original calculation
+    (reward, secs_rem, kill, dps, has_bonus)
 }
 
 /// For a results screen where DMG PTS is directly provided.
@@ -122,7 +152,7 @@ fn format_results(
         calc_stats_results(dmg_pts, boss_pts, has_bonus, time_limit);
 
     format!(
-        "```\n\
+         "```\n\
 ╔══════════════════════════════════════╗\n\
       DMC - {} Results\n\
 ╠══════════════════════════════════════╣\n\
@@ -152,7 +182,15 @@ fn format_leaderboard(
 ) -> String {
     let time_limit = boss_time_limit(boss_name);
     let dmg_pts = boss_dmg_pts(boss_name);
-    let bonus_str = if has_bonus { "X120% | " } else { "" };
+
+    // Auto-detect resolved has_bonus state based on the first player's score
+    let mut resolved_has_bonus = has_bonus;
+    if !players.is_empty() {
+        let (_, _, _, _, actual_bonus) = calc_stats_leaderboard(players[0].total_pts, dmg_pts, has_bonus, time_limit);
+        resolved_has_bonus = actual_bonus;
+    }
+
+    let bonus_str = if resolved_has_bonus { "X120% | " } else { "" };
     let time_str = if time_limit >= 300.0 { "5min" } else { "4min" };
 
     const RANK_EMOJIS: [&str; 10] = [
@@ -173,12 +211,10 @@ fn format_leaderboard(
             .get((player.rank as usize).saturating_sub(1))
             .unwrap_or(&"🔢");
 
-        let (_, _, kill_time, dps) =
-            calc_stats(player.total_pts, dmg_pts, has_bonus, time_limit);
+        let (_, _, kill_time, dps, _) =
+            calc_stats_leaderboard(player.total_pts, dmg_pts, resolved_has_bonus, time_limit);
 
         if kill_time < 0.0 {
-            // Negative kill time means the player's total_pts doesn't match
-            // our expected DMG PTS constant → different cap / assumption.
             out.push_str(&format!(
                 "\n {} {}\n    Total PTS : {}\n    Kill Time : ❌ Different DMG cap\n\
 ╠──────────────────────────────────────╣",
