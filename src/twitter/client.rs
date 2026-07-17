@@ -13,10 +13,11 @@ pub const ACCOUNTS: &[(&str, &str)] = &[
 /// Nitter instances tried in order. If one fails, the next is attempted.
 /// Public instances come and go; this list covers the most stable ones.
 const NITTER_INSTANCES: &[&str] = &[
-    "https://nitter.net",
+    "https://nitter.privacyredirect.com",
     "https://nitter.poast.org",
-    "https://nitter.cz",
-    "https://nitter.it",
+    "https://nitter.space",
+    "https://nitter.tiekoetter.com",
+    "https://nitter.catsarch.com",
 ];
 
 pub struct TwitterClient {
@@ -26,12 +27,8 @@ pub struct TwitterClient {
 impl TwitterClient {
     pub fn new() -> Result<Self> {
         let http = Client::builder()
-            .user_agent(
-                "Mozilla/5.0 (Windows NT 10.0; Win64; x64) \
-                 AppleWebKit/537.36 (KHTML, like Gecko) \
-                 Chrome/124.0.0.0 Safari/537.36",
-            )
-            .timeout(std::time::Duration::from_secs(20))
+            .user_agent("Mozilla/5.0 (compatible; Feedbin feed-fetcher; +https://feedbin.com)")
+            .timeout(std::time::Duration::from_secs(5))
             .build()?;
         Ok(Self { http })
     }
