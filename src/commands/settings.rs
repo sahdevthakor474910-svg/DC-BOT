@@ -25,7 +25,9 @@ use crate::db::queries;
         "clear_cache",
         "block_user",
         "unblock_user",
-        "blocked_list"
+        "blocked_list",
+        "export_setup",
+        "import_setup"
     )
 )]
 pub async fn settings(_ctx: Context<'_>) -> Result<(), Error> {
@@ -240,6 +242,63 @@ pub async fn blocked_list(ctx: Context<'_>) -> Result<(), Error> {
         ));
 
     ctx.send(poise::CreateReply::default().embed(embed)).await?;
+    Ok(())
+}
+
+/// 📤 Export the entire bot setup configurations for this server to a JSON file.
+#[poise::command(slash_command, guild_only, rename = "export-setup")]
+pub async fn export_setup(ctx: Context<'_>) -> Result<(), Error> {
+    let guild_id = ctx.guild_id().unwrap().to_string();
+    let db = &ctx.data().db;
+
+    ctx.defer().await?;
+
+    let backup = queries::export_guild_setup(db, &guild_id).await?;
+    let json_bytes = serde_json::to_vec_pretty(&backup)?;
+
+    let attachment = serenity::CreateAttachment::bytes(json_bytes, "setup_backup.json");
+    ctx.send(
+        poise::CreateReply::default()
+            .content("📤 **Here is your server setup configurations file!**\nKeep this file stored safely. If you redeploy or the bot's data resets, you can import this file using `/settings import-setup` to restore all settings.")
+            .attachment(attachment)
+    ).await?;
+
+    Ok(())
+}
+
+/// 📥 Import/Restore the bot setup configurations from a previously exported JSON file.
+#[poise::command(slash_command, guild_only, rename = "import-setup")]
+pub async fn import_setup(
+    ctx: Context<'_>,
+    #[description = "The exported setup_backup.json file"] attachment: serenity::Attachment,
+) -> Result<(), Error> {
+    let guild_id = ctx.guild_id().unwrap().to_string();
+    let db = &ctx.data().db;
+
+    ctx.defer().await?;
+
+    let file_bytes = match attachment.download().await {
+        Ok(bytes) => bytes,
+        Err(e) => {
+            ctx.say(format!("❌ Failed to download attachment: {}", e)).await?;
+            return Ok(());
+        }
+    };
+
+    let backup: queries::GuildSetupBackup = match serde_json::from_slice(&file_bytes) {
+        Ok(b) => b,
+        Err(e) => {
+            ctx.say(format!("❌ Invalid backup file format: {}. Make sure you are uploading the correct `setup_backup.json` file.", e)).await?;
+            return Ok(());
+        }
+    };
+
+    if let Err(e) = queries::import_guild_setup(db, &guild_id, backup).await {
+        ctx.say(format!("❌ Failed to restore configuration: {}", e)).await?;
+        return Ok(());
+    }
+
+    ctx.say("✅ **Setup restored successfully!** All channel mappings, auto-react targets, emojis and settings are back in place.").await?;
     Ok(())
 }
 
