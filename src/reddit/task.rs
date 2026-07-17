@@ -82,6 +82,7 @@ async fn post_subreddit(
     subreddit: &str,
     channel_id_str: &str,
     force: bool,
+    max_posts: usize,
 ) -> usize {
     let channel_id_u64: u64 = match channel_id_str.parse() {
         Ok(id) => id,
@@ -111,8 +112,8 @@ async fn post_subreddit(
                     error!("DB error marking post seen: {}", e);
                 }
 
-                // Limit to 5 posts per subreddit per tick to keep channels active without spamming.
-                if posted >= 5 {
+                // Limit to max_posts per subreddit per tick to keep channels active without spamming.
+                if posted >= max_posts {
                     continue;
                 }
 
@@ -199,29 +200,48 @@ async fn tick(data: &Data, http: &Arc<serenity::Http>, force: bool) -> Result<us
                 Some(id) => id,
                 None => continue,
             };
-            total_posted += post_subreddit(data, http, &cfg.guild_id, subreddit, &channel_id_str, force).await;
+            total_posted += post_subreddit(data, http, &cfg.guild_id, subreddit, &channel_id_str, force, 5).await;
         }
+
+        // Keep track of how many hot photos we've posted for this guild in this tick
+        let mut hot_photos_posted = 0usize;
 
         // ── NSFW subreddits ──────────────────────────────────────────────
         for subreddit in NSFW_SUBREDDITS {
+            let is_hot_photo_sub = matches!(
+                *subreddit,
+                "PetiteGoneWild" | "slimgirls" | "altgonewild"
+                | "cosplaygirls" | "realgirls"
+                | "FitNakedGirls" | "collegesluts"
+            );
+
             let target_channel = match *subreddit {
                 "rule34" => cfg.rule34_channel_id.as_ref().or(cfg.nsfw_channel_id.as_ref()),
                 "hentai" => cfg.hentai_channel_id.as_ref().or(cfg.nsfw_channel_id.as_ref()),
                 // ── Hot Photos: 18-25 aesthetic, slim, petite, cosplay ─────────
-                "PetiteGoneWild" | "slimgirls" | "altgonewild"
-                | "cosplaygirls" | "realgirls"
-                | "FitNakedGirls" | "collegesluts" => {
+                _ if is_hot_photo_sub => {
                     cfg.porn_channel_id.as_ref().or(cfg.nsfw_channel_id.as_ref())
                 }
                 _ => cfg.nsfw_channel_id.as_ref(),
             };
 
             if let Some(channel_id) = target_channel {
-                total_posted += post_subreddit(data, http, &cfg.guild_id, subreddit, channel_id, force).await;
+                let is_dest_porn_channel = cfg.porn_channel_id.as_ref().map_or(false, |id| id == channel_id);
+
+                if is_dest_porn_channel && is_hot_photo_sub {
+                    if hot_photos_posted >= 3 {
+                        continue;
+                    }
+                    let limit = 3 - hot_photos_posted;
+                    let posted = post_subreddit(data, http, &cfg.guild_id, subreddit, channel_id, force, limit).await;
+                    hot_photos_posted += posted;
+                    total_posted += posted;
+                } else {
+                    total_posted += post_subreddit(data, http, &cfg.guild_id, subreddit, channel_id, force, 5).await;
+                }
             }
         }
     }
 
     Ok(total_posted)
-
 }
