@@ -4,13 +4,20 @@ use super::gemini::BossResult;
 // Boss time limits (seconds)
 // ─────────────────────────────────────────────────────────────────────────────
 
+/// Normalizes a boss name by removing all non-alphanumeric characters and converting to lowercase.
+fn normalize_boss_name(name: &str) -> String {
+    name.chars()
+        .filter(|c| c.is_alphanumeric())
+        .collect::<String>()
+        .to_lowercase()
+}
+
 /// Returns the total time limit in seconds for the given boss name.
-/// Matching is case-insensitive and trims surrounding whitespace.
 fn boss_time_limit(name: &str) -> u64 {
-    let n = name.trim().to_lowercase();
-    match n.as_str() {
-        "vergil" | "dante" | "hell commander" => 300,
-        _ => 240, // Devil Mite, Cerberus, Calibur, Minotaur, Nevan, Hell Shade, Beowulf, Plutone
+    let norm = normalize_boss_name(name);
+    match norm.as_str() {
+        "vergil" | "dante" | "hellcommander" => 300,
+        _ => 240, // devilmite, cerberus, calibur, minotaur, nevan, hellshade, beowulf, plutone
     }
 }
 
@@ -111,10 +118,17 @@ impl BossStats {
 // Helpers
 // ─────────────────────────────────────────────────────────────────────────────
 
-/// Format a duration in seconds as `M:SS` (e.g. `2:47`).
+/// Format a duration in seconds with millisecond precision (e.g. "16s 687ms").
 fn format_time(secs: f64) -> String {
-    let total = secs.round() as u64;
-    let m = total / 60;
-    let s = total % 60;
-    format!("{}:{:02}", m, s)
+    let total_ms = (secs * 1000.0).round() as u64;
+    let ms = total_ms % 1000;
+    let total_secs = total_ms / 1000;
+    let s = total_secs % 60;
+    let m = total_secs / 60;
+
+    if m > 0 {
+        format!("{}m {}s {:03}ms", m, s, ms)
+    } else {
+        format!("{}s {:03}ms", s, ms)
+    }
 }
