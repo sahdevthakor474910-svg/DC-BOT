@@ -120,12 +120,5 @@ impl BossStats {
 
 /// Format a duration in seconds with 1 decimal place precision (e.g. "16.8s").
 fn format_time(secs: f64) -> String {
-    let m = (secs / 60.0).floor() as u64;
-    let s = secs % 60.0;
-
-    if m > 0 {
-        format!("{}m {:.1}s", m, s)
-    } else {
-        format!("{:.1}s", secs)
-    }
+    format!("{:.1}s", secs)
 }
