@@ -5,7 +5,7 @@ use sqlx::{Row, SqlitePool};
 // Structs returned by queries
 // ────────────────────────────────────────────────────────────────────────────
 
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, serde::Serialize, serde::Deserialize)]
 pub struct GuildConfig {
     pub guild_id: String,
     pub meme_channel_id: Option<String>,
@@ -911,3 +911,152 @@ pub async fn get_blocked_users(db: &SqlitePool, guild_id: &str) -> Result<Vec<St
         .await?;
     Ok(rows.into_iter().map(|r| r.get("user_id")).collect())
 }
+
+#[derive(Debug, Clone, serde::Serialize, serde::Deserialize)]
+pub struct GuildSetupBackup {
+    pub config: GuildConfig,
+    pub reaction_channels: Vec<String>,
+    pub reaction_users: Vec<String>,
+    pub reaction_emojis: Vec<String>,
+    pub channel_emojis: Vec<(String, String)>, // (channel_id, emoji)
+    pub user_emojis: Vec<(String, String)>,    // (user_id, emoji)
+    pub blocked_users: Vec<String>,
+}
+
+pub async fn export_guild_setup(db: &SqlitePool, guild_id: &str) -> Result<GuildSetupBackup> {
+    let config = get_or_create_guild(db, guild_id).await?;
+    let reaction_channels = get_reaction_channels(db, guild_id).await?;
+    let reaction_users = get_reaction_users(db, guild_id).await?;
+    let reaction_emojis = get_emojis(db, guild_id).await?;
+
+    let channel_emojis_rows = sqlx::query("SELECT channel_id, emoji FROM channel_emojis WHERE guild_id = ?")
+        .bind(guild_id)
+        .fetch_all(db)
+        .await?;
+    let channel_emojis = channel_emojis_rows.into_iter()
+        .map(|r| (r.get("channel_id"), r.get("emoji")))
+        .collect();
+
+    let user_emojis_rows = sqlx::query("SELECT user_id, emoji FROM user_emojis WHERE guild_id = ?")
+        .bind(guild_id)
+        .fetch_all(db)
+        .await?;
+    let user_emojis = user_emojis_rows.into_iter()
+        .map(|r| (r.get("user_id"), r.get("emoji")))
+        .collect();
+
+    let blocked_users = get_blocked_users(db, guild_id).await?;
+
+    Ok(GuildSetupBackup {
+        config,
+        reaction_channels,
+        reaction_users,
+        reaction_emojis,
+        channel_emojis,
+        user_emojis,
+        blocked_users,
+    })
+}
+
+pub async fn import_guild_setup(db: &SqlitePool, guild_id: &str, mut backup: GuildSetupBackup) -> Result<()> {
+    backup.config.guild_id = guild_id.to_string();
+
+    let mut tx = db.begin().await?;
+
+    sqlx::query("DELETE FROM guild_config WHERE guild_id = ?").bind(guild_id).execute(&mut *tx).await?;
+    sqlx::query("DELETE FROM reaction_channels WHERE guild_id = ?").bind(guild_id).execute(&mut *tx).await?;
+    sqlx::query("DELETE FROM reaction_users WHERE guild_id = ?").bind(guild_id).execute(&mut *tx).await?;
+    sqlx::query("DELETE FROM reaction_emojis WHERE guild_id = ?").bind(guild_id).execute(&mut *tx).await?;
+    sqlx::query("DELETE FROM channel_emojis WHERE guild_id = ?").bind(guild_id).execute(&mut *tx).await?;
+    sqlx::query("DELETE FROM user_emojis WHERE guild_id = ?").bind(guild_id).execute(&mut *tx).await?;
+    sqlx::query("DELETE FROM blocked_users WHERE guild_id = ?").bind(guild_id).execute(&mut *tx).await?;
+
+    sqlx::query(
+        "INSERT INTO guild_config (
+            guild_id, meme_channel_id, posting_interval_secs, brainrot_channel_id,
+            shitposting_channel_id, instagram_channel_id, news_channel_id,
+            free_games_channel_id, nsfw_channel_id, rule34_channel_id,
+            porn_channel_id, hentai_channel_id, jav_channel_id,
+            porn_video_channel_id, okxxx_channel_id, coc_channel_id,
+            twitter_channel_id, twitter_global_channel_id, twitter_asia_channel_id,
+            dmc_channel_id, auto_react_enabled
+        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)"
+    )
+    .bind(&backup.config.guild_id)
+    .bind(&backup.config.meme_channel_id)
+    .bind(backup.config.posting_interval_secs)
+    .bind(&backup.config.brainrot_channel_id)
+    .bind(&backup.config.shitposting_channel_id)
+    .bind(&backup.config.instagram_channel_id)
+    .bind(&backup.config.news_channel_id)
+    .bind(&backup.config.free_games_channel_id)
+    .bind(&backup.config.nsfw_channel_id)
+    .bind(&backup.config.rule34_channel_id)
+    .bind(&backup.config.porn_channel_id)
+    .bind(&backup.config.hentai_channel_id)
+    .bind(&backup.config.jav_channel_id)
+    .bind(&backup.config.porn_video_channel_id)
+    .bind(&backup.config.okxxx_channel_id)
+    .bind(&backup.config.coc_channel_id)
+    .bind(&backup.config.twitter_channel_id)
+    .bind(&backup.config.twitter_global_channel_id)
+    .bind(&backup.config.twitter_asia_channel_id)
+    .bind(&backup.config.dmc_channel_id)
+    .bind(backup.config.auto_react_enabled)
+    .execute(&mut *tx)
+    .await?;
+
+    for ch in backup.reaction_channels {
+        sqlx::query("INSERT INTO reaction_channels (guild_id, channel_id) VALUES (?, ?)")
+            .bind(guild_id)
+            .bind(ch)
+            .execute(&mut *tx)
+            .await?;
+    }
+
+    for u in backup.reaction_users {
+        sqlx::query("INSERT INTO reaction_users (guild_id, user_id) VALUES (?, ?)")
+            .bind(guild_id)
+            .bind(u)
+            .execute(&mut *tx)
+            .await?;
+    }
+
+    for e in backup.reaction_emojis {
+        sqlx::query("INSERT INTO reaction_emojis (guild_id, emoji) VALUES (?, ?)")
+            .bind(guild_id)
+            .bind(e)
+            .execute(&mut *tx)
+            .await?;
+    }
+
+    for (ch, e) in backup.channel_emojis {
+        sqlx::query("INSERT INTO channel_emojis (guild_id, channel_id, emoji) VALUES (?, ?, ?)")
+            .bind(guild_id)
+            .bind(ch)
+            .bind(e)
+            .execute(&mut *tx)
+            .await?;
+    }
+
+    for (u, e) in backup.user_emojis {
+        sqlx::query("INSERT INTO user_emojis (guild_id, user_id, emoji) VALUES (?, ?, ?)")
+            .bind(guild_id)
+            .bind(u)
+            .bind(e)
+            .execute(&mut *tx)
+            .await?;
+    }
+
+    for u in backup.blocked_users {
+        sqlx::query("INSERT INTO blocked_users (guild_id, user_id) VALUES (?, ?)")
+            .bind(guild_id)
+            .bind(u)
+            .execute(&mut *tx)
+            .await?;
+    }
+
+    tx.commit().await?;
+    Ok(())
+}
+
