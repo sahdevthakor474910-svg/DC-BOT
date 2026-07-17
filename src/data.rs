@@ -37,7 +37,7 @@ impl Data {
         let reddit = RedditClient::new(&config.reddit_user_agent)?;
         let http_client = reqwest::Client::builder()
             .user_agent(&config.reddit_user_agent)
-            .timeout(std::time::Duration::from_secs(10))
+            .timeout(std::time::Duration::from_secs(60))
             .build()?;
         Ok(Self {
             db,

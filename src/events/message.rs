@@ -71,9 +71,11 @@ pub async fn handle(
                         }
                     }
                     Err(e) => {
-                        // Image didn't look like a DMC screenshot or Gemini couldn't parse it.
-                        // Log but don't spam the channel with error messages.
-                        debug!("DMC analysis failed (probably not a boss result screen): {:#}", e);
+                        error!("DMC analysis failed: {:#}", e);
+                        // Reply visibly so you can see what went wrong while testing
+                        let _ = message
+                            .reply(&ctx.http, format!("❌ DMC analysis error: `{}`", e))
+                            .await;
                     }
                 }
             }
