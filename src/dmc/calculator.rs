@@ -118,17 +118,14 @@ impl BossStats {
 // Helpers
 // ─────────────────────────────────────────────────────────────────────────────
 
-/// Format a duration in seconds with millisecond precision (e.g. "16s 687ms").
+/// Format a duration in seconds with 1 decimal place precision (e.g. "16.8s").
 fn format_time(secs: f64) -> String {
-    let total_ms = (secs * 1000.0).round() as u64;
-    let ms = total_ms % 1000;
-    let total_secs = total_ms / 1000;
-    let s = total_secs % 60;
-    let m = total_secs / 60;
+    let m = (secs / 60.0).floor() as u64;
+    let s = secs % 60.0;
 
     if m > 0 {
-        format!("{}m {}s {:03}ms", m, s, ms)
+        format!("{}m {:.1}s", m, s)
     } else {
-        format!("{}s {:03}ms", s, ms)
+        format!("{:.1}s", secs)
     }
 }
