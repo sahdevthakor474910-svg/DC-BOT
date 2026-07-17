@@ -312,6 +312,54 @@ impl RedditClient {
 
         Ok(posts)
     }
+
+    /// Fetch latest memes from memesguy.com by scraping the homepage.
+    pub async fn fetch_memesguy_memes(&self) -> Result<Vec<MemeGuyPost>> {
+        debug!("Fetching memes from memesguy.com");
+        let html = self.client.get("https://memesguy.com/")
+            .send()
+            .await?
+            .text()
+            .await?;
+
+        let block_re = regex::Regex::new(r#"(?s)<a\s+href="(/meme/[^"]+)"[^>]*>[\s\n]*<img\s+src="([^"]+)"\s+alt="([^"]+)"#)?;
+
+        let mut posts = Vec::new();
+        for cap in block_re.captures_iter(&html) {
+            let href = &cap[1];
+            let img_src = &cap[2];
+            let alt = &cap[3];
+
+            let id = href.trim_start_matches("/meme/").to_string();
+            let title = decode_entities(alt);
+            let url = format!("https://memesguy.com{}", href);
+
+            posts.push(MemeGuyPost {
+                id,
+                title,
+                url,
+                image_url: img_src.to_string(),
+            });
+        }
+
+        Ok(posts)
+    }
+}
+
+#[derive(Debug, Clone)]
+pub struct MemeGuyPost {
+    pub id: String,
+    pub title: String,
+    pub url: String,
+    pub image_url: String,
+}
+
+fn decode_entities(html: &str) -> String {
+    html.replace("&quot;", "\"")
+        .replace("&#039;", "'")
+        .replace("&amp;", "&")
+        .replace("&lt;", "<")
+        .replace("&gt;", ">")
 }
 
 // ─── Scrolller API response structures ────────────────────────────────────────

@@ -7,7 +7,7 @@ use tracing::{error, info, warn};
 
 use crate::data::Data;
 use crate::db::queries;
-use crate::reddit::client::{RedditClient, SUBREDDITS, NSFW_SUBREDDITS};
+use crate::reddit::client::{RedditClient, NSFW_SUBREDDITS};
 
 /// Run a single fetch-and-post cycle (used by /admin force-refresh).
 pub async fn run_once(data: &Data, http: &Arc<serenity::Http>, force: bool) -> Result<usize> {
@@ -60,17 +60,6 @@ fn to_rxddit_url(url: &str) -> String {
     url.replace("www.reddit.com", "rxddit.com")
        .replace("reddit.com", "rxddit.com")
        .replace("redd.it", "rxddit.com")
-}
-
-/// Helper to get target channel ID based on subreddit.
-fn get_target_channel_id(cfg: &queries::GuildConfig, subreddit: &str) -> Option<String> {
-    match subreddit.to_lowercase().as_str() {
-        "memes" | "dankmemes" => cfg.meme_channel_id.clone(),
-        "brainrot" => cfg.brainrot_channel_id.clone(),
-        "shitposting" | "whenthe" => cfg.shitposting_channel_id.clone(),
-        "196" => cfg.instagram_channel_id.clone(),
-        _ => None,
-    }
 }
 
 /// Fetch posts from one subreddit and post unseen ones to a Discord channel.
@@ -182,8 +171,73 @@ async fn post_subreddit(
     posted
 }
 
-/// One sweep: for every guild with configured channels, fetch all subreddits and
-/// post any unseen media posts as embeds.
+/// Post memesguy.com memes to a specific Discord channel.
+async fn post_memesguy_to_channel(
+    data: &Data,
+    http: &Arc<serenity::Http>,
+    guild_id: &str,
+    channel_id_str: &str,
+    posts: &[crate::reddit::client::MemeGuyPost],
+    force: bool,
+) -> usize {
+    let channel_id_u64: u64 = match channel_id_str.parse() {
+        Ok(id) => id,
+        Err(_) => {
+            warn!("Invalid channel ID in DB for guild {}: {}", guild_id, channel_id_str);
+            return 0;
+        }
+    };
+
+    let channel = serenity::ChannelId::new(channel_id_u64);
+    let mut posted = 0usize;
+
+    for post in posts {
+        let dedup_id = format!("memesguy_{}_{}", channel_id_str, post.id);
+
+        if !force {
+            match queries::is_post_seen(&data.db, guild_id, &dedup_id).await {
+                Ok(true) => continue,
+                Err(e) => { error!("DB error checking seen memesguy post: {}", e); continue; }
+                _ => {}
+            }
+        }
+
+        // Mark seen immediately
+        if let Err(e) = queries::mark_post_seen(&data.db, guild_id, &dedup_id).await {
+            error!("DB error marking memesguy post seen: {}", e);
+        }
+
+        // Limit to 3 posts per channel per tick
+        if posted >= 3 {
+            continue;
+        }
+
+        let embed = serenity::CreateEmbed::new()
+            .title(&post.title)
+            .url(&post.url)
+            .image(&post.image_url)
+            .footer(serenity::CreateEmbedFooter::new("memesguy.com"))
+            .color(0x34D399); // Emerald green
+
+        let message = serenity::CreateMessage::new()
+            .content(&post.image_url)
+            .embed(embed);
+
+        if let Err(e) = channel.send_message(http, message).await {
+            error!("Failed to post memesguy meme {} to channel {}: {}", post.id, channel_id_str, e);
+        } else {
+            info!("📸 Posted memesguy.com meme {} to {}", post.id, channel_id_str);
+            posted += 1;
+        }
+
+        tokio::time::sleep(Duration::from_millis(500)).await;
+    }
+
+    posted
+}
+
+/// One sweep: for every guild with configured channels, fetch all SFW memes from memesguy.com,
+/// and NSFW memes from Scrolller/Reddit.
 async fn tick(data: &Data, http: &Arc<serenity::Http>, force: bool) -> Result<usize> {
     let configs = queries::get_all_guild_configs(&data.db).await?;
 
@@ -191,16 +245,32 @@ async fn tick(data: &Data, http: &Arc<serenity::Http>, force: bool) -> Result<us
         return Ok(0);
     }
 
+    // Fetch SFW memesguy memes once for all guilds
+    let memesguy_posts = match data.reddit.fetch_memesguy_memes().await {
+        Ok(posts) => posts,
+        Err(e) => {
+            error!("Failed to fetch SFW memes from memesguy.com: {:#}", e);
+            vec![]
+        }
+    };
+
     let mut total_posted = 0usize;
 
     for cfg in configs {
-        // ── Regular subreddits ────────────────────────────────────────────
-        for subreddit in SUBREDDITS {
-            let channel_id_str = match get_target_channel_id(&cfg, subreddit) {
-                Some(id) => id,
-                None => continue,
-            };
-            total_posted += post_subreddit(data, http, &cfg.guild_id, subreddit, &channel_id_str, force, 5).await;
+        // ── memesguy.com SFW Memes ─────────────────────────────────────────
+        if !memesguy_posts.is_empty() {
+            if let Some(ref ch) = cfg.meme_channel_id {
+                total_posted += post_memesguy_to_channel(data, http, &cfg.guild_id, ch, &memesguy_posts, force).await;
+            }
+            if let Some(ref ch) = cfg.shitposting_channel_id {
+                total_posted += post_memesguy_to_channel(data, http, &cfg.guild_id, ch, &memesguy_posts, force).await;
+            }
+            if let Some(ref ch) = cfg.brainrot_channel_id {
+                total_posted += post_memesguy_to_channel(data, http, &cfg.guild_id, ch, &memesguy_posts, force).await;
+            }
+            if let Some(ref ch) = cfg.instagram_channel_id {
+                total_posted += post_memesguy_to_channel(data, http, &cfg.guild_id, ch, &memesguy_posts, force).await;
+            }
         }
 
         // Keep track of how many hot photos we've posted for this guild in this tick
