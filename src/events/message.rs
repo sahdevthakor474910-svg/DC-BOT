@@ -66,6 +66,9 @@ pub async fn handle(
                     message.author.name
                 );
 
+                // Show typing indicator while Gemini processes
+                let _ = ctx.http.broadcast_typing(message.channel_id).await;
+
                 match gemini::analyze_screenshot(
                     &data.http_client,
                     &data.config.gemini_api_key,
@@ -81,7 +84,11 @@ pub async fn handle(
                         }
                     }
                     Err(e) => {
-                        warn!("DMC screenshot analysis failed (likely not a DMC screen): {:#}", e);
+                        // Log and reply with error so we can diagnose remotely
+                        error!("DMC screenshot analysis failed: {:#}", e);
+                        let _ = message
+                            .reply(&ctx.http, format!("❌ Analysis failed: `{}`", e))
+                            .await;
                     }
                 }
             }
