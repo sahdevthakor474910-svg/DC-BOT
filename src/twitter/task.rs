@@ -56,9 +56,31 @@ async fn tick(
             }
         };
 
-        // Translate Japanese tweets once before broadcasting to keep translation API usage low
+        // Translate Japanese tweets once before broadcasting to keep translation API usage low,
+        // and ONLY if the tweet is actually new to at least one guild.
         for tweet in &mut tweets {
-            if super::translate::is_japanese(&tweet.text) {
+            let mut is_new_for_some_guild = false;
+            for cfg in &configs {
+                let target_channel_id = if *username == "dmc_poc" {
+                    cfg.twitter_global_channel_id.as_ref().or(cfg.twitter_channel_id.as_ref())
+                } else if *username == "dmc_poc_jp" {
+                    cfg.twitter_asia_channel_id.as_ref().or(cfg.twitter_channel_id.as_ref())
+                } else {
+                    None
+                };
+
+                if target_channel_id.is_some() {
+                    match queries::is_tweet_seen(&data.db, &cfg.guild_id, &tweet.id).await {
+                        Ok(false) => {
+                            is_new_for_some_guild = true;
+                            break;
+                        }
+                        _ => {}
+                    }
+                }
+            }
+
+            if is_new_for_some_guild && super::translate::is_japanese(&tweet.text) {
                 let translated = super::translate::translate_ja_to_en(
                     client.http(),
                     &tweet.text,
@@ -67,6 +89,8 @@ async fn tick(
                 if translated != tweet.text {
                     tweet.translated_text = Some(translated);
                 }
+                // Sleep 1 second to avoid hitting API rate limits/concurrency limit on Gemini
+                tokio::time::sleep(Duration::from_secs(1)).await;
             }
         }
 
