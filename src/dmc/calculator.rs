@@ -1,0 +1,120 @@
+use super::gemini::BossResult;
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Boss time limits (seconds)
+// ─────────────────────────────────────────────────────────────────────────────
+
+/// Returns the total time limit in seconds for the given boss name.
+/// Matching is case-insensitive and trims surrounding whitespace.
+fn boss_time_limit(name: &str) -> u64 {
+    let n = name.trim().to_lowercase();
+    match n.as_str() {
+        "vergil" | "dante" | "hell commander" => 300,
+        _ => 240, // Devil Mite, Cerberus, Calibur, Minotaur, Nevan, Hell Shade, Beowulf, Plutone
+    }
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Final computed stats
+// ─────────────────────────────────────────────────────────────────────────────
+
+pub struct BossStats {
+    pub boss_name: String,
+    pub total_damage: i64,   // DMG PTS
+    pub kill_time_secs: f64, // seconds it took to kill the boss
+    pub kill_time_fmt: String,
+    pub dps: f64,
+    pub boss_pts: i64,
+    pub has_bonus: bool,
+    pub reward_pts: i64,
+    pub secs_remaining: f64,
+    pub boss_time_limit: u64,
+}
+
+impl BossStats {
+    pub fn compute(result: &BossResult) -> Self {
+        // ── Reward PTS ───────────────────────────────────────────────────────
+        let (reward_pts, base_boss_pts) = if result.has_bonus {
+            // Strip the 20 % bonus to recover the pre-bonus total
+            let pre_bonus = (result.boss_pts as f64 / 1.20).round() as i64;
+            (pre_bonus - result.dmg_pts, pre_bonus)
+        } else {
+            (result.boss_pts - result.dmg_pts, result.boss_pts)
+        };
+
+        // ── Seconds remaining ────────────────────────────────────────────────
+        // Formula: Reward PTS × 10 ÷ 489530
+        let secs_remaining = (reward_pts as f64 * 10.0) / 489_530.0;
+
+        // ── Kill time ───────────────────────────────────────────────────────
+        let total_secs = boss_time_limit(&result.boss_name) as f64;
+        let kill_time_secs = (total_secs - secs_remaining).max(0.0);
+
+        // ── DPS ─────────────────────────────────────────────────────────────
+        let dps = if kill_time_secs > 0.0 {
+            result.dmg_pts as f64 / kill_time_secs
+        } else {
+            0.0
+        };
+
+        // ── Format kill time as M:SS ─────────────────────────────────────────
+        let kill_time_fmt = format_time(kill_time_secs);
+
+        Self {
+            boss_name: result.boss_name.clone(),
+            total_damage: result.dmg_pts,
+            kill_time_secs,
+            kill_time_fmt,
+            dps,
+            boss_pts: base_boss_pts,
+            has_bonus: result.has_bonus,
+            reward_pts,
+            secs_remaining,
+            boss_time_limit: boss_time_limit(&result.boss_name),
+        }
+    }
+
+    /// Build the formatted Discord reply string.
+    pub fn discord_message(&self) -> String {
+        let damage_m = self.total_damage as f64 / 1_000_000.0;
+        let dps_m = self.dps / 1_000_000.0;
+        let bonus_str = if self.has_bonus { "x120% ✅" } else { "None ❌" };
+
+        format!(
+            "```\n\
+═══════════════════════════════\n\
+  DMC: Peak of Combat Results\n\
+═══════════════════════════════\n\
+  Boss        : {boss}\n\
+  Total Damage: {dmg:.2}M\n\
+  Kill Time   : {time}\n\
+  DPS         : {dps:.2}M/s\n\
+  Boss PTS    : {pts}\n\
+  Bonus       : {bonus}\n\
+  Reward PTS  : {reward}\n\
+  Secs Left   : {secs:.2}s\n\
+═══════════════════════════════\n\
+```",
+            boss   = self.boss_name,
+            dmg    = damage_m,
+            time   = self.kill_time_fmt,
+            dps    = dps_m,
+            pts    = self.boss_pts,
+            bonus  = bonus_str,
+            reward = self.reward_pts,
+            secs   = self.secs_remaining,
+        )
+    }
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Helpers
+// ─────────────────────────────────────────────────────────────────────────────
+
+/// Format a duration in seconds as `M:SS` (e.g. `2:47`).
+fn format_time(secs: f64) -> String {
+    let total = secs.round() as u64;
+    let m = total / 60;
+    let s = total % 60;
+    format!("{}:{:02}", m, s)
+}

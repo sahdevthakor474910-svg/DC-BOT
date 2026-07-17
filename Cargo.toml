@@ -58,6 +58,7 @@ url = "2"
 axum = "0.7"
 regex = "1"
 scraper = "0.19"
+base64 = "0.22"
 
 
 

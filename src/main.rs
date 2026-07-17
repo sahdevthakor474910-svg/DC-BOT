@@ -5,6 +5,7 @@ mod config;
 mod coc;
 mod data;
 mod db;
+mod dmc;
 mod events;
 mod freegames;
 mod jav;
@@ -399,6 +400,26 @@ mod tests {
         let translated = twitter::translate::translate_ja_to_en(&client, jp_text).await;
         println!("Translated '{}' -> '{}'", jp_text, translated);
         assert!(!translated.is_empty());
+    }
+
+    #[tokio::test]
+    async fn test_live_translation() {
+        let twitter_client = twitter::client::TwitterClient::new().unwrap();
+        println!("Fetching tweets from @dmc_poc_jp...");
+        let tweets = twitter_client.fetch_tweets("dmc_poc_jp", 5).await;
+        assert!(tweets.is_ok(), "Failed to fetch tweets: {:?}", tweets.err());
+        let tweets = tweets.unwrap();
+        for (i, tweet) in tweets.iter().enumerate() {
+            println!("\n--- Tweet {} ---", i + 1);
+            println!("  ID: {}", tweet.id);
+            println!("  Text: {}", tweet.text);
+            let is_jp = twitter::translate::is_japanese(&tweet.text);
+            println!("  Is Japanese? {}", is_jp);
+            if is_jp {
+                let translated = twitter::translate::translate_ja_to_en(twitter_client.http(), &tweet.text).await;
+                println!("  Translated: {}", translated);
+            }
+        }
     }
 }
 

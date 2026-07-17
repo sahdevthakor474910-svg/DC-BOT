@@ -1,12 +1,15 @@
 use anyhow::Result;
 use poise::serenity_prelude as serenity;
-use tracing::{debug, error};
+use tracing::{debug, error, info};
 
 use crate::data::Data;
 use crate::db::queries;
+use crate::dmc::{calculator::BossStats, gemini};
 
 /// Called for every new message received by the bot.
-/// Applies auto-reactions based on guild configuration.
+///
+/// 1. If the message has image attachments → try DMC: Peak of Combat analysis.
+/// 2. Applies auto-reactions based on guild configuration.
 pub async fn handle(
     ctx: &serenity::Context,
     message: &serenity::Message,
@@ -17,7 +20,67 @@ pub async fn handle(
         return Ok(());
     }
 
-    // Only operate inside guilds
+    // ── DMC screenshot analysis ───────────────────────────────────────────────
+    // Check if the message has any image attachments and we have a Gemini key.
+    if !data.config.gemini_api_key.is_empty() {
+        let image_attachments: Vec<&serenity::Attachment> = message
+            .attachments
+            .iter()
+            .filter(|a| {
+                matches!(
+                    a.content_type.as_deref(),
+                    Some("image/png")
+                        | Some("image/jpeg")
+                        | Some("image/jpg")
+                        | Some("image/gif")
+                        | Some("image/webp")
+                )
+                // Fallback: check file extension for attachments without content_type
+                || {
+                    let name = a.filename.to_lowercase();
+                    name.ends_with(".png")
+                        || name.ends_with(".jpg")
+                        || name.ends_with(".jpeg")
+                        || name.ends_with(".gif")
+                        || name.ends_with(".webp")
+                }
+            })
+            .collect();
+
+        if !image_attachments.is_empty() {
+            for attachment in image_attachments {
+                info!(
+                    "🎮 DMC screenshot detected: '{}' from {}",
+                    attachment.filename,
+                    message.author.name
+                );
+
+                match gemini::analyze_screenshot(
+                    &data.http_client,
+                    &data.config.gemini_api_key,
+                    &attachment.url,
+                )
+                .await
+                {
+                    Ok(boss_result) => {
+                        let stats = BossStats::compute(&boss_result);
+                        let reply = stats.discord_message();
+
+                        if let Err(e) = message.reply(&ctx.http, &reply).await {
+                            error!("Failed to send DMC analysis reply: {}", e);
+                        }
+                    }
+                    Err(e) => {
+                        // Image didn't look like a DMC screenshot or Gemini couldn't parse it.
+                        // Log but don't spam the channel with error messages.
+                        debug!("DMC analysis failed (probably not a boss result screen): {:#}", e);
+                    }
+                }
+            }
+        }
+    }
+
+    // Only the remainder operates inside guilds for auto-reacting
     let guild_id = match message.guild_id {
         Some(id) => id.to_string(),
         None => return Ok(()),

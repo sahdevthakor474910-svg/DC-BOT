@@ -16,6 +16,9 @@ pub struct AppConfig {
     pub log_level: String,
     /// Public base URL of the bot server for rendering web-stream links.
     pub public_url: String,
+    /// Google Gemini API key — used for DMC: Peak of Combat screenshot analysis.
+    /// Optional: feature is silently disabled when absent.
+    pub gemini_api_key: String,
 }
 
 impl AppConfig {
@@ -36,6 +39,7 @@ impl AppConfig {
             log_level: env::var("LOG_LEVEL").unwrap_or_else(|_| "info".to_string()),
             public_url: env::var("PUBLIC_URL")
                 .unwrap_or_else(|_| "http://localhost:10000".to_string()),
+            gemini_api_key: env::var("GEMINI_API_KEY").unwrap_or_default(),
         })
     }
 }
