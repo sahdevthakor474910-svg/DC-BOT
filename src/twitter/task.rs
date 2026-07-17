@@ -59,7 +59,11 @@ async fn tick(
         // Translate Japanese tweets once before broadcasting to keep translation API usage low
         for tweet in &mut tweets {
             if super::translate::is_japanese(&tweet.text) {
-                let translated = super::translate::translate_ja_to_en(client.http(), &tweet.text).await;
+                let translated = super::translate::translate_ja_to_en(
+                    client.http(),
+                    &tweet.text,
+                    &data.config.gemini_api_key,
+                ).await;
                 if translated != tweet.text {
                     tweet.translated_text = Some(translated);
                 }

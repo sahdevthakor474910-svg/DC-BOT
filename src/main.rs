@@ -397,7 +397,7 @@ mod tests {
         let en_text = "Hello, world!";
         assert!(!twitter::translate::is_japanese(en_text), "Should detect SFW/non-Japanese text as false");
 
-        let translated = twitter::translate::translate_ja_to_en(&client, jp_text).await;
+        let translated = twitter::translate::translate_ja_to_en(&client, jp_text, "").await;
         println!("Translated '{}' -> '{}'", jp_text, translated);
         assert!(!translated.is_empty());
     }
@@ -416,7 +416,7 @@ mod tests {
             let is_jp = twitter::translate::is_japanese(&tweet.text);
             println!("  Is Japanese? {}", is_jp);
             if is_jp {
-                let translated = twitter::translate::translate_ja_to_en(twitter_client.http(), &tweet.text).await;
+                let translated = twitter::translate::translate_ja_to_en(twitter_client.http(), &tweet.text, "").await;
                 println!("  Translated: {}", translated);
             }
         }
