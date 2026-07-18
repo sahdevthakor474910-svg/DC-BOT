@@ -37,13 +37,11 @@ pub async fn run(data: Data, http: Arc<serenity::Http>) {
 /// Embed accent colour per tag.
 fn tag_colour(tag: &str) -> u32 {
     match tag {
-        "🎁 Free Reward"       => 0xF1C40F, // gold
-        "⚔️ Update"            => 0xE74C3C, // CoC red
-        "🏆 Clan War League"   => 0x9B59B6, // purple
-        "🏅 Event"             => 0x2ECC71, // green
-        "📢 Announcement"      => 0x3498DB, // blue
-        "📺 Update Video"      => 0xFF0000, // YouTube red
-        _                      => 0x5865F2, // Discord blurple
+        "🎁 Free Reward"  => 0xF1C40F, // gold
+        "⚔️ Update"       => 0xE74C3C, // CoC red
+        "🏅 Event"        => 0x2ECC71, // green
+        "📢 Announcement" => 0x3498DB, // blue
+        _                 => 0x5865F2, // Discord blurple
     }
 }
 

@@ -10,8 +10,8 @@ const MAX_AGE_HOURS: i64 = 48;
 // Keyword classifier
 // =============================================================================
 
-/// Maps a post text to an emoji tag. Returns None to default.
-fn classify(text: &str) -> Option<&'static str> {
+/// Maps a post text to an emoji tag. Falls back to a generic announcement tag.
+fn classify(text: &str) -> &'static str {
     let t = text.to_lowercase();
 
     // Free reward / gifts / store freebies
@@ -20,7 +20,7 @@ fn classify(text: &str) -> Option<&'static str> {
         || t.contains("giveaway") || t.contains("gem") || t.contains("free gift")
         || t.contains("special offer") || t.contains("store")
     {
-        return Some("🎁 Free Reward");
+        return "🎁 Free Reward";
     }
 
     // Season updates, Sneak Peeks, Maintenance, balance changes, Town Hall updates
@@ -32,7 +32,7 @@ fn classify(text: &str) -> Option<&'static str> {
         || t.contains("trailer") || t.contains("reveal") || t.contains("dev update")
         || t.contains("developer update") || t.contains("sneak peak")
     {
-        return Some("⚔️ Update");
+        return "⚔️ Update";
     }
 
     // Clan Games, Gold Pass, Events, Challenges (e.g. spotlight etc)
@@ -41,10 +41,10 @@ fn classify(text: &str) -> Option<&'static str> {
         || t.contains("gold pass") || t.contains("spotlight") || t.contains("calendar")
         || t.contains("clan games") || t.contains("war league") || t.contains("cwl")
     {
-        return Some("🏅 Event");
+        return "🏅 Event";
     }
 
-    None
+    "📢 Announcement"
 }
 
 // =============================================================================
@@ -96,23 +96,20 @@ pub async fn fetch_all_updates(_client: &reqwest::Client) -> Vec<CocUpdate> {
             continue;
         }
 
-        let tag = classify(&tweet.text).unwrap_or("⚔️ Update");
+        let tag = classify(&tweet.text);
 
         let text_lines: Vec<&str> = tweet.text.split('\n').map(|s| s.trim()).filter(|s| !s.is_empty()).collect();
         let first_line = text_lines.first().cloned().unwrap_or("");
-        let title = if first_line.chars().count() > 80 {
-            truncate(first_line, 80)
-        } else if first_line.is_empty() {
+        let title = if first_line.is_empty() {
             truncate(&tweet.text, 80)
+        } else if first_line.chars().count() > 80 {
+            truncate(first_line, 80)
         } else {
             first_line.to_string()
         };
-        
-        let description = if tweet.text != title {
-            Some(tweet.text.clone())
-        } else {
-            None
-        };
+
+        // Always include the full tweet text as description (shows the full body in the embed).
+        let description = Some(truncate(&tweet.text, 900));
 
         updates.push(CocUpdate {
             id: format!("coc::x::{}", tweet.id),
