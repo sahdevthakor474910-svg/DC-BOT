@@ -164,7 +164,10 @@ RULES FOR BOTH
 - If value unclear, use 0
 
 BONUS BOSSES (X120%):
-Nevan, Hell Shade, Beowulf, Plutone, Vergil, Dante, Hell Commander, Hell·Commander, Hell-Commander, Hell-commander"#;
+Nevan, Hell Shade, Beowulf, Plutone, Vergil, Dante, Hell Commander, Hell·Commander, Hell-Commander, Hell-commander
+
+NON-BONUS BOSSES (no X120%):
+Devil Mite, Cerberus, Minotaur, Phantom, Calibur"#;
 
 // ─────────────────────────────────────────────────────────────────────────────
 // gemini-3.1-flash-lite is the modern free-tier model (15 RPM / 1500 RPD) that supports vision.

@@ -101,8 +101,8 @@ impl TwitterClient {
 
             // Check if it's the whitelisting warning or bot verification page
             let title = feed.title.as_ref().map(|t| t.content.as_str()).unwrap_or("");
-            if title.contains("not yet whitelisted") || title.contains("bot") || title.contains("Loading") {
-                last_err = Some(anyhow::anyhow!("Instance returned bot/whitelist challenge page"));
+            if title.contains("not yet whitelisted") || title.contains("Loading...") || title.contains("Instance is in maintenance") {
+                last_err = Some(anyhow::anyhow!("Instance returned challenge/maintenance page: {}", title));
                 continue;
             }
 
