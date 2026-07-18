@@ -1,6 +1,6 @@
 use anyhow::Result;
 use reqwest::Client;
-use tracing::{info, warn};
+use tracing::info;
 
 use super::models::Tweet;
 

@@ -1,42 +1,7 @@
-use feed_rs::parser;
-use tracing::{debug, info, warn};
+use tracing::{info, warn};
 
+use crate::twitter::client::TwitterClient;
 use super::models::CocUpdate;
-
-// =============================================================================
-// Official CoC news sources
-//
-// 1. Supercell Inbox RSS — 3 feeds (news / events / community)
-//    Project: https://github.com/skrwo/supercell-inbox-rss (GitHub Pages)
-//    Scrapes Supercell's official in-game CMS every hour at :25.
-//    Identical to what you see in the "News" tab inside the game.
-//
-// 2. Official CoC YouTube channel
-//    Channel ID verified via "Copy channel ID" on @ClashofClans YouTube page.
-//    Trailers, developer updates, season reveals.
-//
-// 3. r/ClashOfClans — Official flair only
-//    Supercell community managers (u/ClashOfClans) post announcements here.
-// =============================================================================
-
-// Supercell Inbox RSS feeds (raw.githubusercontent.com paths)
-const SUPERCELL_NEWS_RSS: &str =
-    "https://raw.githubusercontent.com/skrwo/supercell-inbox-rss/main/rss/clashofclans/en/news.xml";
-
-const SUPERCELL_EVENTS_RSS: &str =
-    "https://raw.githubusercontent.com/skrwo/supercell-inbox-rss/main/rss/clashofclans/en/events.xml";
-
-const SUPERCELL_COMMUNITY_RSS: &str =
-    "https://raw.githubusercontent.com/skrwo/supercell-inbox-rss/main/rss/clashofclans/en/community.xml";
-
-
-// YouTube channel ID verified from https://www.youtube.com/@ClashofClans
-const COC_YOUTUBE_RSS: &str =
-    "https://www.youtube.com/feeds/videos.xml?channel_id=UCD1Em4q90ZUK2R5HKesszJg";
-
-// Reddit Official-flair posts, sorted by new, last week only
-const REDDIT_OFFICIAL_RSS: &str =
-    "https://www.reddit.com/r/ClashOfClans/search.rss?q=flair%3A%22Official%22&sort=new&restrict_sr=1&t=week";
 
 // Only show posts from the last N hours — prevents old content flooding on first run
 const MAX_AGE_HOURS: i64 = 48;
@@ -45,9 +10,9 @@ const MAX_AGE_HOURS: i64 = 48;
 // Keyword classifier
 // =============================================================================
 
-/// Maps a post title to an emoji tag.  Returns None to drop unrelated posts.
-fn classify(title: &str) -> Option<&'static str> {
-    let t = title.to_lowercase();
+/// Maps a post text to an emoji tag. Returns None to default.
+fn classify(text: &str) -> Option<&'static str> {
+    let t = text.to_lowercase();
 
     // Free reward / gifts / store freebies
     if t.contains("free") || t.contains("reward") || t.contains("gift")
@@ -86,28 +51,6 @@ fn classify(title: &str) -> Option<&'static str> {
 // Helpers
 // =============================================================================
 
-fn strip_html(html: &str) -> String {
-    let mut out = String::new();
-    let mut in_tag = false;
-    for c in html.chars() {
-        match c {
-            '<' => in_tag = true,
-            '>' => { in_tag = false; out.push(' '); }
-            _ if !in_tag => out.push(c),
-            _ => {}
-        }
-    }
-    out.replace("&amp;",  "&")
-       .replace("&lt;",   "<")
-       .replace("&gt;",   ">")
-       .replace("&quot;", "\"")
-       .replace("&#39;",  "'")
-       .replace("&nbsp;", " ")
-       .split_whitespace()
-       .collect::<Vec<_>>()
-       .join(" ")
-}
-
 fn truncate(s: &str, max: usize) -> String {
     if s.chars().count() <= max {
         s.to_string()
@@ -126,113 +69,63 @@ fn is_recent(ts: Option<chrono::DateTime<chrono::Utc>>) -> bool {
 }
 
 // =============================================================================
-// RSS fetcher
-// =============================================================================
-
-/// Fetch one RSS/Atom feed and map entries to CocUpdate.
-///
-/// * `is_supercell_inbox` — ALL items are official; bypass date gate & accept all keywords
-async fn fetch_rss(
-    client: &reqwest::Client,
-    url: &str,
-    source: &str,
-    is_supercell_inbox: bool,
-) -> Vec<CocUpdate> {
-    let result: anyhow::Result<Vec<CocUpdate>> = async {
-        let bytes = client
-            .get(url)
-            .header("User-Agent", "discord-coc-bot/2.0 (contact: github.com/dc-bot)")
-            .header("Accept", "application/rss+xml, application/atom+xml, */*")
-            .send()
-            .await?
-            .error_for_status()?
-            .bytes()
-            .await?;
-
-        let feed = parser::parse(bytes.as_ref())
-            .map_err(|e| anyhow::anyhow!("Parse error for {url}: {e}"))?;
-
-        let items = feed.entries.into_iter().take(20).filter_map(|entry| {
-            let title     = entry.title.as_ref()?.content.clone();
-            let link      = entry.links.first()?.href.clone();
-            let summary   = entry.summary.map(|t| t.content);
-            let content   = entry.content.and_then(|c| c.body);
-            let published = entry.published;
-            let media     = entry.media;
-
-            // For Supercell Inbox: accept all without date gate (it represents the official game inbox)
-            // For others (Reddit/YouTube): enforce 48-hour recency gate
-            if !is_supercell_inbox && !is_recent(published) {
-                return None;
-            }
-
-            let tag = classify(&title)?;
-
-
-            let description = summary
-                .or(content)
-                .map(|html| truncate(&strip_html(&html), 300));
-
-            let image_url = media.iter().find_map(|m| {
-                m.content.iter().find_map(|c| c.url.as_ref().map(|u| u.as_str().to_string()))
-            });
-
-            Some(CocUpdate {
-                id:           format!("coc::{}::{}", source, link),
-                title,
-                description,
-                url:          link,
-                image_url,
-                source:       source.to_string(),
-                published_at: published,
-                tag:          tag.to_string(),
-            })
-        }).collect();
-
-        Ok(items)
-    }.await;
-
-    match result {
-        Ok(items) => {
-            if !items.is_empty() {
-                info!("CoC {source}: {} item(s) fetched", items.len());
-            } else {
-                debug!("CoC {source}: 0 new items this cycle");
-            }
-            items
-        }
-        Err(e) => {
-            warn!("CoC {source} unavailable: {:#}", e);
-            vec![]
-        }
-    }
-}
-
-// =============================================================================
 // Public API
 // =============================================================================
 
-pub async fn fetch_all_updates(client: &reqwest::Client) -> Vec<CocUpdate> {
-    // All five sources fetched concurrently
-    let (mut sc_news, mut sc_events, mut sc_community, mut youtube, mut reddit) = tokio::join!(
-        fetch_rss(client, SUPERCELL_NEWS_RSS,      "Supercell News",      true),
-        fetch_rss(client, SUPERCELL_EVENTS_RSS,    "Supercell Events",    true),
-        fetch_rss(client, SUPERCELL_COMMUNITY_RSS, "Supercell Community", true),
-        fetch_rss(client, COC_YOUTUBE_RSS,         "CoC YouTube",         false),
-        fetch_rss(client, REDDIT_OFFICIAL_RSS,     "r/ClashOfClans",      false),
-    );
+pub async fn fetch_all_updates(_client: &reqwest::Client) -> Vec<CocUpdate> {
+    let twitter_client = match TwitterClient::new() {
+        Ok(tc) => tc,
+        Err(e) => {
+            warn!("CoC fetcher: failed to initialize TwitterClient: {}", e);
+            return vec![];
+        }
+    };
 
-    let mut all: Vec<CocUpdate> = Vec::new();
-    all.append(&mut sc_news);
-    all.append(&mut sc_events);
-    all.append(&mut sc_community);
-    all.append(&mut youtube);
-    all.append(&mut reddit);
+    let tweets = match twitter_client.fetch_tweets("ClashofClans", 10).await {
+        Ok(t) => t,
+        Err(e) => {
+            warn!("CoC fetcher: failed to fetch tweets: {}", e);
+            vec![]
+        }
+    };
 
-    // Deduplicate by generated ID
-    let mut seen = std::collections::HashSet::new();
-    all.retain(|u| seen.insert(u.id.clone()));
+    let mut updates = Vec::new();
+    for tweet in tweets {
+        // Enforce 48-hour recency gate on tweets
+        if !is_recent(tweet.published_at) {
+            continue;
+        }
 
-    debug!("CoC fetcher: {} unique updates ready to post", all.len());
-    all
+        let tag = classify(&tweet.text).unwrap_or("⚔️ Update");
+
+        let text_lines: Vec<&str> = tweet.text.split('\n').map(|s| s.trim()).filter(|s| !s.is_empty()).collect();
+        let first_line = text_lines.first().cloned().unwrap_or("");
+        let title = if first_line.chars().count() > 80 {
+            truncate(first_line, 80)
+        } else if first_line.is_empty() {
+            truncate(&tweet.text, 80)
+        } else {
+            first_line.to_string()
+        };
+        
+        let description = if tweet.text != title {
+            Some(tweet.text.clone())
+        } else {
+            None
+        };
+
+        updates.push(CocUpdate {
+            id: format!("coc::x::{}", tweet.id),
+            title,
+            description,
+            url: tweet.link.clone(),
+            image_url: None, // simple, image in text link is followed by Discord auto-preview anyway
+            source: "𝕏 @ClashofClans".to_string(),
+            published_at: tweet.published_at,
+            tag: tag.to_string(),
+        });
+    }
+
+    info!("CoC X: {} item(s) fetched", updates.len());
+    updates
 }
