@@ -22,7 +22,7 @@ pub async fn run(data: Data, http: Arc<serenity::Http>) {
     };
 
     loop {
-        match tick(&data, &http, &client, false).await {
+        match tick(&data, &http, &client, false, false).await {
             Ok(n) if n > 0 => info!("🐦 Twitter: posted {} new tweet(s)", n),
             Ok(_) => {}
             Err(e) => error!("Twitter task error: {:#}", e),
@@ -35,7 +35,7 @@ pub async fn run(data: Data, http: Arc<serenity::Http>) {
 /// Dynamic run_once wrapper for slash command /post.
 pub async fn run_once(data: &Data, http: &Arc<serenity::Http>, force: bool) -> Result<usize> {
     let client = TwitterClient::new()?;
-    tick(data, http, &client, force).await
+    tick(data, http, &client, force, true).await
 }
 
 async fn tick(
@@ -43,6 +43,7 @@ async fn tick(
     http: &Arc<serenity::Http>,
     client: &TwitterClient,
     force: bool,
+    is_once: bool,
 ) -> Result<usize> {
     let configs = queries::get_all_guild_configs(&data.db).await?;
     let mut total = 0usize;
@@ -56,6 +57,19 @@ async fn tick(
                 continue;
             }
         };
+
+        // If run via /post (is_once), only send tweets that are less than a week old.
+        if is_once {
+            let now = chrono::Utc::now();
+            tweets.retain(|t| {
+                if let Some(published) = t.published_at {
+                    let age = now.signed_duration_since(published);
+                    age.num_days() < 7
+                } else {
+                    false
+                }
+            });
+        }
 
         // Translate Japanese tweets once before broadcasting to keep translation API usage low,
         // and ONLY if the tweet is actually new to at least one guild.

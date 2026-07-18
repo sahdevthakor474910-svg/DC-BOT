@@ -84,11 +84,8 @@ pub async fn handle(
                         }
                     }
                     Err(e) => {
-                        // Log and reply with error so we can diagnose remotely
-                        error!("DMC screenshot analysis failed: {:#}", e);
-                        let _ = message
-                            .reply(&ctx.http, format!("❌ Analysis failed: `{}`", e))
-                            .await;
+                        // Log error to console but do not reply to the user on Discord
+                        warn!("DMC screenshot analysis failed (likely unrelated image): {:#}", e);
                     }
                 }
             }

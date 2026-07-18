@@ -11,6 +11,9 @@ pub struct Tweet {
     pub link: String,
     /// Human-readable publish date/time string (may be empty).
     pub pub_date: String,
+    /// Exact UTC published timestamp for filtering.
+    pub published_at: Option<chrono::DateTime<chrono::Utc>>,
     /// Cached English translation (if the original text was Japanese).
     pub translated_text: Option<String>,
 }
+

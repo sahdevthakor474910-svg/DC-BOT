@@ -17,7 +17,8 @@ fn boss_dmg_pts(name: &str) -> i64 {
     let norm = normalize_boss_name(name);
     if norm.contains("devilmite")           { 1_022_497_809 }
     else if norm.contains("cerberus")        { 1_335_976_271 }
-    else if norm.contains("minotaur")        { 951_865_962   }
+    else if norm.contains("minotaur")
+        || norm.contains("phantom")          { 951_865_962   }
     else if norm.contains("nevan")           { 864_589_190   }
     else if norm.contains("hellshade")       { 905_640_916   }
     else if norm.contains("beowulf")         { 946_374_652   }
@@ -99,14 +100,18 @@ fn calc_stats_leaderboard(
 }
 
 /// For a results screen where DMG PTS is directly provided.
-/// The Results screen always displays the raw base points, so we do not divide by the 1.20x bonus factor here.
 fn calc_stats_results(
     dmg_pts: i64,
     boss_pts: i64,
-    _has_bonus: bool,
+    has_bonus: bool,
     time_limit: f64,
 ) -> (f64, f64, f64, f64) {
-    let reward_pts = boss_pts as f64 - dmg_pts as f64;
+    let reward_pts = if has_bonus {
+        let pre_bonus = boss_pts as f64 / 1.20;
+        pre_bonus - dmg_pts as f64
+    } else {
+        boss_pts as f64 - dmg_pts as f64
+    };
 
     let secs_remaining = (reward_pts * 10.0) / 489_530.0;
     let kill_time = time_limit - secs_remaining;
