@@ -485,12 +485,39 @@ mod tests {
             players: vec![
                 LeaderboardPlayer { rank: 1, name: "S-OH-Am".to_string(), total_pts: 1_099_993_341 },
                 LeaderboardPlayer { rank: 2, name: "Tanishq".to_string(), total_pts: 1_097_568_228 },
+                LeaderboardPlayer { rank: 3, name: "IncompletePlayer".to_string(), total_pts: 500_000_000 },
             ],
         };
         let msg3 = build_discord_message(&lb_bonus);
         assert!(msg3.contains("Hell Shade Leaderboard"));
         assert!(msg3.contains("X120%"));
+        assert!(msg3.contains("Incomplete / Diff HP"), "Leaderboard incomplete player should show Incomplete / Diff HP");
         println!("Hell Shade Leaderboard output:\n{}", msg3);
+
+        // Test case 4: Results screen with Gemini row-swap (boss_pts < dmg_pts)
+        let swapped = ScreenshotData::Results {
+            boss_name: "Vergil".to_string(),
+            dmg_pts: 2_893_810_824, // larger (actually boss_pts)
+            reward_pts: 0,
+            boss_pts: 2_892_440_140, // smaller (actually dmg_pts)
+            has_bonus: true,
+        };
+        let msg4 = build_discord_message(&swapped);
+        assert!(msg4.contains("Vergil Results"));
+        assert!(!msg4.contains("5m 0.0s"), "Swapped fields should be auto-swapped");
+        println!("Swapped fields output:\n{}", msg4);
+
+        // Test case 5: Results screen with hallucinated large reward_pts (> 20M)
+        let hallucinated = ScreenshotData::Results {
+            boss_name: "Beowulf".to_string(),
+            dmg_pts: 946_374_652,
+            reward_pts: 946_374_652, // hallucinated boss_pts into reward_pts
+            boss_pts: 950_000_000,
+            has_bonus: true,
+        };
+        let msg5 = build_discord_message(&hallucinated);
+        assert!(msg5.contains("Beowulf Results"));
+        println!("Hallucinated reward_pts output:\n{}", msg5);
     }
 }
 

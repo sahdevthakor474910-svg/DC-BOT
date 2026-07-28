@@ -105,18 +105,43 @@ fn calc_stats_leaderboard(
 /// `boss_killed = false` when the player timed out without defeating the boss —
 /// the caller shows a dedicated "❌ Boss Not Killed" message in that case.
 fn calc_stats_results(
-    dmg_pts: i64,
+    dmg_pts_raw: i64,
     reward_pts_direct: i64,
-    boss_pts: i64,
+    boss_pts_raw: i64,
     _has_bonus: bool,
     time_limit: f64,
     boss_name: &str,
 ) -> (f64, f64, f64, f64, bool) {
     let hp_cap = boss_dmg_pts(boss_name);
 
+    // ── Sanity check 1: auto-swap if Gemini returned rows in wrong order ──
+    let (dmg_pts, boss_pts) = if boss_pts_raw > 0 && dmg_pts_raw > 0 && boss_pts_raw < dmg_pts_raw {
+        tracing::warn!(
+            "calc_stats_results: boss_pts ({}) < dmg_pts ({}) for {} — auto-swapping fields",
+            boss_pts_raw, dmg_pts_raw, boss_name
+        );
+        (boss_pts_raw, dmg_pts_raw)
+    } else {
+        (dmg_pts_raw, boss_pts_raw)
+    };
+
+    // ── Sanity check 2: filter out implausible reward_pts_direct (> 20M) ──
+    // Max possible time reward for 300s limit is ~14.68M.
+    let valid_reward_direct = if reward_pts_direct > 0 && reward_pts_direct <= 20_000_000 {
+        reward_pts_direct
+    } else {
+        if reward_pts_direct > 20_000_000 {
+            tracing::warn!(
+                "calc_stats_results: reward_pts_direct ({}) > 20M limit for {} — ignoring invalid Gemini value",
+                reward_pts_direct, boss_name
+            );
+        }
+        0
+    };
+
     // ── Primary: use the directly-read Reward PTS ──────────────────────────
-    let reward_pts: f64 = if reward_pts_direct > 0 {
-        reward_pts_direct as f64
+    let reward_pts: f64 = if valid_reward_direct > 0 {
+        valid_reward_direct as f64
     } else {
         // ── Boss-not-killed shortcut ───────────────────────────────────────
         // reward_pts = 0 AND dmg < hp_cap → player timed out, boss survived.
@@ -286,9 +311,9 @@ fn format_leaderboard(
         let (_, _, kill_time, dps, _) =
             calc_stats_leaderboard(player.total_pts, dmg_pts, resolved_has_bonus, time_limit);
 
-        if kill_time < 0.0 {
+        if kill_time < 0.0 || kill_time > time_limit {
             out.push_str(&format!(
-                "\n {} {}\n    Total PTS : {}\n    Kill Time : ❌ Different DMG cap\n\
+                "\n {} {}\n    Total PTS : {}\n    Kill Time : ❌ Incomplete / Diff HP\n\
 ╠──────────────────────────────────────╣",
                 emoji, player.name, player.total_pts
             ));
