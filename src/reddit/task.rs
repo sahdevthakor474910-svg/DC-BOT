@@ -299,10 +299,10 @@ async fn tick(data: &Data, http: &Arc<serenity::Http>, force: bool) -> Result<us
                 let is_dest_porn_channel = cfg.porn_channel_id.as_ref().map_or(false, |id| id == channel_id);
 
                 if is_dest_porn_channel && is_hot_photo_sub {
-                    if hot_photos_posted >= 3 {
+                    if hot_photos_posted >= 1 {
                         continue;
                     }
-                    let limit = 3 - hot_photos_posted;
+                    let limit = 1 - hot_photos_posted;
                     let posted = post_subreddit(data, http, &cfg.guild_id, subreddit, channel_id, force, limit).await;
                     hot_photos_posted += posted;
                     total_posted += posted;
