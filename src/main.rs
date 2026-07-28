@@ -428,22 +428,37 @@ mod tests {
         use crate::dmc::gemini::{LeaderboardPlayer, ScreenshotData};
 
         // Test case 1: Results screen – Hell Commander with X120% bonus.
-        // On the results screen, boss_pts = raw boss HP cap + reward pts remaining.
-        // The bonus multiplier does NOT inflate boss_pts shown on-screen.
-        // Example: player deals near-full damage with ~28s remaining.
-        //   reward_pts ≈ 1_370_684  →  secs_remaining ≈ 28.0s
-        //   boss_pts = 2_892_440_140 + 1_370_684 = 2_893_810_824
+        // reward_pts is read directly from the screenshot (small number ~1.4M),
+        // NOT computed from boss_pts - dmg_pts (which would give ~0 for big bosses).
+        //   reward_pts = 1_370_684  →  secs_remaining ≈ 28.0s  →  kill_time ≈ 272s
         let results = ScreenshotData::Results {
             boss_name: "Hell Commander".to_string(),
             dmg_pts: 2_892_440_140,
-            boss_pts: 2_893_810_824, // raw boss HP + reward pts (no bonus inflation)
+            reward_pts: 1_370_684, // directly read from "Reward PTS" row
+            boss_pts: 2_893_810_824,
             has_bonus: true,
         };
         let msg = build_discord_message(&results);
         assert!(msg.contains("Hell Commander Results"));
         assert!(msg.contains("X120% ✓"));
-        assert!(!msg.contains("Kill Time   : 0s"), "Kill time should not be zero for a valid run");
+        assert!(!msg.contains("Kill Time   : 0s"), "Kill time should not be zero");
+        assert!(!msg.contains("Kill Time   : 5m 0"), "Kill time should not be 5 min exactly (Dante bug)");
         println!("Results output:\n{}", msg);
+
+        // Test case 1b: Dante with X120% bonus — this was the bugged case.
+        // Gemini was reading boss_pts ≈ dmg_pts → reward_pts = 0 → 5 min every time.
+        // Now we read reward_pts directly from the screenshot.
+        let dante_results = ScreenshotData::Results {
+            boss_name: "Dante".to_string(),
+            dmg_pts: 2_400_000_000,
+            reward_pts: 8_540_200, // directly read — NOT computed from boss_pts - dmg_pts
+            boss_pts: 2_408_540_200,
+            has_bonus: true,
+        };
+        let dante_msg = build_discord_message(&dante_results);
+        assert!(dante_msg.contains("Dante Results"));
+        assert!(!dante_msg.contains("Kill Time   : 5m 0"), "Dante kill time should not be 5 min exactly");
+        println!("Dante Results output:\n{}", dante_msg);
 
         // Test case 2: Leaderboard screen – Calibur without bonus
         let leaderboard = ScreenshotData::Leaderboard {

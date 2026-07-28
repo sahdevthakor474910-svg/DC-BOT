@@ -99,52 +99,57 @@ fn calc_stats_leaderboard(
     (reward, secs_rem, kill, dps, has_bonus)
 }
 
-/// For a results screen where DMG PTS is directly provided.
+/// For a results screen where Reward PTS is directly provided by Gemini.
 ///
-/// On the results screen the three rows are:
-///   DMG PTS    = raw damage you dealt
-///   Reward PTS = time-bonus points
-///   Boss PTS   = DMG PTS + Reward PTS  (always >= DMG PTS)
+/// Primary source: `reward_pts` read directly from the "Reward PTS" row.
+/// This is a small, clearly-labelled number that Gemini reads reliably even
+/// for big bosses like Dante / Vergil / Hell Commander (~2.89B) where
+/// DMG PTS and Boss PTS look almost identical and subtraction gives ~0.
 ///
-/// The X120% bonus is applied server-side to the *leaderboard total*, it does
-/// NOT inflate the Boss PTS shown on your personal results screen.
+/// Fallback: if reward_pts == 0 but boss_pts > dmg_pts, use boss_pts - dmg_pts
+/// (Gemini may have missed the Reward PTS row).
 fn calc_stats_results(
-    dmg_pts_raw: i64,
-    boss_pts_raw: i64,
+    dmg_pts: i64,
+    reward_pts_direct: i64,
+    boss_pts: i64,
     _has_bonus: bool,
     time_limit: f64,
     boss_name: &str,
 ) -> (f64, f64, f64, f64) {
-    // ── Sanity check 1: auto-swap if Gemini returned the rows in the wrong order ──
-    let (dmg_pts, boss_pts) = if boss_pts_raw < dmg_pts_raw {
-        tracing::warn!(
-            "calc_stats_results: boss_pts ({}) < dmg_pts ({}) — auto-swapping (likely Gemini field swap)",
-            boss_pts_raw, dmg_pts_raw
-        );
-        (boss_pts_raw, dmg_pts_raw)
+    // ── Primary: use the directly-read Reward PTS ──────────────────────────
+    let reward_pts: f64 = if reward_pts_direct > 0 {
+        reward_pts_direct as f64
     } else {
-        (dmg_pts_raw, boss_pts_raw)
+        // ── Fallback: compute from boss_pts - dmg_pts ──────────────────────
+        // Only use this when Gemini returned reward_pts = 0 but boss_pts > dmg_pts
+        let computed = (boss_pts as f64 - dmg_pts as f64).max(0.0);
+        if computed > 0.0 {
+            tracing::warn!(
+                "calc_stats_results: reward_pts=0 from Gemini for {} — falling back to boss_pts-dmg_pts ({:.0})",
+                boss_name, computed
+            );
+        }
+        computed
     };
 
-    // ── Sanity check 2: if reward_pts implies a kill time > time_limit, the
-    //    boss_pts is probably wrong. Fall back to the known HP cap. ──────────
-    let raw_reward = (boss_pts as f64 - dmg_pts as f64).max(0.0);
-    let raw_secs   = (raw_reward * 10.0) / 489_530.0;
-    let raw_kill   = time_limit - raw_secs;
+    let secs_remaining = (reward_pts * 10.0) / 489_530.0;
+    let kill_time = time_limit - secs_remaining;
 
-    let (reward_pts, secs_remaining, kill_time) = if raw_kill < 0.0 || raw_kill > time_limit {
+    // ── Plausibility guard ─────────────────────────────────────────────────
+    // If kill_time is outside [0, time_limit] the data is corrupt. Use the
+    // known HP cap as a last resort so we at least show a valid kill time.
+    let (reward_pts, secs_remaining, kill_time) = if kill_time < 0.0 || kill_time > time_limit {
         tracing::warn!(
-            "calc_stats_results: implausible kill_time ({:.1}s) for {} — using known HP cap",
-            raw_kill, boss_name
+            "calc_stats_results: implausible kill_time ({:.1}s) for {} — clamping via HP cap",
+            kill_time, boss_name
         );
-        // Use known HP cap so reward_pts = 0, kill_time = time_limit (full fight)
         let cap = boss_dmg_pts(boss_name) as f64;
-        let rp  = (cap - dmg_pts as f64).max(0.0);
-        let sr  = (rp * 10.0) / 489_530.0;
-        let kt  = time_limit - sr;
+        let rp = (cap - dmg_pts as f64).max(0.0);
+        let sr = (rp * 10.0) / 489_530.0;
+        let kt = time_limit - sr;
         (rp, sr, kt)
     } else {
-        (raw_reward, raw_secs, raw_kill)
+        (reward_pts, secs_remaining, kill_time)
     };
 
     let dps = if kill_time > 0.0 {
@@ -181,12 +186,13 @@ fn format_kill_time(secs: f64) -> String {
 fn format_results(
     boss_name: &str,
     dmg_pts: i64,
+    reward_pts: i64,
     boss_pts: i64,
     has_bonus: bool,
 ) -> String {
     let time_limit = boss_time_limit(boss_name);
-    let (reward_pts, secs_remaining, kill_time, dps) =
-        calc_stats_results(dmg_pts, boss_pts, has_bonus, time_limit, boss_name);
+    let (reward_pts_f, secs_remaining, kill_time, dps) =
+        calc_stats_results(dmg_pts, reward_pts, boss_pts, has_bonus, time_limit, boss_name);
 
     format!(
          "```\n\
@@ -205,7 +211,7 @@ fn format_results(
         boss_pts,
         format_kill_time(kill_time),
         dps,
-        reward_pts,
+        reward_pts_f,
         secs_remaining,
         if has_bonus { "X120% ✓" } else { "None" }
     )
@@ -290,9 +296,10 @@ pub fn build_discord_message(data: &ScreenshotData) -> String {
         ScreenshotData::Results {
             boss_name,
             dmg_pts,
+            reward_pts,
             boss_pts,
             has_bonus,
-        } => format_results(boss_name, *dmg_pts, *boss_pts, *has_bonus),
+        } => format_results(boss_name, *dmg_pts, *reward_pts, *boss_pts, *has_bonus),
 
         ScreenshotData::Leaderboard {
             boss_name,

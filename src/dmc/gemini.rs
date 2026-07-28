@@ -17,10 +17,14 @@ pub struct LeaderboardPlayer {
 /// The two kinds of screenshots the bot can receive.
 #[derive(Debug)]
 pub enum ScreenshotData {
-    /// Post-battle results screen (shows DMG PTS / Boss PTS).
+    /// Post-battle results screen (shows DMG PTS / Reward PTS / Boss PTS).
     Results {
         boss_name: String,
         dmg_pts: i64,
+        /// Time-bonus Reward PTS read directly from the results screen.
+        /// Using this avoids having to compute boss_pts - dmg_pts, which
+        /// breaks for Dante / HC / Vergil where both numbers are ~2.89B.
+        reward_pts: i64,
         boss_pts: i64,
         has_bonus: bool,
     },
@@ -43,6 +47,10 @@ enum RawScreenshot {
     Results {
         boss_name: String,
         dmg_pts: i64,
+        /// Reward PTS read directly from the results screen (optional for
+        /// backwards-compat — falls back to 0 so older prompts still parse).
+        #[serde(default)]
+        reward_pts: i64,
         boss_pts: i64,
         has_bonus: bool,
     },
@@ -119,34 +127,48 @@ First identify the screenshot type:
 ═══════════════════════════════════
 RESULTS SCREENSHOT — Field Definitions
 ═══════════════════════════════════
-The results screen shows exactly three score rows:
-  DMG PTS    — the raw damage you dealt to the boss HP bar
-  Reward PTS — bonus points for finishing quickly (time-based)
-  Boss PTS   — DMG PTS + Reward PTS combined (always >= DMG PTS)
+The results screen shows exactly THREE score rows with these labels:
+  DMG PTS    — raw damage dealt to the boss HP bar  (large number)
+  Reward PTS — time-bonus for finishing quickly      (usually much smaller)
+  Boss PTS   — DMG PTS + Reward PTS combined         (largest number)
 
-Extract:
-1. boss_name  — e.g. "Hell Commander", "Vergil", "Calibur"
-2. dmg_pts    — the number on the "DMG PTS" row  (NEVER the Boss PTS row)
-3. boss_pts   — the number on the "Boss PTS" row  (always >= dmg_pts)
-4. has_bonus  — true if boss is in the BONUS list below, else false
+Extract ALL FOUR of these fields:
+1. boss_name  — e.g. "Dante", "Vergil", "Hell Commander", "Calibur"
+2. dmg_pts    — the number on the "DMG PTS" row
+3. reward_pts — the number on the "Reward PTS" row  ← READ THIS DIRECTLY
+4. boss_pts   — the number on the "Boss PTS" row
+5. has_bonus  — true if boss is in the BONUS list below, else false
 
-IMPORTANT sanity check: boss_pts >= dmg_pts always.
-If the number you read for boss_pts is smaller than dmg_pts, you have the rows swapped — swap them.
+CRITICAL: reward_pts is always MUCH SMALLER than dmg_pts for big bosses like
+Dante, Vergil, Hell Commander. Do NOT confuse it with DMG PTS.
+If reward_pts appears larger than dmg_pts you have the rows swapped.
 
 Example 1 — Non-bonus boss (Calibur):
 {
   "type": "results",
   "boss_name": "Calibur",
   "dmg_pts": 1022497809,
+  "reward_pts": 11295415,
   "boss_pts": 1033793224,
   "has_bonus": false
 }
 
-Example 2 — Bonus boss (Hell Commander, full-clear with time left):
+Example 2 — Bonus boss (Dante, mid-clear with time left):
+{
+  "type": "results",
+  "boss_name": "Dante",
+  "dmg_pts": 2400000000,
+  "reward_pts": 8540200,
+  "boss_pts": 2408540200,
+  "has_bonus": true
+}
+
+Example 3 — Bonus boss (Hell Commander, full-clear with time left):
 {
   "type": "results",
   "boss_name": "Hell Commander",
   "dmg_pts": 2892440140,
+  "reward_pts": 1881540,
   "boss_pts": 2894321680,
   "has_bonus": true
 }
@@ -292,8 +314,8 @@ pub async fn analyze_screenshot(
 
             tracing::info!("✅ DMC analysis succeeded via {model}");
             return Ok(match raw {
-                RawScreenshot::Results { boss_name, dmg_pts, boss_pts, has_bonus } =>
-                    ScreenshotData::Results { boss_name, dmg_pts, boss_pts, has_bonus },
+                RawScreenshot::Results { boss_name, dmg_pts, reward_pts, boss_pts, has_bonus } =>
+                    ScreenshotData::Results { boss_name, dmg_pts, reward_pts, boss_pts, has_bonus },
                 RawScreenshot::Leaderboard { boss_name, has_bonus, players } =>
                     ScreenshotData::Leaderboard { boss_name, has_bonus, players },
             });
