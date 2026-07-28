@@ -188,23 +188,26 @@ async fn tick(
                     error!("🐦 DB error marking tweet seen: {}", e);
                 }
 
+                // Helper to safely truncate UTF-8 string at char boundary
+                let safe_truncate = |s: &str, max_bytes: usize| -> String {
+                    if s.len() <= max_bytes {
+                        s.to_string()
+                    } else {
+                        let mut end = max_bytes;
+                        while !s.is_char_boundary(end) && end > 0 {
+                            end -= 1;
+                        }
+                        format!("{}…", &s[..end])
+                    }
+                };
+
                 // Build a clean embed using pre-translated text if present
                 let description = if let Some(translated) = &tweet.translated_text {
-                    let original = if tweet.text.len() > 900 {
-                        format!("{}…", &tweet.text[..900])
-                    } else {
-                        tweet.text.clone()
-                    };
-                    let english = if translated.len() > 900 {
-                        format!("{}…", &translated[..900])
-                    } else {
-                        translated.clone()
-                    };
+                    let original = safe_truncate(&tweet.text, 900);
+                    let english = safe_truncate(translated, 900);
                     format!("{}\n\n─── **English Translation** ───\n{}", original, english)
-                } else if tweet.text.len() > 1800 {
-                    format!("{}…", &tweet.text[..1800])
                 } else {
-                    tweet.text.clone()
+                    safe_truncate(&tweet.text, 1800)
                 };
 
                 let footer_text = if tweet.pub_date.is_empty() {
