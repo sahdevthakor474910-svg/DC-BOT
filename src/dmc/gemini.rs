@@ -110,39 +110,56 @@ struct GeminiError {
 // Prompt
 // ─────────────────────────────────────────────────────────────────────────────
 
-const ANALYSIS_PROMPT: &str = r#"You are analyzing Devil May Cry: Peak of Combat screenshots.
+const ANALYSIS_PROMPT: &str = r#"You are analyzing Devil May Cry: Peak of Combat (DMC:PoC) battle screenshots.
 
 First identify the screenshot type:
-- "results"     = shows DMG PTS, Reward PTS, Boss PTS after a battle
-- "leaderboard" = shows Ranking, Player Name, Total PTS
+- "results"     = personal post-battle screen showing DMG PTS / Reward PTS / Boss PTS
+- "leaderboard" = server ranking screen showing player names and Total PTS
 
 ═══════════════════════════════════
-RESULTS SCREENSHOT
+RESULTS SCREENSHOT — Field Definitions
 ═══════════════════════════════════
+The results screen shows exactly three score rows:
+  DMG PTS    — the raw damage you dealt to the boss HP bar
+  Reward PTS — bonus points for finishing quickly (time-based)
+  Boss PTS   — DMG PTS + Reward PTS combined (always >= DMG PTS)
+
 Extract:
-1. Boss name
-2. DMG PTS (large number next to "DMG PTS:")
-3. Boss PTS (large number next to "Boss PTS")
-4. Has X120% bonus? (true/false)
+1. boss_name  — e.g. "Hell Commander", "Vergil", "Calibur"
+2. dmg_pts    — the number on the "DMG PTS" row  (NEVER the Boss PTS row)
+3. boss_pts   — the number on the "Boss PTS" row  (always >= dmg_pts)
+4. has_bonus  — true if boss is in the BONUS list below, else false
 
-Reply in this JSON:
+IMPORTANT sanity check: boss_pts >= dmg_pts always.
+If the number you read for boss_pts is smaller than dmg_pts, you have the rows swapped — swap them.
+
+Example 1 — Non-bonus boss (Calibur):
 {
   "type": "results",
-  "boss_name": "Devil Mite",
+  "boss_name": "Calibur",
   "dmg_pts": 1022497809,
   "boss_pts": 1033793224,
   "has_bonus": false
+}
+
+Example 2 — Bonus boss (Hell Commander, full-clear with time left):
+{
+  "type": "results",
+  "boss_name": "Hell Commander",
+  "dmg_pts": 2892440140,
+  "boss_pts": 2894321680,
+  "has_bonus": true
 }
 
 ═══════════════════════════════════
 LEADERBOARD SCREENSHOT
 ═══════════════════════════════════
 Extract:
-1. Boss name (shown on left side tab that is highlighted/selected)
-2. Has X120% bonus? (true/false - check if this boss has bonus)
-3. All visible players with rank, name, total pts
+1. boss_name — the boss tab that is highlighted/selected on the left side
+2. has_bonus — true if boss is in the BONUS list below
+3. All visible players with rank, name, total_pts
 
-Reply in this JSON:
+Example:
 {
   "type": "leaderboard",
   "boss_name": "Calibur",
@@ -158,15 +175,16 @@ Reply in this JSON:
 ═══════════════════════════════════
 RULES FOR BOTH
 ═══════════════════════════════════
-- Numbers must be plain integers, no commas
-- has_bonus is true only if boss is in bonus list below
-- Extract ALL visible players in leaderboard
-- If value unclear, use 0
+- All numbers must be plain integers — no commas, no spaces
+- has_bonus true ONLY if the boss is in the BONUS list
+- Extract ALL visible players in leaderboard screenshots
+- If a value is unreadable, use 0
 
-BONUS BOSSES (X120%):
-Nevan, Hell Shade, Beowulf, Plutone, Vergil, Dante, Hell Commander, Hell·Commander, Hell-Commander, Hell-commander
+BONUS BOSSES (X120% multiplier applied by server):
+Nevan, Hell Shade, Beowulf, Plutone, Vergil, Dante,
+Hell Commander, Hell·Commander, Hell-Commander, Hell-commander
 
-NON-BONUS BOSSES (no X120%):
+NON-BONUS BOSSES (no multiplier):
 Devil Mite, Cerberus, Minotaur, Phantom, Calibur"#;
 
 // ─────────────────────────────────────────────────────────────────────────────

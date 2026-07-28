@@ -100,21 +100,53 @@ fn calc_stats_leaderboard(
 }
 
 /// For a results screen where DMG PTS is directly provided.
+///
+/// On the results screen the three rows are:
+///   DMG PTS    = raw damage you dealt
+///   Reward PTS = time-bonus points
+///   Boss PTS   = DMG PTS + Reward PTS  (always >= DMG PTS)
+///
+/// The X120% bonus is applied server-side to the *leaderboard total*, it does
+/// NOT inflate the Boss PTS shown on your personal results screen.
 fn calc_stats_results(
-    dmg_pts: i64,
-    boss_pts: i64,
-    has_bonus: bool,
+    dmg_pts_raw: i64,
+    boss_pts_raw: i64,
+    _has_bonus: bool,
     time_limit: f64,
+    boss_name: &str,
 ) -> (f64, f64, f64, f64) {
-    let reward_pts = if has_bonus {
-        let pre_bonus = boss_pts as f64 / 1.20;
-        pre_bonus - dmg_pts as f64
+    // ── Sanity check 1: auto-swap if Gemini returned the rows in the wrong order ──
+    let (dmg_pts, boss_pts) = if boss_pts_raw < dmg_pts_raw {
+        tracing::warn!(
+            "calc_stats_results: boss_pts ({}) < dmg_pts ({}) — auto-swapping (likely Gemini field swap)",
+            boss_pts_raw, dmg_pts_raw
+        );
+        (boss_pts_raw, dmg_pts_raw)
     } else {
-        boss_pts as f64 - dmg_pts as f64
+        (dmg_pts_raw, boss_pts_raw)
     };
 
-    let secs_remaining = (reward_pts * 10.0) / 489_530.0;
-    let kill_time = time_limit - secs_remaining;
+    // ── Sanity check 2: if reward_pts implies a kill time > time_limit, the
+    //    boss_pts is probably wrong. Fall back to the known HP cap. ──────────
+    let raw_reward = (boss_pts as f64 - dmg_pts as f64).max(0.0);
+    let raw_secs   = (raw_reward * 10.0) / 489_530.0;
+    let raw_kill   = time_limit - raw_secs;
+
+    let (reward_pts, secs_remaining, kill_time) = if raw_kill < 0.0 || raw_kill > time_limit {
+        tracing::warn!(
+            "calc_stats_results: implausible kill_time ({:.1}s) for {} — using known HP cap",
+            raw_kill, boss_name
+        );
+        // Use known HP cap so reward_pts = 0, kill_time = time_limit (full fight)
+        let cap = boss_dmg_pts(boss_name) as f64;
+        let rp  = (cap - dmg_pts as f64).max(0.0);
+        let sr  = (rp * 10.0) / 489_530.0;
+        let kt  = time_limit - sr;
+        (rp, sr, kt)
+    } else {
+        (raw_reward, raw_secs, raw_kill)
+    };
+
     let dps = if kill_time > 0.0 {
         dmg_pts as f64 / kill_time
     } else {
@@ -154,7 +186,7 @@ fn format_results(
 ) -> String {
     let time_limit = boss_time_limit(boss_name);
     let (reward_pts, secs_remaining, kill_time, dps) =
-        calc_stats_results(dmg_pts, boss_pts, has_bonus, time_limit);
+        calc_stats_results(dmg_pts, boss_pts, has_bonus, time_limit, boss_name);
 
     format!(
          "```\n\

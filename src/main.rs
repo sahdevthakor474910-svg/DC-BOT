@@ -427,16 +427,22 @@ mod tests {
         use crate::dmc::calculator::build_discord_message;
         use crate::dmc::gemini::{LeaderboardPlayer, ScreenshotData};
 
-        // Test case 1: Results screen – Hell Commander with X120% bonus (results screen displays boss_pts with bonus included)
+        // Test case 1: Results screen – Hell Commander with X120% bonus.
+        // On the results screen, boss_pts = raw boss HP cap + reward pts remaining.
+        // The bonus multiplier does NOT inflate boss_pts shown on-screen.
+        // Example: player deals near-full damage with ~28s remaining.
+        //   reward_pts ≈ 1_370_684  →  secs_remaining ≈ 28.0s
+        //   boss_pts = 2_892_440_140 + 1_370_684 = 2_893_810_824
         let results = ScreenshotData::Results {
             boss_name: "Hell Commander".to_string(),
             dmg_pts: 2_892_440_140,
-            boss_pts: 3_487_570_993, // (2892440140 + 13869021) * 1.20
+            boss_pts: 2_893_810_824, // raw boss HP + reward pts (no bonus inflation)
             has_bonus: true,
         };
         let msg = build_discord_message(&results);
         assert!(msg.contains("Hell Commander Results"));
         assert!(msg.contains("X120% ✓"));
+        assert!(!msg.contains("Kill Time   : 0s"), "Kill time should not be zero for a valid run");
         println!("Results output:\n{}", msg);
 
         // Test case 2: Leaderboard screen – Calibur without bonus

@@ -21,11 +21,34 @@ pub async fn run(data: Data, http: Arc<serenity::Http>) {
         }
     };
 
+    // Log which channels are configured so it's immediately visible in logs at startup
+    if let Ok(configs) = queries::get_all_guild_configs(&data.db).await {
+        for cfg in &configs {
+            let global = cfg.twitter_global_channel_id.as_deref()
+                .or(cfg.twitter_channel_id.as_deref())
+                .unwrap_or("not set");
+            let asia = cfg.twitter_asia_channel_id.as_deref()
+                .or(cfg.twitter_channel_id.as_deref())
+                .unwrap_or("not set");
+            info!(
+                "🐦 Guild {} — Global channel: {} | Asia channel: {}",
+                cfg.guild_id, global, asia
+            );
+        }
+    }
+
     loop {
-        match tick(&data, &http, &client, false, false).await {
-            Ok(n) if n > 0 => info!("🐦 Twitter: posted {} new tweet(s)", n),
-            Ok(_) => {}
-            Err(e) => error!("Twitter task error: {:#}", e),
+        match tick(&data, &http, &client, false).await {
+            Ok((posted, skipped)) => {
+                if posted > 0 {
+                    info!("🐦 Twitter: posted {} new tweet(s) ({} already seen/skipped)", posted, skipped);
+                } else if skipped > 0 {
+                    info!("🐦 Twitter: 0 new tweets — {} already seen/deduped", skipped);
+                } else {
+                    info!("🐦 Twitter: 0 tweets returned (all Nitter instances may be down or no recent tweets)");
+                }
+            }
+            Err(e) => error!("🐦 Twitter task error: {:#}", e),
         }
 
         tokio::time::sleep(Duration::from_secs(10 * 60)).await;
@@ -35,7 +58,8 @@ pub async fn run(data: Data, http: Arc<serenity::Http>) {
 /// Dynamic run_once wrapper for slash command /post.
 pub async fn run_once(data: &Data, http: &Arc<serenity::Http>, force: bool) -> Result<usize> {
     let client = TwitterClient::new()?;
-    tick(data, http, &client, force, true).await
+    let (posted, _skipped) = tick(data, http, &client, force).await?;
+    Ok(posted)
 }
 
 async fn tick(
@@ -43,32 +67,38 @@ async fn tick(
     http: &Arc<serenity::Http>,
     client: &TwitterClient,
     force: bool,
-    is_once: bool,
-) -> Result<usize> {
+) -> Result<(usize, usize)> {
     let configs = queries::get_all_guild_configs(&data.db).await?;
-    let mut total = 0usize;
+    let now = chrono::Utc::now();
+    let mut total_posted = 0usize;
+    let mut total_skipped = 0usize;
 
     for (username, label) in ACCOUNTS {
         // Fetch up to 10 latest tweets per account
         let mut tweets = match client.fetch_tweets(username, 10).await {
             Ok(t) => t,
             Err(e) => {
-                warn!("Failed to fetch tweets for @{}: {}", username, e);
+                warn!("🐦 Failed to fetch tweets for @{}: {:#}", username, e);
                 continue;
             }
         };
 
-        // If run via /post (is_once), only send tweets that are less than a week old.
-        if is_once {
-            let now = chrono::Utc::now();
+        info!("🐦 Fetched {} tweet(s) from @{}", tweets.len(), username);
+
+        // Always filter to tweets less than 7 days old — this prevents the task from
+        // flooding channels with old tweets after a bot restart or DB wipe,
+        // and keeps behaviour consistent between the background task and /post.
+        if !force {
             tweets.retain(|t| {
                 if let Some(published) = t.published_at {
                     let age = now.signed_duration_since(published);
                     age.num_days() < 7
                 } else {
-                    false
+                    // Keep tweets without a timestamp so we don't silently drop legitimate tweets
+                    true
                 }
             });
+            info!("🐦 @{}: {} tweet(s) after 7-day age filter", username, tweets.len());
         }
 
         // Translate Japanese tweets once before broadcasting to keep translation API usage low,
@@ -112,7 +142,7 @@ async fn tick(
         }
 
         for cfg in &configs {
-            // Determine target channel for this username
+            // Determine target channel for this username / account
             let target_channel_id = if *username == "dmc_poc" {
                 cfg.twitter_global_channel_id.as_ref().or(cfg.twitter_channel_id.as_ref())
             } else if *username == "dmc_poc_jp" {
@@ -123,13 +153,16 @@ async fn tick(
 
             let channel_id_str = match target_channel_id {
                 Some(id) => id,
-                None => continue,
+                None => {
+                    // No channel configured for this account in this guild — skip silently
+                    continue;
+                }
             };
 
             let channel_id_u64: u64 = match channel_id_str.parse() {
                 Ok(id) => id,
                 Err(_) => {
-                    warn!("Invalid channel id {} for guild {}", channel_id_str, cfg.guild_id);
+                    warn!("🐦 Invalid channel id '{}' for guild {}", channel_id_str, cfg.guild_id);
                     continue;
                 }
             };
@@ -139,9 +172,12 @@ async fn tick(
                 // Deduplication — skip if already posted
                 if !force {
                     match queries::is_tweet_seen(&data.db, &cfg.guild_id, &tweet.id).await {
-                        Ok(true) => continue,
+                        Ok(true) => {
+                            total_skipped += 1;
+                            continue;
+                        }
                         Err(e) => {
-                            error!("DB error checking seen_tweets: {}", e);
+                            error!("🐦 DB error checking seen_tweets: {}", e);
                             continue;
                         }
                         _ => {}
@@ -149,7 +185,7 @@ async fn tick(
                 }
 
                 if let Err(e) = queries::mark_tweet_seen(&data.db, &cfg.guild_id, &tweet.id).await {
-                    error!("DB error marking tweet seen: {}", e);
+                    error!("🐦 DB error marking tweet seen: {}", e);
                 }
 
                 // Build a clean embed using pre-translated text if present
@@ -165,12 +201,10 @@ async fn tick(
                         translated.clone()
                     };
                     format!("{}\n\n─── **English Translation** ───\n{}", original, english)
+                } else if tweet.text.len() > 1800 {
+                    format!("{}…", &tweet.text[..1800])
                 } else {
-                    if tweet.text.len() > 1800 {
-                        format!("{}…", &tweet.text[..1800])
-                    } else {
-                        tweet.text.clone()
-                    }
+                    tweet.text.clone()
                 };
 
                 let footer_text = if tweet.pub_date.is_empty() {
@@ -197,10 +231,13 @@ async fn tick(
                 match channel.send_message(http, msg).await {
                     Ok(_) => {
                         info!("🐦 Posted tweet {} (@{}) to guild {}", tweet.id, username, cfg.guild_id);
-                        total += 1;
+                        total_posted += 1;
                     }
                     Err(e) => {
-                        error!("Failed to post tweet to channel {}: {}", channel_id_str, e);
+                        error!(
+                            "🐦 Failed to post tweet {} to channel {} (guild {}): {}",
+                            tweet.id, channel_id_str, cfg.guild_id, e
+                        );
                     }
                 }
 
@@ -213,5 +250,5 @@ async fn tick(
         tokio::time::sleep(Duration::from_secs(2)).await;
     }
 
-    Ok(total)
+    Ok((total_posted, total_skipped))
 }
