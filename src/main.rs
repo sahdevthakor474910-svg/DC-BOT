@@ -492,7 +492,7 @@ mod tests {
         let msg3 = build_discord_message(&lb_bonus);
         assert!(msg3.contains("Hell Shade Leaderboard"));
         assert!(msg3.contains("X120%"));
-        assert!(msg3.contains("Incomplete / Diff HP"), "Leaderboard incomplete player should show Incomplete / Diff HP");
+        assert!(msg3.contains("Boss Not Killed"), "Leaderboard incomplete player should show Boss Not Killed");
         println!("Hell Shade Leaderboard output:\n{}", msg3);
 
         // Test case 4: Results screen with Gemini row-swap (boss_pts < dmg_pts)

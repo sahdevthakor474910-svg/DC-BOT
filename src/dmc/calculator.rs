@@ -313,7 +313,7 @@ fn format_leaderboard(
 
         if kill_time < 0.0 || kill_time > time_limit {
             out.push_str(&format!(
-                "\n {} {}\n    Total PTS : {}\n    Kill Time : ❌ Incomplete / Diff HP\n\
+                "\n {} {}\n    Total PTS : {}\n    Kill Time : ❌ Boss Not Killed\n\
 ╠──────────────────────────────────────╣",
                 emoji, player.name, player.total_pts
             ));
