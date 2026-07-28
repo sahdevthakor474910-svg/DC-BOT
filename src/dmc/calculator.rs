@@ -101,13 +101,9 @@ fn calc_stats_leaderboard(
 
 /// For a results screen where Reward PTS is directly provided by Gemini.
 ///
-/// Primary source: `reward_pts` read directly from the "Reward PTS" row.
-/// This is a small, clearly-labelled number that Gemini reads reliably even
-/// for big bosses like Dante / Vergil / Hell Commander (~2.89B) where
-/// DMG PTS and Boss PTS look almost identical and subtraction gives ~0.
-///
-/// Fallback: if reward_pts == 0 but boss_pts > dmg_pts, use boss_pts - dmg_pts
-/// (Gemini may have missed the Reward PTS row).
+/// Returns `(reward_pts, secs_remaining, kill_time, dps, boss_killed)`.
+/// `boss_killed = false` when the player timed out without defeating the boss —
+/// the caller shows a dedicated "❌ Boss Not Killed" message in that case.
 fn calc_stats_results(
     dmg_pts: i64,
     reward_pts_direct: i64,
@@ -115,17 +111,30 @@ fn calc_stats_results(
     _has_bonus: bool,
     time_limit: f64,
     boss_name: &str,
-) -> (f64, f64, f64, f64) {
+) -> (f64, f64, f64, f64, bool) {
+    let hp_cap = boss_dmg_pts(boss_name);
+
     // ── Primary: use the directly-read Reward PTS ──────────────────────────
     let reward_pts: f64 = if reward_pts_direct > 0 {
         reward_pts_direct as f64
     } else {
-        // ── Fallback: compute from boss_pts - dmg_pts ──────────────────────
-        // Only use this when Gemini returned reward_pts = 0 but boss_pts > dmg_pts
+        // ── Boss-not-killed shortcut ───────────────────────────────────────
+        // reward_pts = 0 AND dmg < hp_cap → player timed out, boss survived.
+        // DPS is still useful, computed over the full time limit.
+        if dmg_pts < hp_cap {
+            tracing::info!(
+                "calc_stats_results: reward_pts=0 and dmg_pts ({}) < hp_cap ({}) for {} — boss not killed",
+                dmg_pts, hp_cap, boss_name
+            );
+            let dps = dmg_pts as f64 / time_limit;
+            return (0.0, 0.0, time_limit, dps, false); // boss_killed = false
+        }
+
+        // ── Fallback: boss WAS killed (dmg >= hp_cap), Gemini missed the row ─
         let computed = (boss_pts as f64 - dmg_pts as f64).max(0.0);
         if computed > 0.0 {
             tracing::warn!(
-                "calc_stats_results: reward_pts=0 from Gemini for {} — falling back to boss_pts-dmg_pts ({:.0})",
+                "calc_stats_results: reward_pts=0 from Gemini for {} (full clear) — falling back to boss_pts-dmg_pts ({:.0})",
                 boss_name, computed
             );
         }
@@ -136,17 +145,16 @@ fn calc_stats_results(
     let kill_time = time_limit - secs_remaining;
 
     // ── Plausibility guard ─────────────────────────────────────────────────
-    // If kill_time is outside [0, time_limit] the data is corrupt. Use the
-    // known HP cap as a last resort so we at least show a valid kill time.
+    // kill_time outside [0, time_limit] means the data is still corrupt.
     let (reward_pts, secs_remaining, kill_time) = if kill_time < 0.0 || kill_time > time_limit {
         tracing::warn!(
             "calc_stats_results: implausible kill_time ({:.1}s) for {} — clamping via HP cap",
             kill_time, boss_name
         );
-        let cap = boss_dmg_pts(boss_name) as f64;
+        let cap = hp_cap as f64;
         let rp = (cap - dmg_pts as f64).max(0.0);
         let sr = (rp * 10.0) / 489_530.0;
-        let kt = time_limit - sr;
+        let kt = (time_limit - sr).max(0.0);
         (rp, sr, kt)
     } else {
         (reward_pts, secs_remaining, kill_time)
@@ -158,7 +166,7 @@ fn calc_stats_results(
         0.0
     };
 
-    (reward_pts, secs_remaining, kill_time, dps)
+    (reward_pts, secs_remaining, kill_time, dps, true) // boss_killed = true
 }
 
 
@@ -191,8 +199,29 @@ fn format_results(
     has_bonus: bool,
 ) -> String {
     let time_limit = boss_time_limit(boss_name);
-    let (reward_pts_f, secs_remaining, kill_time, dps) =
+    let (reward_pts_f, secs_remaining, kill_time, dps, boss_killed) =
         calc_stats_results(dmg_pts, reward_pts, boss_pts, has_bonus, time_limit, boss_name);
+
+    if !boss_killed {
+        // Player timed out — boss survived. Show a clear "not killed" summary.
+        return format!(
+            "```\n\
+╔══════════════════════════════════════╗\n\
+      DMC - {} Results\n\
+╠══════════════════════════════════════╣\n\
+  Status      : ❌ Boss Not Killed\n\
+  DMG PTS     : {}\n\
+  DPS         : {:.0}  (over full {}s)\n\
+  Bonus       : {}\n\
+╚══════════════════════════════════════╝\n\
+```",
+            boss_name,
+            dmg_pts,
+            dps,
+            time_limit as u64,
+            if has_bonus { "X120% ✓" } else { "None" }
+        );
+    }
 
     format!(
          "```\n\
