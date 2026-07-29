@@ -14,7 +14,17 @@ pub struct LeaderboardPlayer {
     pub total_pts: i64,
 }
 
-/// The two kinds of screenshots the bot can receive.
+/// A single boss entry from the boss selection / overview screen.
+#[derive(Debug, Deserialize)]
+pub struct BossOverviewEntry {
+    pub boss_name: String,
+    /// The PTS value displayed beneath the boss card.
+    pub pts: i64,
+    /// Whether this boss card shows a Bonus indicator (e.g. "Bonus +20%").
+    pub has_bonus: bool,
+}
+
+/// The three kinds of screenshots the bot can receive.
 #[derive(Debug)]
 pub enum ScreenshotData {
     /// Post-battle results screen (shows DMG PTS / Reward PTS / Boss PTS).
@@ -34,13 +44,17 @@ pub enum ScreenshotData {
         has_bonus: bool,
         players: Vec<LeaderboardPlayer>,
     },
+    /// Boss selection / overview screen showing multiple bosses and their PTS.
+    BossOverview {
+        bosses: Vec<BossOverviewEntry>,
+    },
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
 // Raw Gemini JSON shapes (intermediate deserialization)
 // ─────────────────────────────────────────────────────────────────────────────
 
-/// Gemini can return either screen type; we deserialise via a "type" tag.
+/// Gemini can return any of the three screen types; we deserialise via a "type" tag.
 #[derive(Debug, Deserialize)]
 #[serde(tag = "type", rename_all = "lowercase")]
 enum RawScreenshot {
@@ -58,6 +72,10 @@ enum RawScreenshot {
         boss_name: String,
         has_bonus: bool,
         players: Vec<LeaderboardPlayer>,
+    },
+    #[serde(rename = "bossoverview")]
+    BossOverview {
+        bosses: Vec<BossOverviewEntry>,
     },
 }
 
@@ -121,8 +139,9 @@ struct GeminiError {
 const ANALYSIS_PROMPT: &str = r#"You are analyzing Devil May Cry: Peak of Combat (DMC:PoC) battle screenshots.
 
 First identify the screenshot type:
-- "results"     = personal post-battle screen showing DMG PTS / Reward PTS / Boss PTS
-- "leaderboard" = server ranking screen showing player names and Total PTS
+- "results"      = personal post-battle screen showing DMG PTS / Reward PTS / Boss PTS
+- "leaderboard"  = server ranking screen showing player names and Total PTS
+- "bossoverview" = boss selection screen showing multiple boss cards, each with a name and PTS score
 
 ═══════════════════════════════════
 RESULTS SCREENSHOT — Field Definitions
@@ -195,11 +214,35 @@ Example:
 }
 
 ═══════════════════════════════════
-RULES FOR BOTH
+BOSS OVERVIEW SCREENSHOT
+═══════════════════════════════════
+This screen shows multiple boss cards side-by-side. Each card has:
+- A boss name (displayed in stylised text at the bottom of the card)
+- A PTS value displayed as "PTS:XXXXXXXXX" beneath the card
+- An optional "Bonus" label (e.g. "Bonus ↑20%" or "Bonus +20%") in the top corner
+
+Extract ALL visible boss cards.
+For each boss:
+1. boss_name — the name on the card (e.g. "Nevan", "Cerberus", "Calibur")
+2. pts       — the integer after "PTS:" (no commas)
+3. has_bonus — true ONLY if a Bonus indicator is visibly shown on that card
+
+Example (3 bosses visible, one with bonus):
+{
+  "type": "bossoverview",
+  "bosses": [
+    {"boss_name": "Nevan",    "pts": 874958218,    "has_bonus": false},
+    {"boss_name": "Cerberus", "pts": 1347104169,   "has_bonus": false},
+    {"boss_name": "Calibur",  "pts": 1240079805,   "has_bonus": true}
+  ]
+}
+
+═══════════════════════════════════
+RULES FOR ALL SCREEN TYPES
 ═══════════════════════════════════
 - All numbers must be plain integers — no commas, no spaces
-- has_bonus true ONLY if the boss is in the BONUS list
-- Extract ALL visible players in leaderboard screenshots
+- has_bonus true ONLY if the boss is in the BONUS list OR a Bonus label is visible on that card
+- Extract ALL visible players / boss cards
 - If a value is unreadable, use 0
 
 BONUS BOSSES (X120% multiplier applied by server):
@@ -318,6 +361,8 @@ pub async fn analyze_screenshot(
                     ScreenshotData::Results { boss_name, dmg_pts, reward_pts, boss_pts, has_bonus },
                 RawScreenshot::Leaderboard { boss_name, has_bonus, players } =>
                     ScreenshotData::Leaderboard { boss_name, has_bonus, players },
+                RawScreenshot::BossOverview { bosses } =>
+                    ScreenshotData::BossOverview { bosses },
             });
         }
         // all retries exhausted for this model — try next

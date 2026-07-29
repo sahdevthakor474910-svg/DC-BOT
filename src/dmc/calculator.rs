@@ -1,4 +1,4 @@
-use super::gemini::{LeaderboardPlayer, ScreenshotData};
+use super::gemini::{BossOverviewEntry, LeaderboardPlayer, ScreenshotData};
 
 // ─────────────────────────────────────────────────────────────────────────────
 // Boss constants
@@ -339,9 +339,63 @@ fn format_leaderboard(
     out
 }
 
-// ─────────────────────────────────────────────────────────────────────────────
-// Public entry point
-// ─────────────────────────────────────────────────────────────────────────────
+/// Format the boss-overview screen reply.
+/// Each boss card shows name, PTS, and computed kill time.
+fn format_boss_overview(bosses: &[BossOverviewEntry]) -> String {
+    if bosses.is_empty() {
+        return "```\n⚠️ No boss data found in screenshot.\n```".to_string();
+    }
+
+    let mut out = String::from(
+        "```\n\
+╔══════════════════════════════════════╗\n\
+      DMC - Boss Overview\n\
+╠══════════════════════════════════════╣",
+    );
+
+    for entry in bosses {
+        let time_limit = boss_time_limit(&entry.boss_name);
+        let dmg_cap = boss_dmg_pts(&entry.boss_name);
+
+        // The PTS on the card is a total_pts (includes time bonus if boss killed).
+        // Use the leaderboard formula: strips bonus multiplier if has_bonus, then
+        // back-calculates reward_pts → secs_remaining → kill_time.
+        let (_, _, kill_time, dps, resolved_bonus) =
+            calc_stats_leaderboard(entry.pts, dmg_cap, entry.has_bonus, time_limit);
+
+        let bonus_label = if resolved_bonus { " [X120%]" } else { "" };
+        let time_str = if time_limit >= 300.0 { "5min" } else { "4min" };
+
+        if kill_time < 0.0 || kill_time > time_limit {
+            out.push_str(&format!(
+                "\n  {}{} ({}limit)\n    PTS       : {}\n    Kill Time : ❌ Boss Not Killed\n\
+╠──────────────────────────────────────╣",
+                entry.boss_name, bonus_label, time_str, entry.pts
+            ));
+        } else {
+            out.push_str(&format!(
+                "\n  {}{} ({}limit)\n    PTS       : {}\n    Kill Time : {}\n    DPS       : {:.0}\n\
+╠──────────────────────────────────────╣",
+                entry.boss_name,
+                bonus_label,
+                time_str,
+                entry.pts,
+                format_kill_time(kill_time),
+                dps
+            ));
+        }
+    }
+
+    out.push_str(
+        "\n⚠️ Kill times estimated from card PTS scores\n\
+╚══════════════════════════════════════╝\n\
+```",
+    );
+
+    out
+}
+
+
 
 /// Take the parsed [`ScreenshotData`] and return the ready-to-send Discord
 /// message string.
@@ -360,5 +414,7 @@ pub fn build_discord_message(data: &ScreenshotData) -> String {
             has_bonus,
             players,
         } => format_leaderboard(boss_name, *has_bonus, players),
+
+        ScreenshotData::BossOverview { bosses } => format_boss_overview(bosses),
     }
 }
