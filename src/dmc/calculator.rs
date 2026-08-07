@@ -20,7 +20,8 @@ fn boss_dmg_pts(name: &str) -> i64 {
         || norm.contains("dante")
         || norm.contains("hellcommander") { 2_892_440_140 }
     else if norm.contains("lady")         { 9_038_840_000 } // 5-min boss, own HP pool
-    else                                  { 5_070_000_000 } // all other standard bosses: 5.07 B
+    else if norm.contains("plutone")      { 5_783_842_000 } // calibrated from results screen
+    else                                  { 5_070_000_000 } // remaining standard bosses
 }
 
 
