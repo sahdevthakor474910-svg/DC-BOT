@@ -13,17 +13,30 @@ fn normalize_boss_name(name: &str) -> String {
 }
 
 /// Known max damage points per boss (i.e. their HP pool).
-/// All standard bosses share 5.07 B HP; Vergil / Dante / Hell Commander keep their old value.
 fn boss_dmg_pts(name: &str) -> i64 {
     let norm = normalize_boss_name(name);
     if norm.contains("vergil")
-        || norm.contains("dante")
-        || norm.contains("hellcommander") { 2_892_440_140 }
-    else if norm.contains("lady")         { 9_038_840_000 } // 5-min boss, own HP pool
-    else if norm.contains("plutone")      { 5_783_842_000 } // calibrated from results screen
-    else                                  { 5_070_000_000 } // remaining standard bosses
+        || norm.contains("dante")            { 2_892_440_140 } // kept at pre-buff value until confirmed
+    else if norm.contains("lady")            { 9_038_840_000 } // 5-min boss
+    else if norm.contains("plutone")         { 5_783_842_000 } // calibrated from results screen
+    else                                     { 5_070_000_000 } // all other bosses (incl. HC post-buff)
 }
 
+/// Leaderboard decode factor for each boss.
+///
+/// The game applies a per-boss visual score multiplier to the displayed leaderboard total.
+/// To reverse it: `unscaled = displayed_score × decode_factor`
+/// (decode_factor = 1 / visual_multiplier)
+///
+/// Bosses without a known multiplier default to 1.0 (no scaling).
+fn boss_decode_factor(name: &str) -> f64 {
+    let norm = normalize_boss_name(name);
+    if norm.contains("hellcommander") {
+        0.702_247_191_011_235_955 // = 1 / 1.424  (confirmed from leaderboard score)
+    } else {
+        1.0
+    }
+}
 
 /// Battle time limit in seconds.
 fn boss_time_limit(name: &str) -> f64 {
@@ -48,11 +61,14 @@ fn calc_stats_internal(
     dmg_pts: i64,
     has_bonus: bool,
     time_limit: f64,
+    decode_factor: f64,
 ) -> (f64, f64, f64, f64) {
+    // Strip the per-boss leaderboard multiplier first, then the 120% bonus.
+    let unscaled = total_pts as f64 * decode_factor;
     let reward_pts = if has_bonus {
-        total_pts as f64 / 1.20 - dmg_pts as f64
+        unscaled / 1.20 - dmg_pts as f64
     } else {
-        total_pts as f64 - dmg_pts as f64
+        unscaled - dmg_pts as f64
     };
 
     let secs_remaining = (reward_pts * 10.0) / 489_530.0;
@@ -76,16 +92,17 @@ fn calc_stats_leaderboard(
     dmg_pts: i64,
     has_bonus: bool,
     time_limit: f64,
+    decode_factor: f64,
 ) -> (f64, f64, f64, f64, bool) {
     // 1. Try with the parsed bonus setting
-    let (reward, secs_rem, kill, dps) = calc_stats_internal(total_pts, dmg_pts, has_bonus, time_limit);
+    let (reward, secs_rem, kill, dps) = calc_stats_internal(total_pts, dmg_pts, has_bonus, time_limit, decode_factor);
     if kill >= 0.0 && kill <= time_limit {
         return (reward, secs_rem, kill, dps, has_bonus);
     }
 
     // 2. Try the opposite bonus setting
     let alt_bonus = !has_bonus;
-    let (reward_alt, secs_rem_alt, kill_alt, dps_alt) = calc_stats_internal(total_pts, dmg_pts, alt_bonus, time_limit);
+    let (reward_alt, secs_rem_alt, kill_alt, dps_alt) = calc_stats_internal(total_pts, dmg_pts, alt_bonus, time_limit, decode_factor);
     if kill_alt >= 0.0 && kill_alt <= time_limit {
         return (reward_alt, secs_rem_alt, kill_alt, dps_alt, alt_bonus);
     }
@@ -274,11 +291,12 @@ fn format_leaderboard(
 ) -> String {
     let time_limit = boss_time_limit(boss_name);
     let dmg_pts = boss_dmg_pts(boss_name);
+    let decode_factor = boss_decode_factor(boss_name);
 
     // Auto-detect resolved has_bonus state based on the first player's score
     let mut resolved_has_bonus = has_bonus;
     if !players.is_empty() {
-        let (_, _, _, _, actual_bonus) = calc_stats_leaderboard(players[0].total_pts, dmg_pts, has_bonus, time_limit);
+        let (_, _, _, _, actual_bonus) = calc_stats_leaderboard(players[0].total_pts, dmg_pts, has_bonus, time_limit, decode_factor);
         resolved_has_bonus = actual_bonus;
     }
 
@@ -304,7 +322,7 @@ fn format_leaderboard(
             .unwrap_or(&"🔢");
 
         let (_, _, kill_time, dps, _) =
-            calc_stats_leaderboard(player.total_pts, dmg_pts, resolved_has_bonus, time_limit);
+            calc_stats_leaderboard(player.total_pts, dmg_pts, resolved_has_bonus, time_limit, decode_factor);
 
         if kill_time < 0.0 || kill_time > time_limit {
             out.push_str(&format!(
@@ -351,11 +369,12 @@ fn format_boss_overview(bosses: &[BossOverviewEntry]) -> String {
     for entry in bosses {
         let time_limit = boss_time_limit(&entry.boss_name);
         let dmg_cap = boss_dmg_pts(&entry.boss_name);
+        let decode_factor = boss_decode_factor(&entry.boss_name);
 
         // The PTS on the card is a total_pts (includes time bonus if boss killed).
         // Use the leaderboard formula: back-calculates reward_pts → secs_remaining → kill_time.
         let (_, _, kill_time, dps, resolved_bonus) =
-            calc_stats_leaderboard(entry.pts, dmg_cap, entry.has_bonus, time_limit);
+            calc_stats_leaderboard(entry.pts, dmg_cap, entry.has_bonus, time_limit, decode_factor);
 
         let bonus_label = if resolved_bonus { " [X120%]" } else { "" };
         let time_str = if time_limit >= 300.0 { "5min" } else { "4min" };
