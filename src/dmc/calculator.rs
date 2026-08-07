@@ -18,7 +18,8 @@ fn boss_dmg_pts(name: &str) -> i64 {
     if norm.contains("vergil")
         || norm.contains("dante")            { 2_892_440_140 } // kept at pre-buff value until confirmed
     else if norm.contains("lady")            { 9_038_840_000 } // 5-min boss
-    else if norm.contains("plutone")         { 5_783_842_000 } // calibrated from results screen
+    else if norm.contains("plutone")
+        || norm.contains("beowulf")          { 5_783_842_000 } // game HP 5.078B × 1.139 score mul
     else                                     { 5_070_000_000 } // all other bosses (incl. HC post-buff)
 }
 
