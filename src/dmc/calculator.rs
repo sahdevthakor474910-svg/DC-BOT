@@ -18,38 +18,11 @@ fn boss_dmg_pts(name: &str) -> i64 {
     let norm = normalize_boss_name(name);
     if norm.contains("vergil")
         || norm.contains("dante")
-        || norm.contains("hellcommander")   { 2_892_440_140 }
-    else                                   { 5_070_000_000 } // all standard bosses: 5.07 B
+        || norm.contains("hellcommander") { 2_892_440_140 }
+    else if norm.contains("lady")         { 9_038_840_000 } // 5-min boss, own HP pool
+    else                                  { 5_070_000_000 } // all other standard bosses: 5.07 B
 }
 
-/// Score multiplier applied to total_pts on the in-game results/leaderboard screen.
-///
-/// Groups (from the game's difficulty scaling):
-///   • Cerberus                              → 0.814×
-///   • Nevan / Plutone / Phantom / Minotaur / Beowulf → 1.139×
-///   • Calibur / HellShade / DevilMite / Humans / HellCommander → 1.424×
-///   • Boss-rank bosses (Vergil / Dante)     → 1.000× (no extra multiplier)
-fn boss_score_multiplier(name: &str) -> f64 {
-    let norm = normalize_boss_name(name);
-    if norm.contains("cerberus") {
-        0.814
-    } else if norm.contains("nevan")
-        || norm.contains("plutone")
-        || norm.contains("phantom")
-        || norm.contains("minotaur")
-        || norm.contains("beowulf")
-    {
-        1.139
-    } else if norm.contains("calibur")
-        || norm.contains("hellshade")
-        || norm.contains("devilmite")
-        || norm.contains("hellcommander")
-    {
-        1.424
-    } else {
-        1.0 // Vergil, Dante, or unknown — no multiplier
-    }
-}
 
 /// Battle time limit in seconds.
 fn boss_time_limit(name: &str) -> f64 {
@@ -57,6 +30,7 @@ fn boss_time_limit(name: &str) -> f64 {
     if norm.contains("vergil")
         || norm.contains("dante")
         || norm.contains("hellcommander")
+        || norm.contains("lady")
     {
         300.0
     } else {
@@ -73,14 +47,11 @@ fn calc_stats_internal(
     dmg_pts: i64,
     has_bonus: bool,
     time_limit: f64,
-    score_mul: f64,
 ) -> (f64, f64, f64, f64) {
-    // 1. Strip the score multiplier first, then strip the 120% bonus if active.
-    let unscaled = total_pts as f64 / score_mul;
     let reward_pts = if has_bonus {
-        unscaled / 1.20 - dmg_pts as f64
+        total_pts as f64 / 1.20 - dmg_pts as f64
     } else {
-        unscaled - dmg_pts as f64
+        total_pts as f64 - dmg_pts as f64
     };
 
     let secs_remaining = (reward_pts * 10.0) / 489_530.0;
@@ -104,17 +75,16 @@ fn calc_stats_leaderboard(
     dmg_pts: i64,
     has_bonus: bool,
     time_limit: f64,
-    score_mul: f64,
 ) -> (f64, f64, f64, f64, bool) {
     // 1. Try with the parsed bonus setting
-    let (reward, secs_rem, kill, dps) = calc_stats_internal(total_pts, dmg_pts, has_bonus, time_limit, score_mul);
+    let (reward, secs_rem, kill, dps) = calc_stats_internal(total_pts, dmg_pts, has_bonus, time_limit);
     if kill >= 0.0 && kill <= time_limit {
         return (reward, secs_rem, kill, dps, has_bonus);
     }
 
     // 2. Try the opposite bonus setting
     let alt_bonus = !has_bonus;
-    let (reward_alt, secs_rem_alt, kill_alt, dps_alt) = calc_stats_internal(total_pts, dmg_pts, alt_bonus, time_limit, score_mul);
+    let (reward_alt, secs_rem_alt, kill_alt, dps_alt) = calc_stats_internal(total_pts, dmg_pts, alt_bonus, time_limit);
     if kill_alt >= 0.0 && kill_alt <= time_limit {
         return (reward_alt, secs_rem_alt, kill_alt, dps_alt, alt_bonus);
     }
@@ -136,13 +106,7 @@ fn calc_stats_results(
     time_limit: f64,
     boss_name: &str,
 ) -> (f64, f64, f64, f64, bool) {
-    let hp_cap    = boss_dmg_pts(boss_name);
-    let score_mul = boss_score_multiplier(boss_name);
-    // Primary path: reward_pts_direct is read straight from the "Reward PTS" row
-    // on the results screen — that row shows the pre-multiplier value, so no
-    // score_mul stripping required there.
-    // Fallback paths (derived from boss_pts) DO need to divide by score_mul
-    // because boss_pts is the final post-multiplier total shown on screen.
+    let hp_cap = boss_dmg_pts(boss_name);
 
     // ── Sanity check 1: auto-swap if Gemini returned rows in wrong order ──
     let (dmg_pts, boss_pts) = if boss_pts_raw > 0 && dmg_pts_raw > 0 && boss_pts_raw < dmg_pts_raw {
@@ -186,11 +150,10 @@ fn calc_stats_results(
         }
 
         // ── Fallback: boss WAS killed (dmg >= hp_cap), Gemini missed the row ─
-        // boss_pts on-screen = (dmg_pts + reward_pts) * score_mul, so strip it first.
-        let computed = (boss_pts as f64 / score_mul - dmg_pts as f64).max(0.0);
+        let computed = (boss_pts as f64 - dmg_pts as f64).max(0.0);
         if computed > 0.0 {
             tracing::warn!(
-                "calc_stats_results: reward_pts=0 from Gemini for {} (full clear) — falling back to (boss_pts/score_mul)-dmg_pts ({:.0})",
+                "calc_stats_results: reward_pts=0 from Gemini for {} (full clear) — falling back to boss_pts-dmg_pts ({:.0})",
                 boss_name, computed
             );
         }
@@ -207,7 +170,6 @@ fn calc_stats_results(
             "calc_stats_results: implausible kill_time ({:.1}s) for {} — clamping via HP cap",
             kill_time, boss_name
         );
-        // hp_cap is the raw DMG PTS value (pre-multiplier), same units as dmg_pts.
         let cap = hp_cap as f64;
         let rp = (cap - dmg_pts as f64).max(0.0);
         let sr = (rp * 10.0) / 489_530.0;
@@ -256,7 +218,6 @@ fn format_results(
     has_bonus: bool,
 ) -> String {
     let time_limit = boss_time_limit(boss_name);
-    // score_mul is now looked up inside calc_stats_results — no extra arg needed here.
     let (reward_pts_f, secs_remaining, kill_time, dps, boss_killed) =
         calc_stats_results(dmg_pts, reward_pts, boss_pts, has_bonus, time_limit, boss_name);
 
@@ -312,12 +273,11 @@ fn format_leaderboard(
 ) -> String {
     let time_limit = boss_time_limit(boss_name);
     let dmg_pts = boss_dmg_pts(boss_name);
-    let score_mul = boss_score_multiplier(boss_name);
 
     // Auto-detect resolved has_bonus state based on the first player's score
     let mut resolved_has_bonus = has_bonus;
     if !players.is_empty() {
-        let (_, _, _, _, actual_bonus) = calc_stats_leaderboard(players[0].total_pts, dmg_pts, has_bonus, time_limit, score_mul);
+        let (_, _, _, _, actual_bonus) = calc_stats_leaderboard(players[0].total_pts, dmg_pts, has_bonus, time_limit);
         resolved_has_bonus = actual_bonus;
     }
 
@@ -343,7 +303,7 @@ fn format_leaderboard(
             .unwrap_or(&"🔢");
 
         let (_, _, kill_time, dps, _) =
-            calc_stats_leaderboard(player.total_pts, dmg_pts, resolved_has_bonus, time_limit, score_mul);
+            calc_stats_leaderboard(player.total_pts, dmg_pts, resolved_has_bonus, time_limit);
 
         if kill_time < 0.0 || kill_time > time_limit {
             out.push_str(&format!(
@@ -390,13 +350,11 @@ fn format_boss_overview(bosses: &[BossOverviewEntry]) -> String {
     for entry in bosses {
         let time_limit = boss_time_limit(&entry.boss_name);
         let dmg_cap = boss_dmg_pts(&entry.boss_name);
-        let score_mul = boss_score_multiplier(&entry.boss_name);
 
         // The PTS on the card is a total_pts (includes time bonus if boss killed).
-        // Use the leaderboard formula: strips bonus multiplier if has_bonus, then
-        // back-calculates reward_pts → secs_remaining → kill_time.
+        // Use the leaderboard formula: back-calculates reward_pts → secs_remaining → kill_time.
         let (_, _, kill_time, dps, resolved_bonus) =
-            calc_stats_leaderboard(entry.pts, dmg_cap, entry.has_bonus, time_limit, score_mul);
+            calc_stats_leaderboard(entry.pts, dmg_cap, entry.has_bonus, time_limit);
 
         let bonus_label = if resolved_bonus { " [X120%]" } else { "" };
         let time_str = if time_limit >= 300.0 { "5min" } else { "4min" };
