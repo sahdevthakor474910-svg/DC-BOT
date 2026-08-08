@@ -17,10 +17,11 @@ fn boss_dmg_pts(name: &str) -> i64 {
     let norm = normalize_boss_name(name);
     if norm.contains("vergil")
         || norm.contains("dante")            { 2_892_440_140 } // kept at pre-buff value until confirmed
-    else if norm.contains("lady")            { 9_038_840_000 } // 5-min boss
+    else if norm.contains("lady")            { 9_038_840_000 } // 5-min boss, own HP tier
     else if norm.contains("plutone")
         || norm.contains("beowulf")          { 5_783_842_000 } // game HP 5.078B × 1.139 score mul
-    else                                     { 5_070_000_000 } // all other bosses (incl. HC post-buff)
+    else if norm.contains("cerberus")        { 4_133_492_000 } // game HP 5.078B × 0.814 score mul
+    else                                     { 5_070_000_000 } // remaining bosses (approx 5.078B × 1.0)
 }
 
 /// Leaderboard decode factor for each boss.
