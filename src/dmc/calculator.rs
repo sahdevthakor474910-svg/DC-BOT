@@ -13,6 +13,8 @@ fn normalize_boss_name(name: &str) -> String {
 }
 
 /// Known max damage points per boss (i.e. their HP pool).
+/// This equals the DMG PTS shown on the results screen for a full kill
+/// (= actual game HP × per-boss score multiplier).
 fn boss_dmg_pts(name: &str) -> i64 {
     let norm = normalize_boss_name(name);
     if norm.contains("vergil")
@@ -21,8 +23,12 @@ fn boss_dmg_pts(name: &str) -> i64 {
     else if norm.contains("plutone")
         || norm.contains("beowulf")
         || norm.contains("nevan")            { 5_783_842_000 } // game HP 5.078B × 1.139 score mul
+    else if norm.contains("devilmite")
+        || norm.contains("calibur")
+        || norm.contains("hellshade")
+        || norm.contains("human")            { 7_231_072_000 } // game HP 5.078B × 1.424 score mul
     else if norm.contains("cerberus")        { 4_133_492_000 } // game HP 5.078B × 0.814 score mul
-    else                                     { 5_070_000_000 } // remaining bosses (approx 5.078B × 1.0)
+    else                                     { 5_070_000_000 } // remaining bosses (~5.078B × 1.0)
 }
 
 /// Leaderboard decode factor for each boss.
@@ -34,8 +40,12 @@ fn boss_dmg_pts(name: &str) -> i64 {
 /// Bosses without a known multiplier default to 1.0 (no scaling).
 fn boss_decode_factor(name: &str) -> f64 {
     let norm = normalize_boss_name(name);
-    if norm.contains("hellcommander") {
-        0.702_247_191_011_235_955 // = 1 / 1.424  (confirmed from leaderboard score)
+    if norm.contains("hellcommander")
+        || norm.contains("devilmite")
+        || norm.contains("calibur")
+        || norm.contains("hellshade")
+        || norm.contains("human")            {
+        0.702_247_191_011_235_955 // = 1 / 1.424  (1.424× score group, confirmed from leaderboard)
     } else {
         1.0
     }
