@@ -12,13 +12,15 @@ fn normalize_boss_name(name: &str) -> String {
         .to_lowercase()
 }
 
-/// Known max damage points per boss (i.e. their HP pool).
+/// Known max damage points per boss (i.e. their HP pool.
 /// This equals the DMG PTS shown on the results screen for a full kill
 /// (= actual game HP × per-boss score multiplier).
+/// The leaderboard total score equals the results Boss PTS, so no
+/// additional decode factor is needed — these values cover both screens.
 fn boss_dmg_pts(name: &str) -> i64 {
     let norm = normalize_boss_name(name);
     if norm.contains("vergil")
-        || norm.contains("dante")            { 2_892_440_140 } // kept at pre-buff value until confirmed
+        || norm.contains("dante")            { 2_892_440_140 } // pre-buff value, pending confirmation
     else if norm.contains("lady")            { 9_038_840_000 } // 5-min boss, own HP tier
     else if norm.contains("plutone")
         || norm.contains("beowulf")
@@ -26,29 +28,19 @@ fn boss_dmg_pts(name: &str) -> i64 {
     else if norm.contains("devilmite")
         || norm.contains("calibur")
         || norm.contains("hellshade")
-        || norm.contains("human")            { 7_231_072_000 } // game HP 5.078B × 1.424 score mul
+        || norm.contains("human")
+        || norm.contains("hellcommander")    { 7_231_072_000 } // game HP 5.078B × 1.424 score mul
     else if norm.contains("cerberus")        { 4_133_492_000 } // game HP 5.078B × 0.814 score mul
     else                                     { 5_070_000_000 } // remaining bosses (~5.078B × 1.0)
 }
 
-/// Leaderboard decode factor for each boss.
+/// Leaderboard decode factor per boss.
 ///
-/// The game applies a per-boss visual score multiplier to the displayed leaderboard total.
-/// To reverse it: `unscaled = displayed_score × decode_factor`
-/// (decode_factor = 1 / visual_multiplier)
-///
-/// Bosses without a known multiplier default to 1.0 (no scaling).
-fn boss_decode_factor(name: &str) -> f64 {
-    let norm = normalize_boss_name(name);
-    if norm.contains("hellcommander")
-        || norm.contains("devilmite")
-        || norm.contains("calibur")
-        || norm.contains("hellshade")
-        || norm.contains("human")            {
-        0.702_247_191_011_235_955 // = 1 / 1.424  (1.424× score group, confirmed from leaderboard)
-    } else {
-        1.0
-    }
+/// The leaderboard total score equals the results Boss PTS directly
+/// (the per-boss score multiplier is already baked into boss_dmg_pts).
+/// All bosses use 1.0 — this hook is kept for any future exceptions.
+fn boss_decode_factor(_name: &str) -> f64 {
+    1.0
 }
 
 /// Battle time limit in seconds.
