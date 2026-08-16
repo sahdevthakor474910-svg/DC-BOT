@@ -78,7 +78,7 @@ pub async fn post(
                 jav_n = jav::task::run_once(&data, &http, force_val).await.unwrap_or_else(|e| { tracing::error!("JAV refresh: {:#}", e); 0 });
             }
             ContentType::Porn => {
-                porn_n = porn::task::run_once(&data, &http, force_val).await.unwrap_or_else(|e| { tracing::error!("Porn refresh: {:#}", e); 0 });
+                porn_n = porn::task::run_once(&data, &http).await.unwrap_or_else(|e| { tracing::error!("Porn refresh: {:#}", e); 0 });
             }
             ContentType::Okxxx => {
                 okxxx_n = okxxx::task::run_once(&data, &http, force_val).await.unwrap_or_else(|e| { tracing::error!("OK.XXX refresh: {:#}", e); 0 });
@@ -96,7 +96,7 @@ pub async fn post(
             news::task::run_once(&data, &http, force_val),
             freegames::task::run_once(&data, &http, force_val),
             jav::task::run_once(&data, &http, force_val),
-            porn::task::run_once(&data, &http, force_val),
+            porn::task::run_once(&data, &http),
             okxxx::task::run_once(&data, &http, force_val),
             coc::task::run_once(&data, &http, force_val),
             crate::twitter::task::run_once(&data, &http, force_val),

@@ -180,3 +180,82 @@ impl PornClient {
         Err(anyhow::anyhow!("No direct MP4 URL found for Redtube video ID {}", video_id))
     }
 }
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Beeg.tv scraper (SSR HTML — no API key required)
+// ─────────────────────────────────────────────────────────────────────────────
+
+const BEEGTV_BASE: &str = "https://beeg.tv";
+
+/// Scrapes the beeg.tv homepage which is Next.js SSR — all video cards
+/// are already in the returned HTML (no JS execution needed).
+pub struct BeegTvClient {
+    http: Client,
+}
+
+impl BeegTvClient {
+    pub fn new() -> Result<Self> {
+        let http = Client::builder()
+            .user_agent("Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36")
+            .timeout(std::time::Duration::from_secs(15))
+            .build()?;
+        Ok(Self { http })
+    }
+
+    /// Fetch the latest videos from beeg.tv homepage.
+    /// Returns up to `limit` videos by scraping the SSR HTML.
+    pub async fn fetch_latest(&self, limit: usize) -> Result<Vec<super::models::BeegTvVideo>> {
+        let html = self.http
+            .get(BEEGTV_BASE)
+            .header("Accept", "text/html,application/xhtml+xml")
+            .send()
+            .await?
+            .error_for_status()?
+            .text()
+            .await?;
+
+        Self::parse_videos(&html, limit)
+    }
+
+    fn parse_videos(html: &str, limit: usize) -> Result<Vec<super::models::BeegTvVideo>> {
+        use regex::Regex;
+
+        // Each video card is: href="/slug-NUMBER">...alt="title"...duration span...
+        // Pattern captures: (1) full slug path, (2) numeric ID, (3) img alt (real title),
+        //                   (4) thumbnail path, (5) duration
+        let re = Regex::new(
+            r#"href="(/([\w-]+-(\d+)))">.*?<img alt="([^"]+)"[^>]+src="(/uploads/thumbnails/[^"]+)".*?<span[^>]*>(\d+:\d+)</span>"#,
+        )?;
+
+        let mut videos = Vec::new();
+        for cap in re.captures_iter(html) {
+            let slug_path = &cap[1];   // e.g. /under-rapid-dick-fire-127461
+            let video_id  = cap[3].to_string(); // e.g. 127461
+            let title     = html_unescape(&cap[4]);
+            let thumb_rel = &cap[5];   // e.g. /uploads/thumbnails/under-...jpg
+            let duration  = cap[6].to_string();
+
+            videos.push(super::models::BeegTvVideo {
+                video_id,
+                title,
+                url:       format!("{}{}", BEEGTV_BASE, slug_path),
+                thumbnail: format!("{}{}", BEEGTV_BASE, thumb_rel),
+                duration,
+            });
+
+            if videos.len() >= limit {
+                break;
+            }
+        }
+
+        Ok(videos)
+    }
+}
+
+fn html_unescape(s: &str) -> String {
+    s.replace("&#x27;", "'")
+     .replace("&amp;", "&")
+     .replace("&quot;", "\"")
+     .replace("&lt;", "<")
+     .replace("&gt;", ">")
+}

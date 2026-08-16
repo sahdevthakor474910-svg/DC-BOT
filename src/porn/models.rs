@@ -47,3 +47,13 @@ where
 pub struct VideoTag {
     pub tag_name: String,
 }
+
+/// A video scraped from beeg.tv (no official API — we parse SSR HTML).
+#[derive(Debug, Clone)]
+pub struct BeegTvVideo {
+    pub video_id: String,   // numeric part of the slug, e.g. "127461"
+    pub title: String,
+    pub url: String,        // full page URL e.g. https://beeg.tv/under-rapid-dick-fire-127461
+    pub thumbnail: String,  // full thumb URL e.g. https://beeg.tv/uploads/thumbnails/…
+    pub duration: String,   // "56:29"
+}
