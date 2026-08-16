@@ -33,6 +33,7 @@ use crate::porn;
         "set_hentai_channel",
         "set_jav_channel",
         "set_porn_video_channel",
+        "unset_channel",
         "toggle_auto_react",
         "add_reaction_user",
         "remove_reaction_user",
@@ -226,6 +227,59 @@ pub async fn set_porn_video_channel(
         "✅ Porn Video channel → {}\n🔥 Posts studio videos (NaughtyAmerica, Brazzers, MILF etc.) every 45 min from RedTube!",
         channel.id.mention()
     )).await?;
+    Ok(())
+}
+
+#[derive(Debug, poise::ChoiceParameter)]
+pub enum ChannelFeedType {
+    #[name = "Memes"]
+    Meme,
+    #[name = "Brainrot"]
+    Brainrot,
+    #[name = "Shitposting"]
+    Shitposting,
+    #[name = "Instagram Memes"]
+    Instagram,
+    #[name = "Gaming News"]
+    News,
+    #[name = "Free Games"]
+    FreeGames,
+    #[name = "NSFW (Other)"]
+    Nsfw,
+    #[name = "Rule34"]
+    Rule34,
+    #[name = "Porn (Reddit)"]
+    Porn,
+    #[name = "Hentai"]
+    Hentai,
+    #[name = "JAV"]
+    Jav,
+    #[name = "Porn Videos (RedTube)"]
+    PornVideo,
+}
+
+/// Disable a specific feed by unsetting its channel.
+#[poise::command(slash_command, guild_only, rename = "unset-channel")]
+pub async fn unset_channel(
+    ctx: Context<'_>,
+    #[description = "The type of channel feed to disable"] feed: ChannelFeedType,
+) -> Result<(), Error> {
+    let guild_id = ctx.guild_id().unwrap().to_string();
+    match feed {
+        ChannelFeedType::Meme => queries::set_meme_channel(&ctx.data().db, &guild_id, None).await?,
+        ChannelFeedType::Brainrot => queries::set_brainrot_channel(&ctx.data().db, &guild_id, None).await?,
+        ChannelFeedType::Shitposting => queries::set_shitposting_channel(&ctx.data().db, &guild_id, None).await?,
+        ChannelFeedType::Instagram => queries::set_instagram_channel(&ctx.data().db, &guild_id, None).await?,
+        ChannelFeedType::News => queries::set_news_channel(&ctx.data().db, &guild_id, None).await?,
+        ChannelFeedType::FreeGames => queries::set_free_games_channel(&ctx.data().db, &guild_id, None).await?,
+        ChannelFeedType::Nsfw => queries::set_nsfw_channel(&ctx.data().db, &guild_id, None).await?,
+        ChannelFeedType::Rule34 => queries::set_rule34_channel(&ctx.data().db, &guild_id, None).await?,
+        ChannelFeedType::Porn => queries::set_porn_channel(&ctx.data().db, &guild_id, None).await?,
+        ChannelFeedType::Hentai => queries::set_hentai_channel(&ctx.data().db, &guild_id, None).await?,
+        ChannelFeedType::Jav => queries::set_jav_channel(&ctx.data().db, &guild_id, None).await?,
+        ChannelFeedType::PornVideo => queries::set_porn_video_channel(&ctx.data().db, &guild_id, None).await?,
+    }
+    ctx.say(format!("✅ Successfully disabled the **{:?}** feed.", feed)).await?;
     Ok(())
 }
 
