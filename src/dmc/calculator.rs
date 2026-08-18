@@ -88,32 +88,46 @@ fn calc_stats_internal(
 }
 
 /// Given a leaderboard total_pts (and initial assumption of 120% bonus active),
-/// return (reward_pts, secs_remaining, kill_time_secs, dps, resolved_has_bonus).
+/// return (reward_pts, secs_remaining, kill_time_secs, dps, resolved_has_bonus, resolved_total_pts).
 ///
 /// If our initial assumption yields an impossible kill time (negative or exceeding limit),
-/// it automatically toggles the bonus parameter to find the correct fit.
+/// it automatically toggles the bonus parameter and/or auto-corrects truncated 10-digit scores
+/// (where Gemini missed the trailing digit) to find the correct fit.
 fn calc_stats_leaderboard(
     total_pts: i64,
     dmg_pts: i64,
     has_bonus: bool,
     time_limit: f64,
     decode_factor: f64,
-) -> (f64, f64, f64, f64, bool) {
-    // 1. Try with the parsed bonus setting
+) -> (f64, f64, f64, f64, bool, i64) {
+    // 1. Try with the parsed score and parsed bonus setting
     let (reward, secs_rem, kill, dps) = calc_stats_internal(total_pts, dmg_pts, has_bonus, time_limit, decode_factor);
     if kill >= 0.0 && kill <= time_limit {
-        return (reward, secs_rem, kill, dps, has_bonus);
+        return (reward, secs_rem, kill, dps, has_bonus, total_pts);
     }
 
-    // 2. Try the opposite bonus setting
+    // 2. Try with the parsed score and opposite bonus setting
     let alt_bonus = !has_bonus;
     let (reward_alt, secs_rem_alt, kill_alt, dps_alt) = calc_stats_internal(total_pts, dmg_pts, alt_bonus, time_limit, decode_factor);
     if kill_alt >= 0.0 && kill_alt <= time_limit {
-        return (reward_alt, secs_rem_alt, kill_alt, dps_alt, alt_bonus);
+        return (reward_alt, secs_rem_alt, kill_alt, dps_alt, alt_bonus, total_pts);
     }
 
-    // 3. Fallback to the original calculation
-    (reward, secs_rem, kill, dps, has_bonus)
+    // 3. Try auto-correcting a truncated 10-digit score (total_pts * 10) if total_pts < 1B
+    if total_pts > 0 && total_pts < 1_000_000_000 {
+        let pts_x10 = total_pts * 10;
+        let (reward_x10, secs_rem_x10, kill_x10, dps_x10) = calc_stats_internal(pts_x10, dmg_pts, has_bonus, time_limit, decode_factor);
+        if kill_x10 >= 0.0 && kill_x10 <= time_limit {
+            return (reward_x10, secs_rem_x10, kill_x10, dps_x10, has_bonus, pts_x10);
+        }
+        let (reward_x10_alt, secs_rem_x10_alt, kill_x10_alt, dps_x10_alt) = calc_stats_internal(pts_x10, dmg_pts, alt_bonus, time_limit, decode_factor);
+        if kill_x10_alt >= 0.0 && kill_x10_alt <= time_limit {
+            return (reward_x10_alt, secs_rem_x10_alt, kill_x10_alt, dps_x10_alt, alt_bonus, pts_x10);
+        }
+    }
+
+    // 4. Fallback to the original calculation
+    (reward, secs_rem, kill, dps, has_bonus, total_pts)
 }
 
 /// For a results screen where Reward PTS is directly provided by Gemini.
@@ -301,7 +315,7 @@ fn format_leaderboard(
     // Auto-detect resolved has_bonus state based on the first player's score
     let mut resolved_has_bonus = has_bonus;
     if !players.is_empty() {
-        let (_, _, _, _, actual_bonus) = calc_stats_leaderboard(players[0].total_pts, dmg_pts, has_bonus, time_limit, decode_factor);
+        let (_, _, _, _, actual_bonus, _) = calc_stats_leaderboard(players[0].total_pts, dmg_pts, has_bonus, time_limit, decode_factor);
         resolved_has_bonus = actual_bonus;
     }
 
@@ -326,14 +340,14 @@ fn format_leaderboard(
             .get((player.rank as usize).saturating_sub(1))
             .unwrap_or(&"🔢");
 
-        let (_, _, kill_time, dps, _) =
+        let (_, _, kill_time, dps, _, resolved_pts) =
             calc_stats_leaderboard(player.total_pts, dmg_pts, resolved_has_bonus, time_limit, decode_factor);
 
         if kill_time < 0.0 || kill_time > time_limit {
             out.push_str(&format!(
                 "\n {} {}\n    Total PTS : {}\n    Kill Time : ❌ Boss Not Killed\n\
 ╠──────────────────────────────────────╣",
-                emoji, player.name, player.total_pts
+                emoji, player.name, resolved_pts
             ));
         } else {
             out.push_str(&format!(
@@ -341,7 +355,7 @@ fn format_leaderboard(
 ╠──────────────────────────────────────╣",
                 emoji,
                 player.name,
-                player.total_pts,
+                resolved_pts,
                 format_kill_time(kill_time),
                 dps
             ));
@@ -378,7 +392,7 @@ fn format_boss_overview(bosses: &[BossOverviewEntry]) -> String {
 
         // The PTS on the card is a total_pts (includes time bonus if boss killed).
         // Use the leaderboard formula: back-calculates reward_pts → secs_remaining → kill_time.
-        let (_, _, kill_time, dps, resolved_bonus) =
+        let (_, _, kill_time, dps, resolved_bonus, resolved_pts) =
             calc_stats_leaderboard(entry.pts, dmg_cap, entry.has_bonus, time_limit, decode_factor);
 
         let bonus_label = if resolved_bonus { " [X120%]" } else { "" };
@@ -388,7 +402,7 @@ fn format_boss_overview(bosses: &[BossOverviewEntry]) -> String {
             out.push_str(&format!(
                 "\n  {}{} ({}limit)\n    PTS       : {}\n    Kill Time : ❌ Boss Not Killed\n\
 ╠──────────────────────────────────────╣",
-                entry.boss_name, bonus_label, time_str, entry.pts
+                entry.boss_name, bonus_label, time_str, resolved_pts
             ));
         } else {
             out.push_str(&format!(
@@ -397,7 +411,7 @@ fn format_boss_overview(bosses: &[BossOverviewEntry]) -> String {
                 entry.boss_name,
                 bonus_label,
                 time_str,
-                entry.pts,
+                resolved_pts,
                 format_kill_time(kill_time),
                 dps
             ));

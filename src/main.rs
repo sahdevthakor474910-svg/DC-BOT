@@ -517,6 +517,21 @@ mod tests {
         let msg5 = build_discord_message(&hallucinated);
         assert!(msg5.contains("Beowulf Results"));
         println!("Hallucinated reward_pts output:\n{}", msg5);
+
+        // Test case 6: Truncated 10-digit score on Dante Leaderboard (e.g. BADJASS missing trailing digit)
+        let dante_lb = ScreenshotData::Leaderboard {
+            boss_name: "Dante".to_string(),
+            has_bonus: true,
+            players: vec![
+                LeaderboardPlayer { rank: 1, name: "BADJASS".to_string(), total_pts: 869_198_432 }, // truncated 9-digit
+                LeaderboardPlayer { rank: 2, name: "ATHiINA".to_string(), total_pts: 8_690_908_101 },
+            ],
+        };
+        let msg6 = build_discord_message(&dante_lb);
+        assert!(msg6.contains("Dante Leaderboard"));
+        assert!(msg6.contains("BADJASS"), "Leaderboard should include BADJASS");
+        assert!(!msg6.contains("BADJASS\n    Total PTS : 869198432\n    Kill Time : ❌ Boss Not Killed"), "BADJASS truncated score should be auto-corrected");
+        println!("Truncated Dante Leaderboard output:\n{}", msg6);
     }
 }
 

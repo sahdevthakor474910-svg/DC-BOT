@@ -200,6 +200,11 @@ Extract:
 2. has_bonus — true if boss is in the BONUS list below
 3. All visible players with rank, name, total_pts
 
+CRITICAL DIGIT COUNT RULE FOR LEADERBOARDS:
+- Count ALL digits in player scores extremely carefully! Scores in DMC: PoC leaderboards are 10-DIGIT NUMBERS (e.g. 8691984342, 8690908101, 1033499653).
+- Do NOT drop the last digit of any score! Rank 1 scores are often ~8.69 billion (10 digits like 8691984342), NOT 9 digits (like 869198432).
+- Verify that a higher-ranked player's total_pts is >= the player below them!
+
 Example:
 {
   "type": "leaderboard",
