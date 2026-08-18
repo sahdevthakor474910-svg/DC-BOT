@@ -446,19 +446,17 @@ mod tests {
         assert!(!msg.contains("Kill Time   : 5m 0"), "Kill time should not be 5 min exactly (Dante bug)");
         println!("Results output:\n{}", msg);
 
-        // Test case 1b: Dante with X120% bonus — this was the bugged case.
-        // Gemini was reading boss_pts ≈ dmg_pts → reward_pts = 0 → 5 min every time.
-        // Now we read reward_pts directly from the screenshot.
+        // Test case 1b: Dante post-update with X120% bonus (7_231_072_000 DMG PTS).
         let dante_results = ScreenshotData::Results {
             boss_name: "Dante".to_string(),
-            dmg_pts: 2_400_000_000,
-            reward_pts: 8_540_200, // directly read — NOT computed from boss_pts - dmg_pts
-            boss_pts: 2_408_540_200,
+            dmg_pts: 7_231_072_000,
+            reward_pts: 11_990_058,
+            boss_pts: 8_691_674_470,
             has_bonus: true,
         };
         let dante_msg = build_discord_message(&dante_results);
         assert!(dante_msg.contains("Dante Results"));
-        assert!(!dante_msg.contains("Kill Time   : 5m 0"), "Dante kill time should not be 5 min exactly");
+        assert!(dante_msg.contains("Kill Time   : 55.1s"), "Dante kill time should be 55.1s");
         println!("Dante Results output:\n{}", dante_msg);
 
         // Test case 2: Leaderboard screen – Calibur without bonus

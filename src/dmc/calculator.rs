@@ -19,8 +19,7 @@ fn normalize_boss_name(name: &str) -> String {
 /// additional decode factor is needed — these values cover both screens.
 fn boss_dmg_pts(name: &str) -> i64 {
     let norm = normalize_boss_name(name);
-    if norm.contains("vergil")
-        || norm.contains("dante")            { 2_892_440_140 } // pre-buff value, pending confirmation
+    if norm.contains("vergil")               { 2_892_440_140 } // pre-buff value, pending confirmation
     else if norm.contains("lady")            { 9_038_840_000 } // 5-min boss, own HP tier
     else if norm.contains("plutone")
         || norm.contains("beowulf")
@@ -29,7 +28,8 @@ fn boss_dmg_pts(name: &str) -> i64 {
         || norm.contains("calibur")
         || norm.contains("hellshade")
         || norm.contains("human")
-        || norm.contains("hellcommander")    { 7_231_072_000 } // game HP 5.078B × 1.424 score mul
+        || norm.contains("hellcommander")
+        || norm.contains("dante")            { 7_231_072_000 } // game HP 5.078B × 1.424 score mul
     else if norm.contains("cerberus")        { 4_133_492_000 } // game HP 5.078B × 0.814 score mul
     else                                     { 5_070_000_000 } // remaining bosses (~5.078B × 1.0)
 }
