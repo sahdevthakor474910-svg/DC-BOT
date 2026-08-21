@@ -255,7 +255,7 @@ Nevan, Hell Shade, Beowulf, Plutone, Vergil, Dante,
 Hell Commander, Hell·Commander, Hell-Commander, Hell-commander
 
 NON-BONUS BOSSES (no multiplier):
-Devil Mite, Cerberus, Minotaur, Phantom, Calibur"#;
+Devil Mite, Cerberus, Minotaur, Minotauros, Mino, Phantom, Calibur"#;
 
 // ─────────────────────────────────────────────────────────────────────────────
 // gemini-3.1-flash-lite is the modern free-tier model (15 RPM / 1500 RPD) that supports vision.

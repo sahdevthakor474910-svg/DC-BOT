@@ -29,7 +29,10 @@ fn boss_dmg_pts(name: &str) -> i64 {
         || norm.contains("hellshade")
         || norm.contains("human")
         || norm.contains("hellcommander")
-        || norm.contains("dante")            { 7_231_072_000 } // game HP 5.078B × 1.424 score mul
+        || norm.contains("dante")
+        || norm.contains("minotaur")
+        || norm.contains("minotauros")
+        || norm.contains("mino")             { 7_231_072_000 } // game HP 5.078B × 1.424 score mul
     else if norm.contains("cerberus")        { 4_133_492_000 } // game HP 5.078B × 0.814 score mul
     else                                     { 5_070_000_000 } // remaining bosses (~5.078B × 1.0)
 }
@@ -50,6 +53,9 @@ fn boss_time_limit(name: &str) -> f64 {
         || norm.contains("dante")
         || norm.contains("hellcommander")
         || norm.contains("lady")
+        || norm.contains("minotaur")
+        || norm.contains("minotauros")
+        || norm.contains("mino")
     {
         300.0
     } else {

@@ -532,6 +532,19 @@ mod tests {
         assert!(msg6.contains("BADJASS"), "Leaderboard should include BADJASS");
         assert!(!msg6.contains("BADJASS\n    Total PTS : 869198432\n    Kill Time : ❌ Boss Not Killed"), "BADJASS truncated score should be auto-corrected");
         println!("Truncated Dante Leaderboard output:\n{}", msg6);
+
+        // Test case 7: Minotaur / Mino Leaderboard
+        let mino_lb = ScreenshotData::Leaderboard {
+            boss_name: "Minotaur".to_string(),
+            has_bonus: false,
+            players: vec![
+                LeaderboardPlayer { rank: 1, name: "Sly".to_string(), total_pts: 7_243_320_266 },
+            ],
+        };
+        let msg7 = build_discord_message(&mino_lb);
+        assert!(msg7.contains("Minotaur Leaderboard"));
+        assert!(!msg7.contains("Boss Not Killed"), "Minotaur full clear should have valid kill time");
+        println!("Minotaur Leaderboard output:\n{}", msg7);
     }
 }
 
