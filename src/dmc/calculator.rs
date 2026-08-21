@@ -20,13 +20,13 @@ fn normalize_boss_name(name: &str) -> String {
 fn boss_dmg_pts(name: &str) -> i64 {
     let norm = normalize_boss_name(name);
     if norm.contains("vergil")               { 2_892_440_140 } // pre-buff value, pending confirmation
-    else if norm.contains("lady")
-        || norm.contains("minotaur")
-        || norm.contains("minotauros")
-        || norm.contains("mino")             { 9_038_840_000 } // post-buff 9.038B tier (5-min boss)
+    else if norm.contains("lady")            { 9_038_840_000 } // 5-min boss, own HP tier
     else if norm.contains("plutone")
         || norm.contains("beowulf")
-        || norm.contains("nevan")            { 5_783_842_000 } // game HP 5.078B × 1.139 score mul
+        || norm.contains("nevan")
+        || norm.contains("minotaur")
+        || norm.contains("minotauros")
+        || norm.contains("mino")             { 5_783_842_000 } // game HP 5.078B × 1.139 score mul
     else if norm.contains("devilmite")
         || norm.contains("calibur")
         || norm.contains("hellshade")
@@ -53,9 +53,6 @@ fn boss_time_limit(name: &str) -> f64 {
         || norm.contains("dante")
         || norm.contains("hellcommander")
         || norm.contains("lady")
-        || norm.contains("minotaur")
-        || norm.contains("minotauros")
-        || norm.contains("mino")
     {
         300.0
     } else {
@@ -136,6 +133,7 @@ fn calc_stats_leaderboard(
     const ALL_CAPS: &[i64] = &[
         9_038_840_000,
         7_231_072_000,
+        6_938_842_000,
         5_783_842_000,
         5_070_000_000,
         4_133_492_000,

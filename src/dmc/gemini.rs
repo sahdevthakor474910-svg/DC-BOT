@@ -252,10 +252,11 @@ RULES FOR ALL SCREEN TYPES
 
 BONUS BOSSES (X120% multiplier applied by server):
 Nevan, Hell Shade, Beowulf, Plutone, Vergil, Dante,
-Hell Commander, Hell·Commander, Hell-Commander, Hell-commander
+Hell Commander, Hell·Commander, Hell-Commander, Hell-commander,
+Minotaur, Minotauros, Mino
 
 NON-BONUS BOSSES (no multiplier):
-Devil Mite, Cerberus, Minotaur, Minotauros, Mino, Phantom, Calibur"#;
+Devil Mite, Cerberus, Phantom, Calibur"#;
 
 // ─────────────────────────────────────────────────────────────────────────────
 // gemini-3.1-flash-lite is the modern free-tier model (15 RPM / 1500 RPD) that supports vision.

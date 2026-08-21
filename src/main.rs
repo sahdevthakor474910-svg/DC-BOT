@@ -533,18 +533,36 @@ mod tests {
         assert!(!msg6.contains("BADJASS\n    Total PTS : 869198432\n    Kill Time : ❌ Boss Not Killed"), "BADJASS truncated score should be auto-corrected");
         println!("Truncated Dante Leaderboard output:\n{}", msg6);
 
-        // Test case 7: Minotaur / Mino Leaderboard (post-buff 9.038B HP cap tier)
+        // Test case 7: Minotaur Results & Leaderboard (exact values from screenshots)
+        let mino_results = ScreenshotData::Results {
+            boss_name: "Minotaur".to_string(),
+            dmg_pts: 5_783_842_000,
+            reward_pts: 4_140_934,
+            boss_pts: 6_945_579_521,
+            has_bonus: true,
+        };
+        let msg7a = build_discord_message(&mino_results);
+        assert!(msg7a.contains("Minotaur Results"));
+        assert!(msg7a.contains("2m 35.4s"), "Minotaur kill time should be 2m 35.4s");
+        println!("Minotaur Results output:\n{}", msg7a);
+
         let mino_lb = ScreenshotData::Leaderboard {
             boss_name: "Minotaur".to_string(),
-            has_bonus: false,
+            has_bonus: true,
             players: vec![
-                LeaderboardPlayer { rank: 1, name: "Sly".to_string(), total_pts: 9_050_840_000 },
+                LeaderboardPlayer { rank: 1, name: "Rivo2".to_string(), total_pts: 6_951_437_021 },
+                LeaderboardPlayer { rank: 2, name: "Grymm_Jaergliff".to_string(), total_pts: 6_945_579_521 },
+                LeaderboardPlayer { rank: 3, name: "МёртвыйАнархист".to_string(), total_pts: 6_945_414_746 },
+                LeaderboardPlayer { rank: 4, name: "Theskylin".to_string(), total_pts: 6_943_349_614 },
             ],
         };
-        let msg7 = build_discord_message(&mino_lb);
-        assert!(msg7.contains("Minotaur Leaderboard"));
-        assert!(!msg7.contains("Boss Not Killed"), "Minotaur full clear should have valid kill time");
-        println!("Minotaur Leaderboard output:\n{}", msg7);
+        let msg7b = build_discord_message(&mino_lb);
+        assert!(msg7b.contains("Minotaur Leaderboard"));
+        assert!(msg7b.contains("Rivo2"));
+        assert!(msg7b.contains("55.7s"), "Rivo2 kill time should be 55.7s");
+        assert!(msg7b.contains("2m 35.4s"), "Grymm_Jaergliff kill time should be 2m 35.4s");
+        assert!(!msg7b.contains("Boss Not Killed"), "Minotaur full clear should have valid kill time");
+        println!("Minotaur Leaderboard output:\n{}", msg7b);
     }
 }
 
