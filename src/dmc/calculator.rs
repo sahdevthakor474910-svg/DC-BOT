@@ -20,7 +20,10 @@ fn normalize_boss_name(name: &str) -> String {
 fn boss_dmg_pts(name: &str) -> i64 {
     let norm = normalize_boss_name(name);
     if norm.contains("vergil")               { 2_892_440_140 } // pre-buff value, pending confirmation
-    else if norm.contains("lady")            { 9_038_840_000 } // 5-min boss, own HP tier
+    else if norm.contains("lady")
+        || norm.contains("minotaur")
+        || norm.contains("minotauros")
+        || norm.contains("mino")             { 9_038_840_000 } // post-buff 9.038B tier (5-min boss)
     else if norm.contains("plutone")
         || norm.contains("beowulf")
         || norm.contains("nevan")            { 5_783_842_000 } // game HP 5.078B × 1.139 score mul
@@ -29,10 +32,7 @@ fn boss_dmg_pts(name: &str) -> i64 {
         || norm.contains("hellshade")
         || norm.contains("human")
         || norm.contains("hellcommander")
-        || norm.contains("dante")
-        || norm.contains("minotaur")
-        || norm.contains("minotauros")
-        || norm.contains("mino")             { 7_231_072_000 } // game HP 5.078B × 1.424 score mul
+        || norm.contains("dante")            { 7_231_072_000 } // game HP 5.078B × 1.424 score mul
     else if norm.contains("cerberus")        { 4_133_492_000 } // game HP 5.078B × 0.814 score mul
     else                                     { 5_070_000_000 } // remaining bosses (~5.078B × 1.0)
 }
@@ -132,7 +132,35 @@ fn calc_stats_leaderboard(
         }
     }
 
-    // 4. Fallback to the original calculation
+    // 4. Try matching against other known HP caps if the default dmg_pts failed
+    const ALL_CAPS: &[i64] = &[
+        9_038_840_000,
+        7_231_072_000,
+        5_783_842_000,
+        5_070_000_000,
+        4_133_492_000,
+        2_892_440_140,
+    ];
+    for &cap in ALL_CAPS {
+        if cap == dmg_pts {
+            continue;
+        }
+        for &bonus_flag in &[has_bonus, !has_bonus] {
+            let (r, s, k, d) = calc_stats_internal(total_pts, cap, bonus_flag, time_limit, decode_factor);
+            if k >= 0.0 && k <= time_limit {
+                return (r, s, k, d, bonus_flag, total_pts);
+            }
+            if total_pts > 0 && total_pts < 1_000_000_000 {
+                let pts_x10 = total_pts * 10;
+                let (r10, s10, k10, d10) = calc_stats_internal(pts_x10, cap, bonus_flag, time_limit, decode_factor);
+                if k10 >= 0.0 && k10 <= time_limit {
+                    return (r10, s10, k10, d10, bonus_flag, pts_x10);
+                }
+            }
+        }
+    }
+
+    // 5. Fallback to the original calculation
     (reward, secs_rem, kill, dps, has_bonus, total_pts)
 }
 

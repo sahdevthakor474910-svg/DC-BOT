@@ -533,12 +533,12 @@ mod tests {
         assert!(!msg6.contains("BADJASS\n    Total PTS : 869198432\n    Kill Time : ❌ Boss Not Killed"), "BADJASS truncated score should be auto-corrected");
         println!("Truncated Dante Leaderboard output:\n{}", msg6);
 
-        // Test case 7: Minotaur / Mino Leaderboard
+        // Test case 7: Minotaur / Mino Leaderboard (post-buff 9.038B HP cap tier)
         let mino_lb = ScreenshotData::Leaderboard {
             boss_name: "Minotaur".to_string(),
             has_bonus: false,
             players: vec![
-                LeaderboardPlayer { rank: 1, name: "Sly".to_string(), total_pts: 7_243_320_266 },
+                LeaderboardPlayer { rank: 1, name: "Sly".to_string(), total_pts: 9_050_840_000 },
             ],
         };
         let msg7 = build_discord_message(&mino_lb);
