@@ -235,30 +235,40 @@ async fn main() -> Result<()> {
                 info!("⏱️  Twitter/X task spawned (every 10 min — @dmc_poc & @dmc_poc_jp via Nitter RSS)");
 
                 // ── Web Server for Health Check + Media Stream Player ────
-                let server_data = bot_data.clone();
-                tokio::spawn(async move {
-                    let app = web::create_router(server_data);
-                    let port = std::env::var("PORT").unwrap_or_else(|_| "10000".to_string());
-                    let addr = format!("0.0.0.0:{}", port);
-                    info!("📡 Attempting to start web server on {}...", addr);
-                    
-                    match tokio::net::TcpListener::bind(&addr).await {
-                        Ok(listener) => {
-                            info!("📡 Web server listening on http://{}", addr);
-                            if let Err(e) = axum::serve(listener, app).await {
-                                error!("❌ Web server failed to serve: {}", e);
-                            }
-                        }
-                        Err(e) => {
-                            error!("❌ Web server failed to bind to {}: {}", addr, e);
-                        }
-                    }
-                });
+                // NOTE: The web server is now started in main() BEFORE Discord connects,
+                // so Render's port scanner finds it immediately. See below.
 
                 Ok(bot_data)
             })
         })
         .build();
+
+    // ── Start web server FIRST so Render health check passes immediately ─────
+    // Render scans for an open port right after process start. If we wait until
+    // the Discord handshake completes (can take 30-60s), Render times out and
+    // kills the container. We spawn the web server here with a minimal router
+    // that returns 200 OK immediately, even before Discord is connected.
+    {
+        let port = std::env::var("PORT").unwrap_or_else(|_| "10000".to_string());
+        let addr = format!("0.0.0.0:{}", port);
+        info!("📡 Starting web server on {} (before Discord connect)…", addr);
+        tokio::spawn(async move {
+            // Minimal always-ready router for Render health checks
+            use axum::{routing::get, Router};
+            let app = Router::new()
+                .route("/", get(|| async { "OK" }))
+                .route("/health", get(|| async { "OK" }));
+            match tokio::net::TcpListener::bind(&addr).await {
+                Ok(listener) => {
+                    info!("📡 Web server listening on http://{}", addr);
+                    if let Err(e) = axum::serve(listener, app).await {
+                        error!("❌ Web server failed: {}", e);
+                    }
+                }
+                Err(e) => error!("❌ Web server failed to bind to {}: {}", addr, e),
+            }
+        });
+    }
 
     // Start Serenity client
     let mut client = serenity::ClientBuilder::new(&app_config.discord_token, intents)
