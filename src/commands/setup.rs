@@ -52,6 +52,7 @@ pub async fn setup(
     #[description = "🎮 DMC Boss Battle Result screenshot analyzer"]
     dmc: Option<serenity::GuildChannel>,
 ) -> Result<(), Error> {
+    ctx.defer().await?; // prevent Discord 3-second timeout on slow DB queries
     let guild_id = ctx.guild_id().unwrap().to_string();
     let db = &ctx.data().db;
 

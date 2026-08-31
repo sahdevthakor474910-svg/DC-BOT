@@ -17,6 +17,7 @@ fn ch(id: Option<&String>) -> String {
 /// 📊 Show what channels are configured and what the bot is posting.
 #[poise::command(slash_command, guild_only)]
 pub async fn status(ctx: Context<'_>) -> Result<(), Error> {
+    ctx.defer().await?; // prevent Discord 3-second timeout on slow DB queries
     let guild_id = ctx.guild_id().unwrap().to_string();
     let db = &ctx.data().db;
 

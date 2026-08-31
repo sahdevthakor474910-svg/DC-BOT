@@ -4,6 +4,7 @@ use crate::data::{Context, Error};
 /// 📖 How to use the bot — quick reference for all commands.
 #[poise::command(slash_command)]
 pub async fn help(ctx: Context<'_>) -> Result<(), Error> {
+    ctx.defer().await?; // prevent Discord 3-second timeout on Render cold-starts
     let embed = serenity::CreateEmbed::new()
         .title("📖 Quick Start Guide")
         .description(
