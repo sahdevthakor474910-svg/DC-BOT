@@ -17,7 +17,8 @@ mod twitter;
 mod web;
 mod xnxx;
 
-use std::sync::Arc;
+use std::collections::VecDeque;
+use std::sync::{Arc, Mutex};
 
 use anyhow::{Context as _, Result};
 use poise::serenity_prelude as serenity;
@@ -26,6 +27,33 @@ use tracing::{error, info};
 use tracing_subscriber::{fmt, EnvFilter};
 
 use crate::data::{Data, Error};
+
+#[derive(Clone)]
+struct MemoryLogWriter(Arc<Mutex<VecDeque<String>>>);
+
+impl std::io::Write for MemoryLogWriter {
+    fn write(&mut self, buf: &[u8]) -> std::io::Result<usize> {
+        let msg = String::from_utf8_lossy(buf).to_string();
+        let _ = std::io::stdout().write_all(buf);
+        if let Ok(mut lock) = self.0.lock() {
+            if lock.len() >= 500 {
+                lock.pop_front();
+            }
+            lock.push_back(msg);
+        }
+        Ok(buf.len())
+    }
+    fn flush(&mut self) -> std::io::Result<()> {
+        std::io::stdout().flush()
+    }
+}
+
+impl<'a> tracing_subscriber::fmt::MakeWriter<'a> for MemoryLogWriter {
+    type Writer = MemoryLogWriter;
+    fn make_writer(&'a self) -> Self::Writer {
+        self.clone()
+    }
+}
 
 // ────────────────────────────────────────────────────────────────────────────
 // Event handler
@@ -52,6 +80,10 @@ async fn event_handler(
             }
         }
 
+        serenity::FullEvent::InteractionCreate { interaction } => {
+            info!("⚡ InteractionCreate event: kind={:?}, id={}", interaction.kind(), interaction.id());
+        }
+
         _ => {}
     }
 
@@ -70,10 +102,13 @@ async fn main() -> Result<()> {
     let app_config = config::AppConfig::from_env()
         .context("Failed to load configuration from environment")?;
 
+    let log_buffer = Arc::new(Mutex::new(VecDeque::<String>::new()));
+    let writer = MemoryLogWriter(log_buffer.clone());
+
     // Initialise structured logging
     let filter = EnvFilter::try_from_default_env()
         .unwrap_or_else(|_| EnvFilter::new(&app_config.log_level));
-    fmt().with_env_filter(filter).with_target(false).init();
+    fmt().with_env_filter(filter).with_target(false).with_writer(writer).init();
 
     info!("🤖 Starting Discord bot v2…");
 
@@ -148,6 +183,15 @@ async fn main() -> Result<()> {
                     }
                 })
             },
+            // ── Pre-command hook: auto-defer all slash commands immediately ──
+            pre_command: |ctx| {
+                Box::pin(async move {
+                    info!("▶️ Slash command /{} invoked by {} ({})", ctx.command().name, ctx.author().name, ctx.author().id);
+                    if let poise::Context::Application(_) = ctx {
+                        let _ = ctx.defer().await;
+                    }
+                })
+            },
             // ── Global check: silently block banned users on every command ──
             command_check: Some(|ctx| {
                 Box::pin(commands::checks::is_not_blocked_check(ctx))
@@ -159,20 +203,19 @@ async fn main() -> Result<()> {
             let http     = Arc::clone(&ctx.http);
 
             Box::pin(async move {
-                // Register slash commands globally (single source of truth — no guild duplicates)
+                // Register slash commands globally
                 poise::builtins::register_globally(ctx, &framework.options().commands).await?;
                 info!("📋 Slash commands registered globally");
 
-                // Clean up any stale guild-level commands that cause duplicates in Discord
+                // Also register commands directly into all configured guilds for instant availability
                 if let Ok(configs) = crate::db::queries::get_all_guild_configs(&bot_data.db).await {
                     for cfg in configs {
                         if let Ok(guild_id_num) = cfg.guild_id.parse::<u64>() {
                             let guild_id = serenity::GuildId::new(guild_id_num);
-                            // Overwrite guild commands with empty list to clear any old duplicates
-                            if let Err(e) = guild_id.set_commands(&ctx.http, vec![]).await {
-                                tracing::warn!("Could not clear guild commands for {}: {:?}", cfg.guild_id, e);
+                            if let Err(e) = poise::builtins::register_in_guild(ctx, &framework.options().commands, guild_id).await {
+                                tracing::warn!("Could not register commands in guild {}: {:?}", cfg.guild_id, e);
                             } else {
-                                info!("🧹 Cleared stale guild commands for guild {}", cfg.guild_id);
+                                info!("⚡ Slash commands registered instantly in guild {}", cfg.guild_id);
                             }
                         }
                     }
@@ -260,12 +303,19 @@ async fn main() -> Result<()> {
         let port = std::env::var("PORT").unwrap_or_else(|_| "10000".to_string());
         let addr = format!("0.0.0.0:{}", port);
         info!("📡 Starting web server on {} (before Discord connect)…", addr);
+        let logs_clone = log_buffer.clone();
         tokio::spawn(async move {
-            // Minimal always-ready router for Render health checks
             use axum::{routing::get, Router};
             let app = Router::new()
                 .route("/", get(|| async { "OK" }))
-                .route("/health", get(|| async { "OK" }));
+                .route("/health", get(|| async { "OK" }))
+                .route("/logs", get(move || {
+                    let logs = logs_clone.clone();
+                    async move {
+                        let lock = logs.lock().unwrap();
+                        lock.iter().cloned().collect::<Vec<_>>().join("")
+                    }
+                }));
             match tokio::net::TcpListener::bind(&addr).await {
                 Ok(listener) => {
                     info!("📡 Web server listening on http://{}", addr);
@@ -278,16 +328,28 @@ async fn main() -> Result<()> {
         });
     }
 
-    // Start Serenity client
+    // Start Serenity client with automatic reconnect loop
     let mut client = serenity::ClientBuilder::new(&app_config.discord_token, intents)
         .framework(framework)
         .await
         .context("Failed to build Discord client")?;
 
-    info!("🚀 Connecting to Discord…");
-    client.start().await.context("Discord client exited")?;
+    tokio::spawn(async move {
+        loop {
+            info!("🚀 Connecting to Discord…");
+            if let Err(e) = client.start().await {
+                error!("❌ Discord client exited with error: {:#}. Reconnecting in 10s…", e);
+            } else {
+                info!("Discord client exited cleanly. Reconnecting in 5s…");
+            }
+            tokio::time::sleep(std::time::Duration::from_secs(10)).await;
+        }
+    });
 
-    Ok(())
+    // Keep the main process alive
+    loop {
+        tokio::time::sleep(std::time::Duration::from_secs(3600)).await;
+    }
 }
 
 #[cfg(test)]
