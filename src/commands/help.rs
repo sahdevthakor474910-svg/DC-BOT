@@ -29,6 +29,7 @@ pub async fn help(ctx: Context<'_>) -> Result<(), Error> {
              • **jav** → 🎌 JAV videos from Eporner *(Age-Restricted!)*\n\
              • **porn_videos** → 🔥 RedTube: Brazzers, MILF, NaughtyAmerica *(Age-Restricted!)*\n\
              • **okxxx** → 🌶️ OK.XXX: top studio movies *(Age-Restricted!)*\n\
+             • **xnxx** → 🔥 XNXX: trending videos *(Age-Restricted!)*\n\
              • **nsfw** → 🔞 r/nsfw, r/rule34, r/hentai, r/porn *(Age-Restricted!)*\n\n\
              💡 **Stop posting:** Use `/unset` and check **True** next to any channel to disable it.",
             false,

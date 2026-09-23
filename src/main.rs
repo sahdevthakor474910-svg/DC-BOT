@@ -15,6 +15,7 @@ mod porn;
 mod reddit;
 mod twitter;
 mod web;
+mod xnxx;
 
 use std::sync::Arc;
 
@@ -233,6 +234,13 @@ async fn main() -> Result<()> {
                     tokio::spawn(async move { twitter::task::run(d, h).await });
                 }
                 info!("⏱️  Twitter/X task spawned (every 10 min — @dmc_poc & @dmc_poc_jp via Nitter RSS)");
+
+                {
+                    let d = bot_data.clone();
+                    let h = Arc::clone(&http);
+                    tokio::spawn(async move { xnxx::task::run(d, h).await });
+                }
+                info!("⏱️  XNXX task spawned (every 30 min — xnxx.com trending)");
 
                 // ── Web Server for Health Check + Media Stream Player ────
                 // NOTE: The web server is now started in main() BEFORE Discord connects,

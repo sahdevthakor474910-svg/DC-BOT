@@ -51,6 +51,9 @@ pub async fn setup(
 
     #[description = "🎮 DMC Boss Battle Result screenshot analyzer"]
     dmc: Option<serenity::GuildChannel>,
+
+    #[description = "🔥 XNXX channel — must be Age-Restricted! (xnxx.com trending — every 30 min)"]
+    xnxx: Option<serenity::GuildChannel>,
 ) -> Result<(), Error> {
     ctx.defer().await?; // prevent Discord 3-second timeout on slow DB queries
     let guild_id = ctx.guild_id().unwrap().to_string();
@@ -203,6 +206,20 @@ pub async fn setup(
     if let Some(ch) = &dmc {
         queries::set_dmc_channel(db, &guild_id, Some(ch.id.to_string().as_str())).await?;
         lines.push(format!("🎮  **DMC Boss Results** → {} *(screenshot analyzer)*", ch.id.mention()));
+    }
+
+    // ── XNXX ──────────────────────────────────────────────────────────────
+    if let Some(ch) = &xnxx {
+        match ensure_nsfw(ctx, ch).await {
+            Ok(_) => {
+                queries::set_xnxx_channel(db, &guild_id, Some(ch.id.to_string().as_str())).await?;
+                lines.push(format!("🔥  **XNXX** → {} *(xnxx.com trending — every 30 min)*", ch.id.mention()));
+            }
+            Err(warn_msg) => {
+                warnings.push(format!("⚠️  **XNXX** warning: {}", warn_msg));
+                queries::set_xnxx_channel(db, &guild_id, Some(ch.id.to_string().as_str())).await?;
+            }
+        }
     }
 
     // ── Nothing provided ───────────────────────────────────────────────────

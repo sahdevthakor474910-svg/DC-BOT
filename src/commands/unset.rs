@@ -49,6 +49,9 @@ pub async fn unset(
 
     #[description = "Clear the 🎮 DMC Boss Results channel"]
     dmc: Option<bool>,
+
+    #[description = "Clear the 🔥 XNXX channel"]
+    xnxx: Option<bool>,
 ) -> Result<(), Error> {
     ctx.defer().await?; // prevent Discord 3-second timeout on slow DB queries
     let guild_id = ctx.guild_id().unwrap().to_string();
@@ -119,6 +122,11 @@ pub async fn unset(
     if dmc.unwrap_or(false) {
         queries::set_dmc_channel(db, &guild_id, None).await?;
         cleared.push("🎮 DMC Boss Results");
+    }
+
+    if xnxx.unwrap_or(false) {
+        queries::set_xnxx_channel(db, &guild_id, None).await?;
+        cleared.push("🔥 XNXX");
     }
 
     if cleared.is_empty() {

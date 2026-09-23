@@ -10,6 +10,7 @@ use crate::jav;
 use crate::porn;
 use crate::okxxx;
 use crate::coc;
+use crate::xnxx;
 
 #[derive(poise::ChoiceParameter, Clone, Copy, Debug, PartialEq, Eq)]
 pub enum ContentType {
@@ -29,6 +30,8 @@ pub enum ContentType {
     Coc,
     #[name = "X/Twitter Updates"]
     Twitter,
+    #[name = "XNXX Videos"]
+    Xnxx,
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -62,6 +65,7 @@ pub async fn post(
     let mut okxxx_n = 0;
     let mut coc_n = 0;
     let mut twitter_n = 0;
+    let mut xnxx_n = 0;
 
     if let Some(cat) = category {
         match cat {
@@ -89,9 +93,12 @@ pub async fn post(
             ContentType::Twitter => {
                 twitter_n = crate::twitter::task::run_once(&data, &http, force_val).await.unwrap_or_else(|e| { tracing::error!("Twitter refresh: {:#}", e); 0 });
             }
+            ContentType::Xnxx => {
+                xnxx_n = xnxx::task::run_once(&data, &http, force_val).await.unwrap_or_else(|e| { tracing::error!("XNXX refresh: {:#}", e); 0 });
+            }
         }
     } else {
-        let (meme_res, news_res, fg_res, jav_res, porn_res, okxxx_res, coc_res, twitter_res) = tokio::join!(
+        let (meme_res, news_res, fg_res, jav_res, porn_res, okxxx_res, coc_res, twitter_res, xnxx_res) = tokio::join!(
             reddit::task::run_once(&data, &http, force_val),
             news::task::run_once(&data, &http, force_val),
             freegames::task::run_once(&data, &http, force_val),
@@ -100,6 +107,7 @@ pub async fn post(
             okxxx::task::run_once(&data, &http, force_val),
             coc::task::run_once(&data, &http, force_val),
             crate::twitter::task::run_once(&data, &http, force_val),
+            xnxx::task::run_once(&data, &http, force_val),
         );
 
         meme_n = meme_res.unwrap_or_else(|e| { tracing::error!("Meme refresh: {:#}", e); 0 });
@@ -110,9 +118,10 @@ pub async fn post(
         okxxx_n = okxxx_res.unwrap_or_else(|e| { tracing::error!("OK.XXX refresh: {:#}", e); 0 });
         coc_n   = coc_res.unwrap_or_else(|e| { tracing::error!("CoC refresh: {:#}", e); 0 });
         twitter_n = twitter_res.unwrap_or_else(|e| { tracing::error!("Twitter refresh: {:#}", e); 0 });
+        xnxx_n = xnxx_res.unwrap_or_else(|e| { tracing::error!("XNXX refresh: {:#}", e); 0 });
     }
 
-    let total = meme_n + news_n + fg_n + jav_n + porn_n + okxxx_n + coc_n + twitter_n;
+    let total = meme_n + news_n + fg_n + jav_n + porn_n + okxxx_n + coc_n + twitter_n + xnxx_n;
 
     if total == 0 {
         ctx.say(
@@ -150,6 +159,9 @@ pub async fn post(
     }
     if category.is_none() || category == Some(ContentType::Twitter) {
         embed = embed.field("📣 X/Twitter", twitter_n.to_string(), true);
+    }
+    if category.is_none() || category == Some(ContentType::Xnxx) {
+        embed = embed.field("🔥 XNXX Videos", xnxx_n.to_string(), true);
     }
 
     embed = embed.field("📬 Total", total.to_string(), true)
