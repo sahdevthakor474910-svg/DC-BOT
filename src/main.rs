@@ -329,16 +329,30 @@ async fn main() -> Result<()> {
     }
 
     // Start Serenity client with automatic reconnect loop
-    let mut client = serenity::ClientBuilder::new(&app_config.discord_token, intents)
+    info!("🔧 Initializing Discord client builder (client_id: {})…", app_config.discord_client_id);
+    let client_res = serenity::ClientBuilder::new(&app_config.discord_token, intents)
         .framework(framework)
-        .await
-        .context("Failed to build Discord client")?;
+        .await;
+
+    let mut client = match client_res {
+        Ok(c) => {
+            info!("✅ Discord client built successfully! Starting gateway connection loop…");
+            c
+        }
+        Err(e) => {
+            error!("❌ CRITICAL: Failed to build Discord client: {:#}", e);
+            error!("❌ Check that DISCORD_TOKEN is valid in Render dashboard.");
+            loop {
+                tokio::time::sleep(std::time::Duration::from_secs(3600)).await;
+            }
+        }
+    };
 
     tokio::spawn(async move {
         loop {
-            info!("🚀 Connecting to Discord…");
+            info!("🚀 Connecting to Discord Gateway…");
             if let Err(e) = client.start().await {
-                error!("❌ Discord client exited with error: {:#}. Reconnecting in 10s…", e);
+                error!("❌ Discord client error / disconnected: {:#}. Reconnecting in 10s…", e);
             } else {
                 info!("Discord client exited cleanly. Reconnecting in 5s…");
             }

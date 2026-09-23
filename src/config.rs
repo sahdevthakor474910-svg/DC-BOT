@@ -27,7 +27,11 @@ impl AppConfig {
     pub fn from_env() -> Result<Self> {
         Ok(Self {
             discord_token: env::var("DISCORD_TOKEN")
-                .context("Missing required env var DISCORD_TOKEN")?,
+                .context("Missing required env var DISCORD_TOKEN")?
+                .trim()
+                .trim_matches('"')
+                .trim_matches('\'')
+                .to_string(),
             discord_client_id: env::var("DISCORD_CLIENT_ID")
                 .context("Missing required env var DISCORD_CLIENT_ID")?
                 .parse::<u64>()
