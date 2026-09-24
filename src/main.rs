@@ -362,6 +362,38 @@ async fn main() -> Result<()> {
         token.len(),
         &token[..token.len().min(10)]
     );
+    eprintln!(">>> [DIAG] About to test Discord API reachability…");
+
+    // ── Diagnostic: test Discord API reachability before ClientBuilder ───
+    // ClientBuilder internally calls GET /gateway/bot. If this hangs, we know
+    // it's a network issue on Render, not a code bug.
+    {
+        let diag_client = reqwest::Client::builder()
+            .timeout(std::time::Duration::from_secs(15))
+            .build()
+            .unwrap();
+        let diag_url = "https://discord.com/api/v10/gateway/bot";
+        eprintln!(">>> [DIAG] GET {} …", diag_url);
+        match diag_client
+            .get(diag_url)
+            .header("Authorization", format!("Bot {}", token))
+            .send()
+            .await
+        {
+            Ok(resp) => {
+                let status = resp.status();
+                let body = resp.text().await.unwrap_or_default();
+                info!("🔍 Discord API diagnostic: status={}, body={}", status, &body[..body.len().min(200)]);
+                eprintln!(">>> [DIAG] Discord API responded: status={}, body={}", status, &body[..body.len().min(200)]);
+            }
+            Err(e) => {
+                error!("❌ Discord API diagnostic FAILED: {:#}", e);
+                eprintln!(">>> [DIAG] Discord API FAILED: {:#}", e);
+            }
+        }
+    }
+
+    eprintln!(">>> [DIAG] About to call ClientBuilder::new().framework().await …");
 
     // Wrap the builder in a timeout so it can't hang forever (serenity calls
     // GET /gateway/bot here, which could hang on DNS/TLS issues).
@@ -374,10 +406,12 @@ async fn main() -> Result<()> {
     let mut client = match client_res {
         Ok(Ok(c)) => {
             info!("✅ Discord client built successfully!");
+            eprintln!(">>> [DIAG] ✅ Client built OK");
             c
         }
         Ok(Err(e)) => {
             error!("❌ CRITICAL: Failed to build Discord client: {:#}", e);
+            eprintln!(">>> [DIAG] ❌ Client build error: {:#}", e);
             error!("❌ Check that DISCORD_TOKEN is valid in Render dashboard.");
             loop {
                 tokio::time::sleep(std::time::Duration::from_secs(3600)).await;
@@ -385,6 +419,7 @@ async fn main() -> Result<()> {
         }
         Err(_) => {
             error!("❌ CRITICAL: Discord client builder TIMED OUT after 30s!");
+            eprintln!(">>> [DIAG] ❌ Client builder TIMED OUT after 30s!");
             error!("❌ This usually means Render cannot reach Discord API (DNS/TLS/firewall).");
             error!("❌ Will retry in 30s…");
             tokio::time::sleep(std::time::Duration::from_secs(30)).await;
