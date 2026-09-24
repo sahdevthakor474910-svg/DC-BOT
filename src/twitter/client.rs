@@ -60,7 +60,6 @@ impl TwitterClient {
             "https://nitter.net",
             "https://nitter.privacyredirect.com",
             "https://nitter.poast.org",
-            "https://xcancel.com",
         ];
 
         let mut last_err = None;
@@ -79,7 +78,7 @@ impl TwitterClient {
 
             let status = res.status();
             if !status.is_success() {
-                last_err = Some(anyhow::anyhow!("HTTP error {}: {}", status, res.text().await.unwrap_or_default()));
+                last_err = Some(anyhow::anyhow!("HTTP error {}", status));
                 continue;
             }
 
