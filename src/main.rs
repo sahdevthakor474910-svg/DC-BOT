@@ -9,6 +9,7 @@ mod dmc;
 mod events;
 mod freegames;
 mod jav;
+mod javhd;
 mod news;
 mod okxxx;
 mod porn;
@@ -310,6 +311,13 @@ async fn main() -> Result<()> {
                     tokio::spawn(async move { xnxx::task::run(d, h).await });
                 }
                 info!("⏱️  XNXX task spawned (every 30 min — xnxx.com trending)");
+
+                {
+                    let d = bot_data.clone();
+                    let h = Arc::clone(&http);
+                    tokio::spawn(async move { javhd::task::run(d, h).await });
+                }
+                info!("⏱️  JAVHD task spawned (every 20 min — javhd.com API)");
 
                 // ── Web Server for Health Check + Media Stream Player ────
                 // NOTE: The web server is now started in main() BEFORE Discord connects,

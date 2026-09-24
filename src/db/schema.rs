@@ -61,6 +61,10 @@ pub async fn run_migrations(db: &SqlitePool) -> Result<()> {
     let m12 = include_str!("../../migrations/012_xnxx_channel.sql");
     run_migration_alter(db, m12, "012").await?;
 
+    // ── Migration 013: JAVHD channel + seen_javhd dedup table ────────────────
+    let m13 = include_str!("../../migrations/013_javhd_channel.sql");
+    run_migration_alter(db, m13, "013").await?;
+
     info!("Database migrations complete");
     Ok(())
 }

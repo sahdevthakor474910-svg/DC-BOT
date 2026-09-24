@@ -32,6 +32,8 @@ pub enum ContentType {
     Twitter,
     #[name = "XNXX Videos"]
     Xnxx,
+    #[name = "JAVHD Videos"]
+    Javhd,
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -65,63 +67,69 @@ pub async fn post(
     let mut okxxx_n = 0;
     let mut coc_n = 0;
     let mut twitter_n = 0;
-    let mut xnxx_n = 0;
+        let mut xnxx_n = 0;
+        let mut javhd_n = 0;
 
-    if let Some(cat) = category {
-        match cat {
-            ContentType::Memes => {
-                meme_n = reddit::task::run_once(&data, &http, force_val).await.unwrap_or_else(|e| { tracing::error!("Meme refresh: {:#}", e); 0 });
+        if let Some(cat) = category {
+            match cat {
+                ContentType::Memes => {
+                    meme_n = reddit::task::run_once(&data, &http, force_val).await.unwrap_or_else(|e| { tracing::error!("Meme refresh: {:#}", e); 0 });
+                }
+                ContentType::News => {
+                    news_n = news::task::run_once(&data, &http, force_val).await.unwrap_or_else(|e| { tracing::error!("News refresh: {:#}", e); 0 });
+                }
+                ContentType::FreeGames => {
+                    fg_n = freegames::task::run_once(&data, &http, force_val).await.unwrap_or_else(|e| { tracing::error!("FG refresh: {:#}", e); 0 });
+                }
+                ContentType::Jav => {
+                    jav_n = jav::task::run_once(&data, &http, force_val).await.unwrap_or_else(|e| { tracing::error!("JAV refresh: {:#}", e); 0 });
+                }
+                ContentType::Porn => {
+                    porn_n = porn::task::run_once(&data, &http).await.unwrap_or_else(|e| { tracing::error!("Porn refresh: {:#}", e); 0 });
+                }
+                ContentType::Okxxx => {
+                    okxxx_n = okxxx::task::run_once(&data, &http, force_val).await.unwrap_or_else(|e| { tracing::error!("OK.XXX refresh: {:#}", e); 0 });
+                }
+                ContentType::Coc => {
+                    coc_n = coc::task::run_once(&data, &http, force_val).await.unwrap_or_else(|e| { tracing::error!("CoC refresh: {:#}", e); 0 });
+                }
+                ContentType::Twitter => {
+                    twitter_n = crate::twitter::task::run_once(&data, &http, force_val).await.unwrap_or_else(|e| { tracing::error!("Twitter refresh: {:#}", e); 0 });
+                }
+                ContentType::Xnxx => {
+                    xnxx_n = xnxx::task::run_once(&data, &http, force_val).await.unwrap_or_else(|e| { tracing::error!("XNXX refresh: {:#}", e); 0 });
+                }
+                ContentType::Javhd => {
+                    javhd_n = crate::javhd::task::run_once(&data, &http, force_val).await.unwrap_or_else(|e| { tracing::error!("JAVHD refresh: {:#}", e); 0 });
+                }
             }
-            ContentType::News => {
-                news_n = news::task::run_once(&data, &http, force_val).await.unwrap_or_else(|e| { tracing::error!("News refresh: {:#}", e); 0 });
-            }
-            ContentType::FreeGames => {
-                fg_n = freegames::task::run_once(&data, &http, force_val).await.unwrap_or_else(|e| { tracing::error!("FG refresh: {:#}", e); 0 });
-            }
-            ContentType::Jav => {
-                jav_n = jav::task::run_once(&data, &http, force_val).await.unwrap_or_else(|e| { tracing::error!("JAV refresh: {:#}", e); 0 });
-            }
-            ContentType::Porn => {
-                porn_n = porn::task::run_once(&data, &http).await.unwrap_or_else(|e| { tracing::error!("Porn refresh: {:#}", e); 0 });
-            }
-            ContentType::Okxxx => {
-                okxxx_n = okxxx::task::run_once(&data, &http, force_val).await.unwrap_or_else(|e| { tracing::error!("OK.XXX refresh: {:#}", e); 0 });
-            }
-            ContentType::Coc => {
-                coc_n = coc::task::run_once(&data, &http, force_val).await.unwrap_or_else(|e| { tracing::error!("CoC refresh: {:#}", e); 0 });
-            }
-            ContentType::Twitter => {
-                twitter_n = crate::twitter::task::run_once(&data, &http, force_val).await.unwrap_or_else(|e| { tracing::error!("Twitter refresh: {:#}", e); 0 });
-            }
-            ContentType::Xnxx => {
-                xnxx_n = xnxx::task::run_once(&data, &http, force_val).await.unwrap_or_else(|e| { tracing::error!("XNXX refresh: {:#}", e); 0 });
-            }
+        } else {
+            let (meme_res, news_res, fg_res, jav_res, porn_res, okxxx_res, coc_res, twitter_res, xnxx_res, javhd_res) = tokio::join!(
+                reddit::task::run_once(&data, &http, force_val),
+                news::task::run_once(&data, &http, force_val),
+                freegames::task::run_once(&data, &http, force_val),
+                jav::task::run_once(&data, &http, force_val),
+                porn::task::run_once(&data, &http),
+                okxxx::task::run_once(&data, &http, force_val),
+                coc::task::run_once(&data, &http, force_val),
+                crate::twitter::task::run_once(&data, &http, force_val),
+                xnxx::task::run_once(&data, &http, force_val),
+                crate::javhd::task::run_once(&data, &http, force_val),
+            );
+
+            meme_n = meme_res.unwrap_or_else(|e| { tracing::error!("Meme refresh: {:#}", e); 0 });
+            news_n = news_res.unwrap_or_else(|e| { tracing::error!("News refresh: {:#}", e); 0 });
+            fg_n   = fg_res.unwrap_or_else(|e|   { tracing::error!("FG refresh: {:#}", e);   0 });
+            jav_n  = jav_res.unwrap_or_else(|e|  { tracing::error!("JAV refresh: {:#}", e);  0 });
+            porn_n = porn_res.unwrap_or_else(|e| { tracing::error!("Porn refresh: {:#}", e); 0 });
+            okxxx_n = okxxx_res.unwrap_or_else(|e| { tracing::error!("OK.XXX refresh: {:#}", e); 0 });
+            coc_n   = coc_res.unwrap_or_else(|e| { tracing::error!("CoC refresh: {:#}", e); 0 });
+            twitter_n = twitter_res.unwrap_or_else(|e| { tracing::error!("Twitter refresh: {:#}", e); 0 });
+            xnxx_n = xnxx_res.unwrap_or_else(|e| { tracing::error!("XNXX refresh: {:#}", e); 0 });
+            javhd_n = javhd_res.unwrap_or_else(|e| { tracing::error!("JAVHD refresh: {:#}", e); 0 });
         }
-    } else {
-        let (meme_res, news_res, fg_res, jav_res, porn_res, okxxx_res, coc_res, twitter_res, xnxx_res) = tokio::join!(
-            reddit::task::run_once(&data, &http, force_val),
-            news::task::run_once(&data, &http, force_val),
-            freegames::task::run_once(&data, &http, force_val),
-            jav::task::run_once(&data, &http, force_val),
-            porn::task::run_once(&data, &http),
-            okxxx::task::run_once(&data, &http, force_val),
-            coc::task::run_once(&data, &http, force_val),
-            crate::twitter::task::run_once(&data, &http, force_val),
-            xnxx::task::run_once(&data, &http, force_val),
-        );
 
-        meme_n = meme_res.unwrap_or_else(|e| { tracing::error!("Meme refresh: {:#}", e); 0 });
-        news_n = news_res.unwrap_or_else(|e| { tracing::error!("News refresh: {:#}", e); 0 });
-        fg_n   = fg_res.unwrap_or_else(|e|   { tracing::error!("FG refresh: {:#}", e);   0 });
-        jav_n  = jav_res.unwrap_or_else(|e|  { tracing::error!("JAV refresh: {:#}", e);  0 });
-        porn_n = porn_res.unwrap_or_else(|e| { tracing::error!("Porn refresh: {:#}", e); 0 });
-        okxxx_n = okxxx_res.unwrap_or_else(|e| { tracing::error!("OK.XXX refresh: {:#}", e); 0 });
-        coc_n   = coc_res.unwrap_or_else(|e| { tracing::error!("CoC refresh: {:#}", e); 0 });
-        twitter_n = twitter_res.unwrap_or_else(|e| { tracing::error!("Twitter refresh: {:#}", e); 0 });
-        xnxx_n = xnxx_res.unwrap_or_else(|e| { tracing::error!("XNXX refresh: {:#}", e); 0 });
-    }
-
-    let total = meme_n + news_n + fg_n + jav_n + porn_n + okxxx_n + coc_n + twitter_n + xnxx_n;
+        let total = meme_n + news_n + fg_n + jav_n + porn_n + okxxx_n + coc_n + twitter_n + xnxx_n + javhd_n;
 
     if total == 0 {
         ctx.say(
@@ -162,6 +170,9 @@ pub async fn post(
     }
     if category.is_none() || category == Some(ContentType::Xnxx) {
         embed = embed.field("🔥 XNXX Videos", xnxx_n.to_string(), true);
+    }
+    if category.is_none() || category == Some(ContentType::Javhd) {
+        embed = embed.field("🎌 JAVHD Videos", javhd_n.to_string(), true);
     }
 
     embed = embed.field("📬 Total", total.to_string(), true)
