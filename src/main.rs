@@ -24,34 +24,53 @@ use anyhow::{Context as _, Result};
 use poise::serenity_prelude as serenity;
 use sqlx::sqlite::{SqliteConnectOptions, SqlitePoolOptions};
 use tracing::{error, info};
-use tracing_subscriber::{fmt, EnvFilter};
+use tracing_subscriber::{fmt, layer::SubscriberExt, util::SubscriberInitExt, EnvFilter};
 
 use crate::data::{Data, Error};
 
-#[derive(Clone)]
-struct MemoryLogWriter(Arc<Mutex<VecDeque<String>>>);
+/// A non-blocking tracing layer that captures formatted log lines into a ring
+/// buffer. Unlike the old `MemoryLogWriter` this does NOT touch stdout (the
+/// default `fmt::Layer` handles that) and never blocks the async runtime.
+struct RingBufferLayer(Arc<Mutex<VecDeque<String>>>);
 
-impl std::io::Write for MemoryLogWriter {
-    fn write(&mut self, buf: &[u8]) -> std::io::Result<usize> {
-        let msg = String::from_utf8_lossy(buf).to_string();
-        let _ = std::io::stdout().write_all(buf);
+impl<S: tracing::Subscriber> tracing_subscriber::Layer<S> for RingBufferLayer {
+    fn on_event(
+        &self,
+        event: &tracing::Event<'_>,
+        _ctx: tracing_subscriber::layer::Context<'_, S>,
+    ) {
+        use std::fmt::Write;
+        let meta = event.metadata();
+        let mut msg = String::new();
+        let _ = write!(msg, "{} ", meta.level());
+
+        // Visitor to extract the "message" field
+        struct MsgVisitor<'a>(&'a mut String);
+        impl tracing::field::Visit for MsgVisitor<'_> {
+            fn record_debug(&mut self, field: &tracing::field::Field, value: &dyn std::fmt::Debug) {
+                if field.name() == "message" {
+                    let _ = write!(self.0, "{:?}", value);
+                } else {
+                    let _ = write!(self.0, " {}={:?}", field.name(), value);
+                }
+            }
+            fn record_str(&mut self, field: &tracing::field::Field, value: &str) {
+                if field.name() == "message" {
+                    self.0.push_str(value);
+                } else {
+                    let _ = write!(self.0, " {}={}", field.name(), value);
+                }
+            }
+        }
+        event.record(&mut MsgVisitor(&mut msg));
+        msg.push('\n');
+
         if let Ok(mut lock) = self.0.lock() {
             if lock.len() >= 500 {
                 lock.pop_front();
             }
             lock.push_back(msg);
         }
-        Ok(buf.len())
-    }
-    fn flush(&mut self) -> std::io::Result<()> {
-        std::io::stdout().flush()
-    }
-}
-
-impl<'a> tracing_subscriber::fmt::MakeWriter<'a> for MemoryLogWriter {
-    type Writer = MemoryLogWriter;
-    fn make_writer(&'a self) -> Self::Writer {
-        self.clone()
     }
 }
 
@@ -103,12 +122,19 @@ async fn main() -> Result<()> {
         .context("Failed to load configuration from environment")?;
 
     let log_buffer = Arc::new(Mutex::new(VecDeque::<String>::new()));
-    let writer = MemoryLogWriter(log_buffer.clone());
 
-    // Initialise structured logging
+    // Initialise structured logging with two layers:
+    // 1. fmt::Layer → writes to stdout (default, non-blocking)
+    // 2. RingBufferLayer → captures lines into an in-memory ring buffer for /logs
     let filter = EnvFilter::try_from_default_env()
         .unwrap_or_else(|_| EnvFilter::new(&app_config.log_level));
-    fmt().with_env_filter(filter).with_target(false).with_writer(writer).init();
+    let fmt_layer = fmt::layer().with_target(false);
+    let ring_layer = RingBufferLayer(log_buffer.clone());
+    tracing_subscriber::registry()
+        .with(filter)
+        .with(fmt_layer)
+        .with(ring_layer)
+        .init();
 
     info!("🤖 Starting Discord bot v2…");
 
@@ -329,40 +355,53 @@ async fn main() -> Result<()> {
     }
 
     // Start Serenity client with automatic reconnect loop
-    info!("🔧 Initializing Discord client builder (client_id: {})…", app_config.discord_client_id);
-    let client_res = serenity::ClientBuilder::new(&app_config.discord_token, intents)
-        .framework(framework)
-        .await;
+    let token = &app_config.discord_token;
+    info!(
+        "🔧 Initializing Discord client builder (client_id: {}, token_len: {}, token_prefix: {}…)",
+        app_config.discord_client_id,
+        token.len(),
+        &token[..token.len().min(10)]
+    );
+
+    // Wrap the builder in a timeout so it can't hang forever (serenity calls
+    // GET /gateway/bot here, which could hang on DNS/TLS issues).
+    let client_res = tokio::time::timeout(
+        std::time::Duration::from_secs(30),
+        serenity::ClientBuilder::new(token, intents).framework(framework),
+    )
+    .await;
 
     let mut client = match client_res {
-        Ok(c) => {
-            info!("✅ Discord client built successfully! Starting gateway connection loop…");
+        Ok(Ok(c)) => {
+            info!("✅ Discord client built successfully!");
             c
         }
-        Err(e) => {
+        Ok(Err(e)) => {
             error!("❌ CRITICAL: Failed to build Discord client: {:#}", e);
             error!("❌ Check that DISCORD_TOKEN is valid in Render dashboard.");
             loop {
                 tokio::time::sleep(std::time::Duration::from_secs(3600)).await;
             }
         }
+        Err(_) => {
+            error!("❌ CRITICAL: Discord client builder TIMED OUT after 30s!");
+            error!("❌ This usually means Render cannot reach Discord API (DNS/TLS/firewall).");
+            error!("❌ Will retry in 30s…");
+            tokio::time::sleep(std::time::Duration::from_secs(30)).await;
+            // Exit so Render restarts us
+            std::process::exit(1);
+        }
     };
 
-    tokio::spawn(async move {
-        loop {
-            info!("🚀 Connecting to Discord Gateway…");
-            if let Err(e) = client.start().await {
-                error!("❌ Discord client error / disconnected: {:#}. Reconnecting in 10s…", e);
-            } else {
-                info!("Discord client exited cleanly. Reconnecting in 5s…");
-            }
-            tokio::time::sleep(std::time::Duration::from_secs(10)).await;
-        }
-    });
-
-    // Keep the main process alive
+    // Run the gateway connection in a loop (reconnect on disconnect)
     loop {
-        tokio::time::sleep(std::time::Duration::from_secs(3600)).await;
+        info!("🚀 Connecting to Discord Gateway…");
+        if let Err(e) = client.start().await {
+            error!("❌ Discord client error / disconnected: {:#}. Reconnecting in 10s…", e);
+        } else {
+            info!("Discord client exited cleanly. Reconnecting in 5s…");
+        }
+        tokio::time::sleep(std::time::Duration::from_secs(10)).await;
     }
 }
 
