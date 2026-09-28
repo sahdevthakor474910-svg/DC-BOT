@@ -31,7 +31,7 @@ pub async fn help(ctx: Context<'_>) -> Result<(), Error> {
              • **okxxx** → 🌶️ OK.XXX: top studio movies *(Age-Restricted!)*\n\
              • **xnxx** → 🔥 XNXX: trending videos *(Age-Restricted!)*\n\
              • **javhd** → 🎌 JAVHD: featured videos *(Age-Restricted!)*\n\
-             • **hanime** → 🔮 Hanime: hentai videos from hanime.tv *(Age-Restricted!)*\n\
+             • **hanime** → 🔮 Hentai: anime & 3D hentai videos with direct video player *(Age-Restricted!)*\n\
              • **nsfw** → 🔞 r/nsfw, r/rule34, r/hentai, r/porn *(Age-Restricted!)*\n\n\
              💡 **Stop posting:** Use `/unset` and check **True** next to any channel to disable it.",
             false,

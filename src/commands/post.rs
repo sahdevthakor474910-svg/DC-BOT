@@ -183,7 +183,7 @@ pub async fn post(
         embed = embed.field("🎌 JAVHD Videos", javhd_n.to_string(), true);
     }
     if category.is_none() || category == Some(ContentType::Hanime) {
-        embed = embed.field("🔮 Hanime Videos", hanime_n.to_string(), true);
+        embed = embed.field("🔮 Hentai Videos", hanime_n.to_string(), true);
     }
 
     embed = embed.field("📬 Total", total.to_string(), true)

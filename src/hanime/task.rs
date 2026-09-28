@@ -17,9 +17,9 @@ pub async fn run_once(data: &Data, http: &Arc<serenity::Http>, force: bool) -> R
     post_videos(data, http, &videos, force).await
 }
 
-/// Background task — runs every 25 minutes.
+/// Background task — runs every 20 minutes.
 pub async fn run(data: Data, http: Arc<serenity::Http>) {
-    info!("🔮 Hanime task started (every 25 min — hanime.tv hentai videos)");
+    info!("🔮 Hentai video task started (every 20 min — anime & 3D hentai with direct MP4)");
 
     let client = match HanimeClient::new() {
         Ok(c) => c,
@@ -35,12 +35,12 @@ pub async fn run(data: Data, http: Arc<serenity::Http>) {
         match client.fetch_for_tick(tick).await {
             Ok(videos) => {
                 match post_videos(&data, &http, &videos, false).await {
-                    Ok(n) if n > 0 => info!("🔮 Hanime: posted {} video(s) (tick {})", n, tick),
+                    Ok(n) if n > 0 => info!("🔮 Hentai: posted {} video(s) (tick {})", n, tick),
                     Ok(_) => {}
-                    Err(e) => error!("Hanime post error: {:#}", e),
+                    Err(e) => error!("Hentai post error: {:#}", e),
                 }
             }
-            Err(e) => error!("Hanime fetch error: {:#}", e),
+            Err(e) => error!("Hentai fetch error: {:#}", e),
         }
 
         if let Err(e) = queries::prune_old_seen_hanime(&data.db, 30).await {
@@ -48,15 +48,16 @@ pub async fn run(data: Data, http: Arc<serenity::Http>) {
         }
 
         tick += 1;
-        tokio::time::sleep(Duration::from_secs(25 * 60)).await;
+        tokio::time::sleep(Duration::from_secs(20 * 60)).await;
     }
 }
 
-fn format_views(views: u64) -> String {
-    if views >= 1_000_000 {
-        format!("{:.1}M+", (views as f64) / 1_000_000.0)
-    } else if views >= 1_000 {
-        format!("{:.1}K+", (views as f64) / 1_000.0)
+fn format_views(views: &str) -> String {
+    let n: u64 = views.parse().unwrap_or(0);
+    if n >= 1_000_000 {
+        format!("{:.1}M", n as f64 / 1_000_000.0)
+    } else if n >= 1_000 {
+        format!("{:.0}K", n as f64 / 1_000.0)
     } else {
         views.to_string()
     }
@@ -97,7 +98,10 @@ async fn post_videos(
             if !force {
                 match queries::is_hanime_seen(&data.db, &cfg.guild_id, &video.id).await {
                     Ok(true) => continue,
-                    Err(e) => { error!("DB error checking seen_hanime: {}", e); continue; }
+                    Err(e) => {
+                        error!("DB error checking seen_hanime: {}", e);
+                        continue;
+                    }
                     _ => {}
                 }
             }
@@ -111,45 +115,44 @@ async fn post_videos(
                 break;
             }
 
-            let views_str = if video.views == 0 {
-                String::new()
-            } else {
-                format!(" • 👁️ {}", format_views(video.views))
-            };
+            let views_str = format_views(&video.views);
+            let footer = format!(
+                "🔮 Hentai • ⏱️ {} • 👁️ {} views",
+                video.duration, views_str
+            );
 
-            let tags_str = if video.tags.is_empty() {
-                String::new()
-            } else {
-                let display_tags = video.tags.iter().take(4).cloned().collect::<Vec<_>>().join(", ");
-                format!(" • 🏷️ {}", display_tags)
-            };
+            let play_url = format!(
+                "{}/play?url={}&source=hentai&title={}",
+                data.config.public_url,
+                crate::web::encode_hex(&video.page_url),
+                url::form_urlencoded::byte_serialize(video.title.as_bytes()).collect::<String>()
+            );
 
-            let mut embed = serenity::CreateEmbed::new()
+            let embed = serenity::CreateEmbed::new()
                 .title(&video.title)
+                .url(&video.page_url)
+                .description(format!("🌐 **[Web Stream Player]({})**", play_url))
                 .color(0x9B59B6) // Purple
-                .description(format!("🎬 **Studio**: {} | 👍 {}", video.brand, video.likes))
-                .footer(serenity::CreateEmbedFooter::new(format!(
-                    "🔮 Hanime{}{}",
-                    views_str, tags_str
-                )));
+                .footer(serenity::CreateEmbedFooter::new(footer));
+
+            // Post direct MP4 in content for inline Discord playback
+            let content = format!("🎥 **{}**\n{}", video.title, video.mp4_url);
+            let mut msg = serenity::CreateMessage::new().content(&content);
 
             if !video.cover_url.is_empty() {
-                embed = embed.image(&video.cover_url);
+                msg = msg.embed(embed.image(&video.cover_url));
+            } else {
+                msg = msg.embed(embed);
             }
-
-            // The content message should just be the page URL
-            let msg = serenity::CreateMessage::new()
-                .content(&video.page_url)
-                .embed(embed);
 
             match channel.send_message(http, msg).await {
                 Ok(_) => {
-                    info!("🔮 Hanime: posted video {} to guild {}", video.id, cfg.guild_id);
+                    info!("🔮 Hentai: posted video {} to guild {}", video.id, cfg.guild_id);
                     total += 1;
                     posted_this_tick += 1;
                 }
                 Err(e) => {
-                    error!("Failed to post hanime video to channel {}: {}", channel_id_str, e);
+                    error!("Failed to post hentai video to channel {}: {}", channel_id_str, e);
                 }
             }
 

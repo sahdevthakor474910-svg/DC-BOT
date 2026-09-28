@@ -1,25 +1,33 @@
-use serde::Deserialize;
+use serde::{Deserialize, Deserializer};
 
 #[derive(Debug, Clone, Deserialize)]
-pub struct HanimeApiResponse {
-    pub data: Vec<HanimeEntry>,
+pub struct EpornerHentaiSearchResponse {
+    pub videos: Vec<EpornerHentaiEntry>,
 }
 
 #[derive(Debug, Clone, Deserialize)]
-pub struct HanimeEntry {
-    pub id: u64,
-    pub name: String,
-    pub slug: String,
-    pub description: Option<String>,
-    pub views: u64,
-    pub cover_url: Option<String>,
-    pub poster_url: Option<String>,
-    pub brand: Option<String>,
-    pub likes: Option<u64>,
-    pub dislikes: Option<u64>,
-    pub tags: Option<Vec<String>>,
-    pub created_at_unix: Option<i64>,
-    pub released_at_unix: Option<i64>,
+pub struct EpornerHentaiEntry {
+    #[serde(rename = "id", deserialize_with = "deserialize_string_or_number")]
+    pub id: String,
+    pub title: String,
+    #[serde(default)]
+    pub views: Option<String>,
+    #[serde(default)]
+    pub length_min: Option<String>,
+    #[serde(default)]
+    pub length: Option<String>,
+    #[serde(default)]
+    pub url: Option<String>,
+    pub thumbs: Option<Vec<EpornerHentaiThumb>>,
+    #[serde(default)]
+    pub default_thumb: Option<EpornerHentaiThumb>,
+}
+
+#[derive(Debug, Clone, Deserialize)]
+pub struct EpornerHentaiThumb {
+    pub src: String,
+    pub width: Option<u32>,
+    pub height: Option<u32>,
 }
 
 /// Resolved hentai video ready for posting
@@ -28,9 +36,25 @@ pub struct HanimeVideo {
     pub id: String,
     pub title: String,
     pub page_url: String,
+    pub mp4_url: String,
     pub cover_url: String,
-    pub brand: String,
-    pub views: u64,
-    pub likes: u64,
-    pub tags: Vec<String>,
+    pub duration: String,
+    pub views: String,
+}
+
+fn deserialize_string_or_number<'de, D>(deserializer: D) -> Result<String, D::Error>
+where
+    D: Deserializer<'de>,
+{
+    #[derive(Deserialize)]
+    #[serde(untagged)]
+    enum AnyVal {
+        String(String),
+        Number(serde_json::Number),
+    }
+
+    match AnyVal::deserialize(deserializer)? {
+        AnyVal::String(s) => Ok(s),
+        AnyVal::Number(n) => Ok(n.to_string()),
+    }
 }
