@@ -325,7 +325,7 @@ async fn main() -> Result<()> {
                     let h = Arc::clone(&http);
                     tokio::spawn(async move { hanime::task::run(d, h).await });
                 }
-                info!("⏱️  Hanime task spawned (every 25 min — hanime.tv hentai videos)");
+                info!("⏱️  Hentai task spawned (every 20 min — anime & 3D hentai with direct MP4)");
 
                 // ── Web Server for Health Check + Media Stream Player ────
                 // NOTE: The web server is now started in main() BEFORE Discord connects,

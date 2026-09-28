@@ -10,7 +10,7 @@ pub struct EpornerHentaiEntry {
     #[serde(rename = "id", deserialize_with = "deserialize_string_or_number")]
     pub id: String,
     pub title: String,
-    #[serde(default)]
+    #[serde(default, deserialize_with = "deserialize_opt_string_or_number")]
     pub views: Option<String>,
     #[serde(default)]
     pub length_min: Option<String>,
@@ -56,5 +56,24 @@ where
     match AnyVal::deserialize(deserializer)? {
         AnyVal::String(s) => Ok(s),
         AnyVal::Number(n) => Ok(n.to_string()),
+    }
+}
+
+fn deserialize_opt_string_or_number<'de, D>(deserializer: D) -> Result<Option<String>, D::Error>
+where
+    D: Deserializer<'de>,
+{
+    #[derive(Deserialize)]
+    #[serde(untagged)]
+    enum AnyVal {
+        String(String),
+        Number(serde_json::Number),
+        Null,
+    }
+
+    match AnyVal::deserialize(deserializer)? {
+        AnyVal::String(s) => Ok(Some(s)),
+        AnyVal::Number(n) => Ok(Some(n.to_string())),
+        AnyVal::Null => Ok(None),
     }
 }
