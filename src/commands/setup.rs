@@ -58,7 +58,7 @@ pub async fn setup(
     #[description = "🎌 JAVHD channel — must be Age-Restricted! (javhd.com featured — every 20 min)"]
     javhd: Option<serenity::GuildChannel>,
 
-    #[description = "🔮 Hentai video channel — must be Age-Restricted! (Anime & 3D hentai videos with direct MP4 — every 20 min)"]
+    #[description = "🔮 Hentai channel — must be Age-Restricted! (anime & 3D hentai — every 20 min)"]
     hanime: Option<serenity::GuildChannel>,
 ) -> Result<(), Error> {
     ctx.defer().await?; // prevent Discord 3-second timeout on slow DB queries
