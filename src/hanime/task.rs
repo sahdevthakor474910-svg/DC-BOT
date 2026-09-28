@@ -7,24 +7,24 @@ use tracing::{error, info, warn};
 
 use crate::data::Data;
 use crate::db::queries;
-use super::client::HanimeClient;
-use super::models::HanimeVideo;
+use super::client::HentaiClient;
+use super::models::HentaiVideo;
 
 /// Single tick exposed for `/post` force-refresh.
 pub async fn run_once(data: &Data, http: &Arc<serenity::Http>, force: bool) -> Result<usize> {
-    let client = HanimeClient::new()?;
+    let client = HentaiClient::new()?;
     let videos = client.fetch_for_tick(0).await?;
     post_videos(data, http, &videos, force).await
 }
 
 /// Background task — runs every 20 minutes.
 pub async fn run(data: Data, http: Arc<serenity::Http>) {
-    info!("🔮 Hentai video task started (every 20 min — anime & 3D hentai with direct MP4)");
+    info!("🔮 Hentai video task started (every 20 min — hentaigasm scraper)");
 
-    let client = match HanimeClient::new() {
+    let client = match HentaiClient::new() {
         Ok(c) => c,
         Err(e) => {
-            error!("Failed to create HanimeClient: {:#}", e);
+            error!("Failed to create HentaiClient: {:#}", e);
             return;
         }
     };
@@ -52,21 +52,10 @@ pub async fn run(data: Data, http: Arc<serenity::Http>) {
     }
 }
 
-fn format_views(views: &str) -> String {
-    let n: u64 = views.parse().unwrap_or(0);
-    if n >= 1_000_000 {
-        format!("{:.1}M", n as f64 / 1_000_000.0)
-    } else if n >= 1_000 {
-        format!("{:.0}K", n as f64 / 1_000.0)
-    } else {
-        views.to_string()
-    }
-}
-
 async fn post_videos(
     data: &Data,
     http: &Arc<serenity::Http>,
-    videos: &[HanimeVideo],
+    videos: &[HentaiVideo],
     force: bool,
 ) -> Result<usize> {
     let configs = queries::get_all_guild_configs(&data.db).await?;
@@ -115,35 +104,18 @@ async fn post_videos(
                 break;
             }
 
-            let views_str = format_views(&video.views);
-            let footer = format!(
-                "🔮 Hentai • ⏱️ {} • 👁️ {} views",
-                video.duration, views_str
-            );
-
-            let play_url = format!(
-                "{}/play?url={}&source=hentai&title={}",
-                data.config.public_url,
-                crate::web::encode_hex(&video.page_url),
-                url::form_urlencoded::byte_serialize(video.title.as_bytes()).collect::<String>()
-            );
-
             let embed = serenity::CreateEmbed::new()
                 .title(&video.title)
-                .url(&video.page_url)
-                .description(format!("🌐 **[Web Stream Player]({})**", play_url))
+                .url(&video.url)
+                .image(&video.thumbnail)
                 .color(0x9B59B6) // Purple
-                .footer(serenity::CreateEmbedFooter::new(footer));
+                .footer(serenity::CreateEmbedFooter::new(format!(
+                    "🔮 Hentai • 👁️ {} views • 👍 {}", video.views, video.likes
+                )));
 
-            // Post direct MP4 in content for inline Discord playback
-            let content = format!("🎥 **{}**\n{}", video.title, video.mp4_url);
-            let mut msg = serenity::CreateMessage::new().content(&content);
-
-            if !video.cover_url.is_empty() {
-                msg = msg.embed(embed.image(&video.cover_url));
-            } else {
-                msg = msg.embed(embed);
-            }
+            let msg = serenity::CreateMessage::new()
+                .content(&video.url)
+                .embed(embed);
 
             match channel.send_message(http, msg).await {
                 Ok(_) => {
