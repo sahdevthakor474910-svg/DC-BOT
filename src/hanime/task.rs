@@ -13,7 +13,12 @@ use super::models::HentaiVideo;
 /// Single tick exposed for `/post` force-refresh.
 pub async fn run_once(data: &Data, http: &Arc<serenity::Http>, force: bool) -> Result<usize> {
     let client = HentaiClient::new()?;
-    let videos = client.fetch_with_mp4(0).await?;
+    // Use unix seconds to rotate starting page on manual /post
+    let tick = std::time::SystemTime::now()
+        .duration_since(std::time::UNIX_EPOCH)
+        .map(|d| d.as_secs())
+        .unwrap_or(0);
+    let videos = client.fetch_with_mp4(tick).await?;
     post_videos(data, http, &videos, force).await
 }
 
@@ -89,7 +94,7 @@ async fn post_videos(
                 break;
             }
 
-            // Dedup check
+            // Dedup check (skip if not forced and already seen)
             if !force {
                 match queries::is_hanime_seen(&data.db, &cfg.guild_id, &video.id).await {
                     Ok(true) => continue,
@@ -101,28 +106,52 @@ async fn post_videos(
                 }
             }
 
-            // Build embed with thumbnail + metadata
-            let footer_text = format!(
-                "🔮 Hentai • 👁️ {} views • 👍 {}",
-                video.views, video.likes
+            // Format footer
+            let views_str = if video.views.is_empty() {
+                String::new()
+            } else {
+                format!(" • 👁️ {} views", video.views)
+            };
+            let likes_str = if video.likes.is_empty() {
+                String::new()
+            } else {
+                format!(" • 👍 {}", video.likes)
+            };
+            let footer_text = format!("🔮 Hentai{}{}", views_str, likes_str);
+
+            let play_url = format!(
+                "{}/play?url={}&source=hentai&title={}",
+                data.config.public_url,
+                crate::web::encode_hex(&video.url),
+                url::form_urlencoded::byte_serialize(video.title.as_bytes()).collect::<String>()
             );
 
-            let embed = serenity::CreateEmbed::new()
+            let mut embed = serenity::CreateEmbed::new()
                 .title(&video.title)
                 .url(&video.url)
-                .image(&video.thumbnail)
+                .description(format!("🌐 **[Web Stream Player]({})**", play_url))
                 .color(0x9B59B6)
                 .footer(serenity::CreateEmbedFooter::new(footer_text));
 
-            // Post direct MP4 URL as content — Discord renders inline video player
+            // Only attach image if valid URL without unencoded spaces
+            if !video.thumbnail.is_empty() && video.thumbnail.starts_with("http") {
+                embed = embed.image(&video.thumbnail);
+            }
+
+            // Post direct MP4 URL as content so Discord automatically creates the native video player
+            let content = if !video.mp4_url.is_empty() {
+                format!("🎥 **{}**\n{}", video.title, video.mp4_url)
+            } else {
+                format!("🎥 **{}**\n{}", video.title, video.url)
+            };
+
             let msg = serenity::CreateMessage::new()
-                .content(&video.mp4_url)
+                .content(&content)
                 .embed(embed);
 
             match channel.send_message(http, msg).await {
                 Ok(_) => {
                     info!("🔮 Hentai: posted video {} to guild {}", video.id, cfg.guild_id);
-                    // Mark seen AFTER successful post
                     if let Err(e) = queries::mark_hanime_seen(&data.db, &cfg.guild_id, &video.id).await {
                         error!("DB error marking hanime seen: {}", e);
                     }
