@@ -6,4 +6,5 @@ pub struct HentaiVideo {
     pub thumbnail: String,
     pub views: String,
     pub likes: String,
+    pub mp4_url: String,
 }

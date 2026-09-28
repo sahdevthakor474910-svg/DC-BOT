@@ -13,13 +13,13 @@ use super::models::HentaiVideo;
 /// Single tick exposed for `/post` force-refresh.
 pub async fn run_once(data: &Data, http: &Arc<serenity::Http>, force: bool) -> Result<usize> {
     let client = HentaiClient::new()?;
-    let videos = client.fetch_for_tick(0).await?;
+    let videos = client.fetch_with_mp4(0).await?;
     post_videos(data, http, &videos, force).await
 }
 
 /// Background task — runs every 20 minutes.
 pub async fn run(data: Data, http: Arc<serenity::Http>) {
-    info!("🔮 Hentai video task started (every 20 min — hentaigasm scraper)");
+    info!("🔮 Hentai video task started (every 20 min — hentaigasm.com with direct MP4)");
 
     let client = match HentaiClient::new() {
         Ok(c) => c,
@@ -32,8 +32,9 @@ pub async fn run(data: Data, http: Arc<serenity::Http>) {
     let mut tick: u64 = 0;
 
     loop {
-        match client.fetch_for_tick(tick).await {
+        match client.fetch_with_mp4(tick).await {
             Ok(videos) => {
+                info!("🔮 Hentai: fetched {} video(s) with MP4 (tick {})", videos.len(), tick);
                 match post_videos(&data, &http, &videos, false).await {
                     Ok(n) if n > 0 => info!("🔮 Hentai: posted {} video(s) (tick {})", n, tick),
                     Ok(_) => {}
@@ -83,6 +84,11 @@ async fn post_videos(
         let mut posted_this_tick = 0usize;
 
         for video in videos {
+            // Cap at 3 per tick per guild
+            if posted_this_tick >= 3 {
+                break;
+            }
+
             // Dedup check
             if !force {
                 match queries::is_hanime_seen(&data.db, &cfg.guild_id, &video.id).await {
@@ -95,31 +101,31 @@ async fn post_videos(
                 }
             }
 
-            if let Err(e) = queries::mark_hanime_seen(&data.db, &cfg.guild_id, &video.id).await {
-                error!("DB error marking hanime seen: {}", e);
-            }
-
-            // Cap at 3 per tick per guild
-            if posted_this_tick >= 3 {
-                break;
-            }
+            // Build embed with thumbnail + metadata
+            let footer_text = format!(
+                "🔮 Hentai • 👁️ {} views • 👍 {}",
+                video.views, video.likes
+            );
 
             let embed = serenity::CreateEmbed::new()
                 .title(&video.title)
                 .url(&video.url)
                 .image(&video.thumbnail)
-                .color(0x9B59B6) // Purple
-                .footer(serenity::CreateEmbedFooter::new(format!(
-                    "🔮 Hentai • 👁️ {} views • 👍 {}", video.views, video.likes
-                )));
+                .color(0x9B59B6)
+                .footer(serenity::CreateEmbedFooter::new(footer_text));
 
+            // Post direct MP4 URL as content — Discord renders inline video player
             let msg = serenity::CreateMessage::new()
-                .content(&video.url)
+                .content(&video.mp4_url)
                 .embed(embed);
 
             match channel.send_message(http, msg).await {
                 Ok(_) => {
                     info!("🔮 Hentai: posted video {} to guild {}", video.id, cfg.guild_id);
+                    // Mark seen AFTER successful post
+                    if let Err(e) = queries::mark_hanime_seen(&data.db, &cfg.guild_id, &video.id).await {
+                        error!("DB error marking hanime seen: {}", e);
+                    }
                     total += 1;
                     posted_this_tick += 1;
                 }
