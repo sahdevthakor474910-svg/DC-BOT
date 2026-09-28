@@ -57,6 +57,9 @@ pub async fn setup(
 
     #[description = "🎌 JAVHD channel — must be Age-Restricted! (javhd.com featured — every 20 min)"]
     javhd: Option<serenity::GuildChannel>,
+
+    #[description = "🔮 Hanime channel — must be Age-Restricted! (hanime.tv hentai videos — every 25 min)"]
+    hanime: Option<serenity::GuildChannel>,
 ) -> Result<(), Error> {
     ctx.defer().await?; // prevent Discord 3-second timeout on slow DB queries
     let guild_id = ctx.guild_id().unwrap().to_string();
@@ -235,6 +238,20 @@ pub async fn setup(
             Err(warn_msg) => {
                 warnings.push(format!("⚠️  **JAVHD** warning: {}", warn_msg));
                 queries::set_javhd_channel(db, &guild_id, Some(ch.id.to_string().as_str())).await?;
+            }
+        }
+    }
+
+    // ── Hanime ─────────────────────────────────────────────────────────────
+    if let Some(ch) = &hanime {
+        match ensure_nsfw(ctx, ch).await {
+            Ok(_) => {
+                queries::set_hanime_channel(db, &guild_id, Some(ch.id.to_string().as_str())).await?;
+                lines.push(format!("🔮  **Hanime** → {} *(hanime.tv hentai videos — every 25 min)*", ch.id.mention()));
+            }
+            Err(warn_msg) => {
+                warnings.push(format!("⚠️  **Hanime** warning: {}", warn_msg));
+                queries::set_hanime_channel(db, &guild_id, Some(ch.id.to_string().as_str())).await?;
             }
         }
     }

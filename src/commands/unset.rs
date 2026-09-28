@@ -55,6 +55,9 @@ pub async fn unset(
 
     #[description = "Clear the 🎌 JAVHD channel"]
     javhd: Option<bool>,
+
+    #[description = "Clear the 🔮 Hanime channel"]
+    hanime: Option<bool>,
 ) -> Result<(), Error> {
     ctx.defer().await?; // prevent Discord 3-second timeout on slow DB queries
     let guild_id = ctx.guild_id().unwrap().to_string();
@@ -135,6 +138,11 @@ pub async fn unset(
     if javhd.unwrap_or(false) {
         queries::set_javhd_channel(db, &guild_id, None).await?;
         cleared.push("🎌 JAVHD");
+    }
+
+    if hanime.unwrap_or(false) {
+        queries::set_hanime_channel(db, &guild_id, None).await?;
+        cleared.push("🔮 Hanime");
     }
 
     if cleared.is_empty() {

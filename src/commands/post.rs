@@ -34,6 +34,8 @@ pub enum ContentType {
     Xnxx,
     #[name = "JAVHD Videos"]
     Javhd,
+    #[name = "Hanime Videos"]
+    Hanime,
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -69,6 +71,7 @@ pub async fn post(
     let mut twitter_n = 0;
         let mut xnxx_n = 0;
         let mut javhd_n = 0;
+        let mut hanime_n = 0;
 
         if let Some(cat) = category {
             match cat {
@@ -102,9 +105,12 @@ pub async fn post(
                 ContentType::Javhd => {
                     javhd_n = crate::javhd::task::run_once(&data, &http, force_val).await.unwrap_or_else(|e| { tracing::error!("JAVHD refresh: {:#}", e); 0 });
                 }
+                ContentType::Hanime => {
+                    hanime_n = crate::hanime::task::run_once(&data, &http, force_val).await.unwrap_or_else(|e| { tracing::error!("Hanime refresh: {:#}", e); 0 });
+                }
             }
         } else {
-            let (meme_res, news_res, fg_res, jav_res, porn_res, okxxx_res, coc_res, twitter_res, xnxx_res, javhd_res) = tokio::join!(
+            let (meme_res, news_res, fg_res, jav_res, porn_res, okxxx_res, coc_res, twitter_res, xnxx_res, javhd_res, hanime_res) = tokio::join!(
                 reddit::task::run_once(&data, &http, force_val),
                 news::task::run_once(&data, &http, force_val),
                 freegames::task::run_once(&data, &http, force_val),
@@ -115,6 +121,7 @@ pub async fn post(
                 crate::twitter::task::run_once(&data, &http, force_val),
                 xnxx::task::run_once(&data, &http, force_val),
                 crate::javhd::task::run_once(&data, &http, force_val),
+                crate::hanime::task::run_once(&data, &http, force_val),
             );
 
             meme_n = meme_res.unwrap_or_else(|e| { tracing::error!("Meme refresh: {:#}", e); 0 });
@@ -127,9 +134,10 @@ pub async fn post(
             twitter_n = twitter_res.unwrap_or_else(|e| { tracing::error!("Twitter refresh: {:#}", e); 0 });
             xnxx_n = xnxx_res.unwrap_or_else(|e| { tracing::error!("XNXX refresh: {:#}", e); 0 });
             javhd_n = javhd_res.unwrap_or_else(|e| { tracing::error!("JAVHD refresh: {:#}", e); 0 });
+            hanime_n = hanime_res.unwrap_or_else(|e| { tracing::error!("Hanime refresh: {:#}", e); 0 });
         }
 
-        let total = meme_n + news_n + fg_n + jav_n + porn_n + okxxx_n + coc_n + twitter_n + xnxx_n + javhd_n;
+        let total = meme_n + news_n + fg_n + jav_n + porn_n + okxxx_n + coc_n + twitter_n + xnxx_n + javhd_n + hanime_n;
 
     if total == 0 {
         ctx.say(
@@ -173,6 +181,9 @@ pub async fn post(
     }
     if category.is_none() || category == Some(ContentType::Javhd) {
         embed = embed.field("🎌 JAVHD Videos", javhd_n.to_string(), true);
+    }
+    if category.is_none() || category == Some(ContentType::Hanime) {
+        embed = embed.field("🔮 Hanime Videos", hanime_n.to_string(), true);
     }
 
     embed = embed.field("📬 Total", total.to_string(), true)

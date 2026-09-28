@@ -8,6 +8,7 @@ mod db;
 mod dmc;
 mod events;
 mod freegames;
+mod hanime;
 mod jav;
 mod javhd;
 mod news;
@@ -318,6 +319,13 @@ async fn main() -> Result<()> {
                     tokio::spawn(async move { javhd::task::run(d, h).await });
                 }
                 info!("⏱️  JAVHD task spawned (every 20 min — javhd.com API)");
+
+                {
+                    let d = bot_data.clone();
+                    let h = Arc::clone(&http);
+                    tokio::spawn(async move { hanime::task::run(d, h).await });
+                }
+                info!("⏱️  Hanime task spawned (every 25 min — hanime.tv hentai videos)");
 
                 // ── Web Server for Health Check + Media Stream Player ────
                 // NOTE: The web server is now started in main() BEFORE Discord connects,
