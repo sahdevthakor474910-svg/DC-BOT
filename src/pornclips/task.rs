@@ -3,7 +3,7 @@ use std::time::Duration;
 
 use anyhow::Result;
 use poise::serenity_prelude as serenity;
-use tracing::{error, info, warn};
+use tracing::{error, info, warn, debug};
 
 use crate::data::Data;
 use crate::db::queries;
@@ -17,7 +17,7 @@ pub async fn run_once(data: &Data, http: &Arc<serenity::Http>, force: bool) -> R
         .map(|d| d.as_secs())
         .unwrap_or(0);
     let clips = client.fetch_for_tick(tick).await?;
-    post_clips(data, http, &clips, force).await
+    post_clips(data, http, &client, &clips, force).await
 }
 
 /// Background task — runs every 15 minutes.
@@ -37,7 +37,7 @@ pub async fn run(data: Data, http: Arc<serenity::Http>) {
     loop {
         match client.fetch_for_tick(tick).await {
             Ok(clips) => {
-                match post_clips(&data, &http, &clips, false).await {
+                match post_clips(&data, &http, &client, &clips, false).await {
                     Ok(n) if n > 0 => info!("🎬 Posted {} Porn Clip(s) for tick {}", n, tick),
                     Ok(_) => {}
                     Err(e) => error!("Porn Clips task error: {:#}", e),
@@ -60,6 +60,7 @@ pub async fn run(data: Data, http: Arc<serenity::Http>) {
 async fn post_clips(
     data: &Data,
     http: &Arc<serenity::Http>,
+    client: &PornClipsClient,
     clips: &[super::models::RedGifsGif],
     force: bool,
 ) -> Result<usize> {
@@ -71,6 +72,35 @@ async fn post_clips(
 
     if relevant.is_empty() {
         return Ok(0);
+    }
+
+    // Pre-download all clip MP4 bytes (SD quality, ~1-3MB each)
+    // so we upload them as native Discord attachments for inline playback.
+    let mut downloaded: Vec<(&super::models::RedGifsGif, Vec<u8>)> = Vec::new();
+
+    for clip in clips {
+        if downloaded.len() >= 5 {
+            break;
+        }
+        let sd_url = match clip.urls.sd.as_deref() {
+            Some(u) if !u.is_empty() => u,
+            _ => continue,
+        };
+
+        match client.download_bytes(sd_url).await {
+            Ok(bytes) => {
+                // Skip files larger than 24MB (Discord attachment limit ~25MB)
+                if bytes.len() > 24 * 1024 * 1024 {
+                    debug!("🎬 Skipping clip {} — too large ({}MB)", clip.id, bytes.len() / (1024*1024));
+                    continue;
+                }
+                downloaded.push((clip, bytes));
+            }
+            Err(e) => {
+                debug!("🎬 Failed to download clip {}: {}", clip.id, e);
+            }
+        }
+        tokio::time::sleep(Duration::from_millis(200)).await;
     }
 
     let mut total = 0usize;
@@ -87,9 +117,13 @@ async fn post_clips(
         let channel = serenity::ChannelId::new(channel_id_u64);
         let mut posted_this_tick = 0usize;
 
-        for clip in clips {
+        for (clip, bytes) in &downloaded {
+            // Cap at 5 per tick per guild
+            if posted_this_tick >= 5 {
+                break;
+            }
+
             if !force {
-                // Deduplicate via seen_pornclips table
                 match queries::is_pornclips_seen(&data.db, &cfg.guild_id, &clip.id).await {
                     Ok(true) => continue,
                     Err(e) => {
@@ -100,58 +134,53 @@ async fn post_clips(
                 }
             }
 
-            if let Err(e) = queries::mark_pornclips_seen(&data.db, &cfg.guild_id, &clip.id).await {
-                error!("DB error marking pornclips seen: {}", e);
-            }
-
-            // Limit to 5 per tick per guild
-            if posted_this_tick >= 5 {
-                continue;
-            }
-
             // Format duration as mm:ss
             let dur_secs = clip.duration as u64;
             let dur_str = format!("{}:{:02}", dur_secs / 60, dur_secs % 60);
 
-            // Format views
             let views_str = format_views(clip.views);
 
-            let footer = format!(
-                "🎬 Porn Clips • ⏱️ {} • 👁️ {} views",
-                dur_str, views_str
-            );
+            let tags_preview = clip.tags.iter().take(3)
+                .map(|t| t.as_str())
+                .collect::<Vec<_>>()
+                .join(" • ");
 
             let title = if clip.tags.is_empty() {
                 format!("🔥 Clip by {}", clip.user_name)
             } else {
-                format!("🔥 {} — {}", clip.tags.first().unwrap_or(&String::new()), clip.user_name)
+                format!("🔥 {}", tags_preview)
             };
+
+            let footer = format!(
+                "🎬 Porn Clips • ⏱️ {} • 👁️ {} views • by {}",
+                dur_str, views_str, clip.user_name
+            );
 
             let page_url = format!("https://www.redgifs.com/watch/{}", clip.id);
 
             let embed = serenity::CreateEmbed::new()
                 .title(&title)
                 .url(&page_url)
-                .color(0xE91E63);
+                .color(0xE91E63)
+                .footer(serenity::CreateEmbedFooter::new(footer));
 
-            // If we have a poster, add it as the embed image
-            let embed = if let Some(poster) = &clip.urls.poster {
-                embed.image(poster)
-            } else {
-                embed
-            };
-            let embed = embed.footer(serenity::CreateEmbedFooter::new(footer));
+            // Create attachment from downloaded bytes — Discord will play it inline natively
+            let filename = format!("{}.mp4", clip.id);
+            let attachment = serenity::CreateAttachment::bytes(
+                bytes.clone(),
+                filename,
+            );
 
-            // Post SD MP4 directly — Discord renders inline video player
-            let sd_url = clip.urls.sd.as_deref().unwrap_or("");
-            let content = sd_url.to_string();
             let msg = serenity::CreateMessage::new()
-                .content(&content)
-                .embed(embed);
+                .embed(embed)
+                .add_file(attachment);
 
             match channel.send_message(http, msg).await {
                 Ok(_) => {
                     info!("🎬 Posted Porn Clip {} to guild {}", clip.id, cfg.guild_id);
+                    if let Err(e) = queries::mark_pornclips_seen(&data.db, &cfg.guild_id, &clip.id).await {
+                        error!("DB error marking pornclips seen: {}", e);
+                    }
                     total += 1;
                     posted_this_tick += 1;
                 }

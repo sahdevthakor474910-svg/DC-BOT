@@ -100,12 +100,25 @@ impl PornClipsClient {
 
         let resp = self.search(query, 10, page).await?;
         
-        // Filter: only keep clips with SD URL and duration under 120 seconds
+        // Filter: only keep clips with SD URL and duration under 60 seconds (short reels)
         let clips: Vec<RedGifsGif> = resp.gifs
             .into_iter()
-            .filter(|g| g.urls.sd.is_some() && g.duration <= 120.0 && g.duration > 3.0)
+            .filter(|g| g.urls.sd.is_some() && g.duration <= 60.0 && g.duration > 3.0)
             .collect();
 
         Ok(clips)
     }
+
+    /// Download raw MP4 bytes from a URL
+    pub async fn download_bytes(&self, url: &str) -> Result<Vec<u8>> {
+        let bytes = self.http
+            .get(url)
+            .send()
+            .await?
+            .error_for_status()?
+            .bytes()
+            .await?;
+        Ok(bytes.to_vec())
+    }
 }
+
