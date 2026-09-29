@@ -19,16 +19,24 @@ pub struct RedGifsGif {
     pub duration: f64,
     #[serde(default)]
     pub description: Option<String>,
-    #[serde(rename = "hasAudio")]
+    #[serde(rename = "hasAudio", default)]
     pub has_audio: bool,
+    #[serde(default)]
     pub height: u32,
+    #[serde(default)]
     pub width: u32,
+    #[serde(default)]
     pub likes: u64,
+    #[serde(default)]
     pub views: u64,
     #[serde(default)]
     pub tags: Vec<String>,
-    #[serde(rename = "userName")]
+    #[serde(rename = "userName", default)]
     pub user_name: String,
+    #[serde(rename = "contentType", default)]
+    pub content_type: Option<String>,
+    #[serde(default)]
+    pub sexuality: Vec<String>,
     pub urls: RedGifsUrls,
 }
 
