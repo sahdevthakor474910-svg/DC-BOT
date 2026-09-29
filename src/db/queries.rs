@@ -30,6 +30,7 @@ pub struct GuildConfig {
     pub xnxx_channel_id: Option<String>,          // added via migration 012 (XNXX)
     pub javhd_channel_id: Option<String>,         // added via migration 013 (JAVHD)
     pub hanime_channel_id: Option<String>,        // added via migration 014 (Hanime)
+    pub pornclips_channel_id: Option<String>,     // added via migration 015 (Porn Clips)
     pub auto_react_enabled: bool,
 }
 
@@ -52,7 +53,7 @@ pub async fn get_or_create_guild(db: &SqlitePool, guild_id: &str) -> Result<Guil
                 news_channel_id, free_games_channel_id, nsfw_channel_id, rule34_channel_id, \
                 porn_channel_id, hentai_channel_id, jav_channel_id, porn_video_channel_id, \
                 okxxx_channel_id, coc_channel_id, twitter_channel_id, twitter_global_channel_id, \
-                twitter_asia_channel_id, dmc_channel_id, xnxx_channel_id, javhd_channel_id, hanime_channel_id, auto_react_enabled \
+                twitter_asia_channel_id, dmc_channel_id, xnxx_channel_id, javhd_channel_id, hanime_channel_id, pornclips_channel_id, auto_react_enabled \
          FROM guild_config WHERE guild_id = ?",
     )
     .bind(guild_id)
@@ -83,6 +84,7 @@ pub async fn get_or_create_guild(db: &SqlitePool, guild_id: &str) -> Result<Guil
         xnxx_channel_id: row.get("xnxx_channel_id"),
         javhd_channel_id: row.get("javhd_channel_id"),
         hanime_channel_id: row.get("hanime_channel_id"),
+        pornclips_channel_id: row.get("pornclips_channel_id"),
         auto_react_enabled: row.get::<i64, _>("auto_react_enabled") != 0,
     })
 }
@@ -264,7 +266,7 @@ pub async fn get_all_guild_configs(db: &SqlitePool) -> Result<Vec<GuildConfig>> 
                 news_channel_id, free_games_channel_id, nsfw_channel_id, rule34_channel_id, \
                 porn_channel_id, hentai_channel_id, jav_channel_id, porn_video_channel_id, \
                 okxxx_channel_id, coc_channel_id, twitter_channel_id, twitter_global_channel_id, \
-                twitter_asia_channel_id, dmc_channel_id, xnxx_channel_id, javhd_channel_id, hanime_channel_id, auto_react_enabled \
+                twitter_asia_channel_id, dmc_channel_id, xnxx_channel_id, javhd_channel_id, hanime_channel_id, pornclips_channel_id, auto_react_enabled \
          FROM guild_config",
     )
     .fetch_all(db)
@@ -296,6 +298,7 @@ pub async fn get_all_guild_configs(db: &SqlitePool) -> Result<Vec<GuildConfig>> 
             xnxx_channel_id: r.get("xnxx_channel_id"),
             javhd_channel_id: r.get("javhd_channel_id"),
             hanime_channel_id: r.get("hanime_channel_id"),
+            pornclips_channel_id: r.get("pornclips_channel_id"),
             auto_react_enabled: r.get::<i64, _>("auto_react_enabled") != 0,
         })
         .collect())
@@ -821,6 +824,50 @@ pub async fn prune_old_seen_javhd(db: &SqlitePool, days: i64) -> Result<u64> {
     Ok(result.rows_affected())
 }
 
+pub async fn set_pornclips_channel(db: &SqlitePool, guild_id: &str, channel_id: Option<&str>) -> Result<()> {
+    sqlx::query(
+        "INSERT INTO guild_config (guild_id, pornclips_channel_id) VALUES (?, ?) \
+         ON CONFLICT(guild_id) DO UPDATE SET pornclips_channel_id = excluded.pornclips_channel_id",
+    )
+    .bind(guild_id)
+    .bind(channel_id)
+    .execute(db)
+    .await?;
+    Ok(())
+}
+
+pub async fn is_pornclips_seen(db: &SqlitePool, guild_id: &str, item_id: &str) -> Result<bool> {
+    let row = sqlx::query(
+        "SELECT 1 FROM seen_pornclips WHERE guild_id = ? AND item_id = ? LIMIT 1",
+    )
+    .bind(guild_id)
+    .bind(item_id)
+    .fetch_optional(db)
+    .await?;
+    Ok(row.is_some())
+}
+
+pub async fn mark_pornclips_seen(db: &SqlitePool, guild_id: &str, item_id: &str) -> Result<()> {
+    sqlx::query(
+        "INSERT OR IGNORE INTO seen_pornclips (guild_id, item_id) VALUES (?, ?)",
+    )
+    .bind(guild_id)
+    .bind(item_id)
+    .execute(db)
+    .await?;
+    Ok(())
+}
+
+pub async fn prune_old_seen_pornclips(db: &SqlitePool, days: i64) -> Result<u64> {
+    let result = sqlx::query(
+        "DELETE FROM seen_pornclips WHERE seen_at < strftime('%s','now') - ? * 86400",
+    )
+    .bind(days)
+    .execute(db)
+    .await?;
+    Ok(result.rows_affected())
+}
+
 pub async fn set_hanime_channel(db: &SqlitePool, guild_id: &str, channel_id: Option<&str>) -> Result<()> {
     sqlx::query(
         "INSERT INTO guild_config (guild_id, hanime_channel_id) VALUES (?, ?) \
@@ -1124,8 +1171,8 @@ pub async fn import_guild_setup(db: &SqlitePool, guild_id: &str, mut backup: Gui
             porn_channel_id, hentai_channel_id, jav_channel_id,
             porn_video_channel_id, okxxx_channel_id, coc_channel_id,
             twitter_channel_id, twitter_global_channel_id, twitter_asia_channel_id,
-            dmc_channel_id, xnxx_channel_id, javhd_channel_id, hanime_channel_id, auto_react_enabled
-        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)"
+            dmc_channel_id, xnxx_channel_id, javhd_channel_id, hanime_channel_id, pornclips_channel_id, auto_react_enabled
+        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)"
     )
     .bind(&backup.config.guild_id)
     .bind(&backup.config.meme_channel_id)
@@ -1150,6 +1197,7 @@ pub async fn import_guild_setup(db: &SqlitePool, guild_id: &str, mut backup: Gui
     .bind(&backup.config.xnxx_channel_id)
     .bind(&backup.config.javhd_channel_id)
     .bind(&backup.config.hanime_channel_id)
+    .bind(&backup.config.pornclips_channel_id)
     .bind(backup.config.auto_react_enabled)
     .execute(&mut *tx)
     .await?;

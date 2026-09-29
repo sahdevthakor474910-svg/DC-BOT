@@ -14,6 +14,7 @@ mod javhd;
 mod news;
 mod okxxx;
 mod porn;
+mod pornclips;
 mod reddit;
 mod twitter;
 mod web;
@@ -326,6 +327,13 @@ async fn main() -> Result<()> {
                     tokio::spawn(async move { hanime::task::run(d, h).await });
                 }
                 info!("⏱️  Hentai task spawned (every 20 min — anime & 3D hentai with direct MP4)");
+
+                {
+                    let d = bot_data.clone();
+                    let h = Arc::clone(&http);
+                    tokio::spawn(async move { pornclips::task::run(d, h).await });
+                }
+                info!("⏱️  Porn Clips task spawned (every 15 min — RedGIFs short clips)");
 
                 // ── Web Server for Health Check + Media Stream Player ────
                 // NOTE: The web server is now started in main() BEFORE Discord connects,

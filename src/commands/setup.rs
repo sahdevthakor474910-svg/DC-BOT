@@ -60,6 +60,9 @@ pub async fn setup(
 
     #[description = "🔮 Hentai channel — must be Age-Restricted! (anime & 3D hentai — every 20 min)"]
     hanime: Option<serenity::GuildChannel>,
+
+    #[description = "🎬 Porn Clips channel — must be Age-Restricted! (short reels — every 15 min)"]
+    pornclips: Option<serenity::GuildChannel>,
 ) -> Result<(), Error> {
     ctx.defer().await?; // prevent Discord 3-second timeout on slow DB queries
     let guild_id = ctx.guild_id().unwrap().to_string();
@@ -252,6 +255,20 @@ pub async fn setup(
             Err(warn_msg) => {
                 warnings.push(format!("⚠️  **Hanime** warning: {}", warn_msg));
                 queries::set_hanime_channel(db, &guild_id, Some(ch.id.to_string().as_str())).await?;
+            }
+        }
+    }
+
+    // ── Porn Clips ────────────────────────────────────────────────────────
+    if let Some(ch) = &pornclips {
+        match ensure_nsfw(ctx, ch).await {
+            Ok(_) => {
+                queries::set_pornclips_channel(db, &guild_id, Some(ch.id.to_string().as_str())).await?;
+                lines.push(format!("🎬  **Porn Clips** → {} *(RedGIFs short clips — every 15 min)*", ch.id.mention()));
+            }
+            Err(warn_msg) => {
+                warnings.push(format!("⚠️  **Porn Clips** warning: {}", warn_msg));
+                queries::set_pornclips_channel(db, &guild_id, Some(ch.id.to_string().as_str())).await?;
             }
         }
     }
