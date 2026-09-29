@@ -5,20 +5,28 @@ use std::sync::Arc;
 
 use super::models::*;
 
-/// Search queries to rotate through each tick for variety
+/// Search queries to rotate through each tick — hardcore trending content
 const SEARCH_QUERIES: &[&str] = &[
-    "trending",
-    "hot",
-    "amateur",
-    "blowjob",
-    "teen",
-    "milf",
-    "riding",
-    "threesome",
-    "anal",
+    "fucking",
+    "hardcore sex",
+    "doggystyle",
+    "riding cock",
+    "blowjob cum",
+    "rough sex",
     "creampie",
-    "pawg",
-    "bbc",
+    "cowgirl",
+    "missionary pov",
+    "deepthroat",
+    "threesome",
+    "anal sex",
+    "bbc fucking",
+    "milf sex",
+    "teen fuck",
+    "prone bone",
+    "from behind",
+    "cum in mouth",
+    "reverse cowgirl",
+    "sextape",
 ];
 
 pub struct PornClipsClient {
@@ -61,7 +69,7 @@ impl PornClipsClient {
     /// Search RedGIFs with auto-retry on 401 (token expired)
     pub async fn search(&self, query: &str, count: u32, page: u32) -> Result<RedGifsSearchResponse> {
         let url = format!(
-            "https://api.redgifs.com/v2/gifs/search?search_text={}&count={}&page={}",
+            "https://api.redgifs.com/v2/gifs/search?search_text={}&order=trending&count={}&page={}",
             url::form_urlencoded::byte_serialize(query.as_bytes()).collect::<String>(),
             count,
             page
