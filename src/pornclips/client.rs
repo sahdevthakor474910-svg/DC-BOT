@@ -12,24 +12,27 @@ const SEARCH_QUERIES: &[&str] = &[
     "blowjob",
     "doggystyle",
     "cowgirl",
+    "riding",
     "deepthroat",
     "titfuck",
     "facial",
     "hardcore",
     "milf",
-    "brunette",
-    "blonde",
     "amateur",
     "couple",
+    "brunette",
+    "blonde",
     "latina",
     "asian",
     "petite",
     "pawg",
     "threesome",
     "lingerie",
-    "pornstar",
-    "riding",
     "anal",
+    "cumshot",
+    "fucking",
+    "gangbang",
+    "squirt",
 ];
 
 /// Strict filter to guarantee NO solo males, NO gay porn, NO trans content
@@ -163,10 +166,10 @@ impl PornClipsClient {
         Ok(())
     }
 
-    /// Search RedGIFs top trending clips with auto-retry on 401
+    /// Search RedGIFs clips with auto-retry on 401 using the working `query` parameter
     pub async fn search(&self, query: &str, count: u32, page: u32) -> Result<RedGifsSearchResponse> {
         let url = format!(
-            "https://api.redgifs.com/v2/gifs/search?search_text={}&order=top&count={}&page={}",
+            "https://api.redgifs.com/v2/gifs/search?query={}&count={}&page={}",
             url::form_urlencoded::byte_serialize(query.as_bytes()).collect::<String>(),
             count,
             page
@@ -203,9 +206,9 @@ impl PornClipsClient {
     pub async fn fetch_for_tick(&self, tick: u64) -> Result<Vec<RedGifsGif>> {
         let query_idx = (tick as usize) % SEARCH_QUERIES.len();
         let query = SEARCH_QUERIES[query_idx];
-        let page = ((tick as u32) / (SEARCH_QUERIES.len() as u32)) % 10 + 1;
+        let page = ((tick as u32) / (SEARCH_QUERIES.len() as u32)) % 25 + 1;
 
-        let resp = self.search(query, 25, page).await?;
+        let resp = self.search(query, 30, page).await?;
 
         // Filter: only keep straight/female clips with SD URL and duration under 60 seconds
         let clips: Vec<RedGifsGif> = resp

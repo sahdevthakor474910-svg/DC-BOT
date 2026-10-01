@@ -20,9 +20,9 @@ pub async fn run_once(data: &Data, http: &Arc<serenity::Http>, force: bool) -> R
     post_clips(data, http, &client, &clips, force).await
 }
 
-/// Background task — runs every 15 minutes.
+/// Background task — runs every 10 minutes.
 pub async fn run(data: Data, http: Arc<serenity::Http>) {
-    info!("🎬 Porn Clips task started (RedGIFs short clips)");
+    info!("🎬 Porn Clips task started (every 10 min — RedGIFs short clips)");
 
     let client = match PornClipsClient::new().await {
         Ok(c) => c,
@@ -52,8 +52,8 @@ pub async fn run(data: Data, http: Arc<serenity::Http>) {
             warn!("Could not prune seen_pornclips: {}", e);
         }
 
-        // Run every 15 minutes
-        tokio::time::sleep(Duration::from_secs(15 * 60)).await;
+        // Run every 10 minutes
+        tokio::time::sleep(Duration::from_secs(10 * 60)).await;
     }
 }
 
@@ -74,35 +74,6 @@ async fn post_clips(
         return Ok(0);
     }
 
-    // Pre-download all clip MP4 bytes (SD quality, ~1-3MB each)
-    // so we upload them as native Discord attachments for inline playback.
-    let mut downloaded: Vec<(&super::models::RedGifsGif, Vec<u8>)> = Vec::new();
-
-    for clip in clips {
-        if downloaded.len() >= 5 {
-            break;
-        }
-        let sd_url = match clip.urls.sd.as_deref() {
-            Some(u) if !u.is_empty() => u,
-            _ => continue,
-        };
-
-        match client.download_bytes(sd_url).await {
-            Ok(bytes) => {
-                // Skip files larger than 24MB (Discord attachment limit ~25MB)
-                if bytes.len() > 24 * 1024 * 1024 {
-                    debug!("🎬 Skipping clip {} — too large ({}MB)", clip.id, bytes.len() / (1024*1024));
-                    continue;
-                }
-                downloaded.push((clip, bytes));
-            }
-            Err(e) => {
-                debug!("🎬 Failed to download clip {}: {}", clip.id, e);
-            }
-        }
-        tokio::time::sleep(Duration::from_millis(200)).await;
-    }
-
     let mut total = 0usize;
 
     for cfg in relevant {
@@ -117,15 +88,21 @@ async fn post_clips(
         let channel = serenity::ChannelId::new(channel_id_u64);
         let mut posted_this_tick = 0usize;
 
-        for (clip, bytes) in &downloaded {
-            // Cap at 5 per tick per guild
-            if posted_this_tick >= 5 {
+        for clip in clips {
+            // Cap at 3 clips per 10-minute tick per guild
+            if posted_this_tick >= 3 {
                 break;
             }
 
+            let item_id = clip.id.trim().to_lowercase();
+
+            // Deduplication check: check BEFORE downloading
             if !force {
-                match queries::is_pornclips_seen(&data.db, &cfg.guild_id, &clip.id).await {
-                    Ok(true) => continue,
+                match queries::is_pornclips_seen(&data.db, &cfg.guild_id, &item_id).await {
+                    Ok(true) => {
+                        debug!("🎬 Clip {} already seen in guild {}, skipping", item_id, cfg.guild_id);
+                        continue;
+                    }
                     Err(e) => {
                         error!("DB error checking seen_pornclips: {}", e);
                         continue;
@@ -133,6 +110,27 @@ async fn post_clips(
                     _ => {}
                 }
             }
+
+            let sd_url = match clip.urls.sd.as_deref() {
+                Some(u) if !u.is_empty() => u,
+                _ => continue,
+            };
+
+            // Download MP4 on demand only for unseen clips
+            let bytes = match client.download_bytes(sd_url).await {
+                Ok(b) => {
+                    // Skip files larger than 24MB (Discord limit)
+                    if b.len() > 24 * 1024 * 1024 {
+                        debug!("🎬 Skipping clip {} — too large ({}MB)", item_id, b.len() / (1024 * 1024));
+                        continue;
+                    }
+                    b
+                }
+                Err(e) => {
+                    debug!("🎬 Failed to download clip {}: {}", item_id, e);
+                    continue;
+                }
+            };
 
             // Format duration as mm:ss
             let dur_secs = clip.duration as u64;
@@ -167,7 +165,7 @@ async fn post_clips(
             // Create attachment from downloaded bytes — Discord will play it inline natively
             let filename = format!("{}.mp4", clip.id);
             let attachment = serenity::CreateAttachment::bytes(
-                bytes.clone(),
+                bytes,
                 filename,
             );
 
@@ -177,8 +175,8 @@ async fn post_clips(
 
             match channel.send_message(http, msg).await {
                 Ok(_) => {
-                    info!("🎬 Posted Porn Clip {} to guild {}", clip.id, cfg.guild_id);
-                    if let Err(e) = queries::mark_pornclips_seen(&data.db, &cfg.guild_id, &clip.id).await {
+                    info!("🎬 Posted Porn Clip {} to guild {}", item_id, cfg.guild_id);
+                    if let Err(e) = queries::mark_pornclips_seen(&data.db, &cfg.guild_id, &item_id).await {
                         error!("DB error marking pornclips seen: {}", e);
                     }
                     total += 1;

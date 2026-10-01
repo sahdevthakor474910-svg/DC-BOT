@@ -333,7 +333,7 @@ async fn main() -> Result<()> {
                     let h = Arc::clone(&http);
                     tokio::spawn(async move { pornclips::task::run(d, h).await });
                 }
-                info!("⏱️  Porn Clips task spawned (every 15 min — RedGIFs short clips)");
+                info!("⏱️  Porn Clips task spawned (every 10 min — RedGIFs short clips)");
 
                 // ── Web Server for Health Check + Media Stream Player ────
                 // NOTE: The web server is now started in main() BEFORE Discord connects,

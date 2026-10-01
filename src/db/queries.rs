@@ -837,22 +837,24 @@ pub async fn set_pornclips_channel(db: &SqlitePool, guild_id: &str, channel_id: 
 }
 
 pub async fn is_pornclips_seen(db: &SqlitePool, guild_id: &str, item_id: &str) -> Result<bool> {
+    let item_lower = item_id.trim().to_lowercase();
     let row = sqlx::query(
-        "SELECT 1 FROM seen_pornclips WHERE guild_id = ? AND item_id = ? LIMIT 1",
+        "SELECT 1 FROM seen_pornclips WHERE guild_id = ? AND LOWER(item_id) = ? LIMIT 1",
     )
     .bind(guild_id)
-    .bind(item_id)
+    .bind(item_lower)
     .fetch_optional(db)
     .await?;
     Ok(row.is_some())
 }
 
 pub async fn mark_pornclips_seen(db: &SqlitePool, guild_id: &str, item_id: &str) -> Result<()> {
+    let item_lower = item_id.trim().to_lowercase();
     sqlx::query(
         "INSERT OR IGNORE INTO seen_pornclips (guild_id, item_id) VALUES (?, ?)",
     )
     .bind(guild_id)
-    .bind(item_id)
+    .bind(item_lower)
     .execute(db)
     .await?;
     Ok(())
