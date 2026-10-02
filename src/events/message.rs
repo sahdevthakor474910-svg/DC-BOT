@@ -105,7 +105,7 @@ pub async fn handle(
     if let Some(guild_id) = message.guild_id {
         let guild_id_str = guild_id.to_string();
         if let Ok(cfg) = queries::get_or_create_guild(&data.db, &guild_id_str).await {
-            if cfg.gali_response_enabled {
+            if cfg.gali_response_enabled && !cfg.safe_mode_enabled {
                 let user_id_str = message.author.id.to_string();
                 let is_blocked = queries::is_user_blocked(&data.db, &guild_id_str, &user_id_str)
                     .await

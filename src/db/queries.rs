@@ -33,6 +33,7 @@ pub struct GuildConfig {
     pub pornclips_channel_id: Option<String>,     // added via migration 015 (Porn Clips)
     pub auto_react_enabled: bool,
     pub gali_response_enabled: bool,              // added via migration 017 (Gali response)
+    pub safe_mode_enabled: bool,                  // added via migration 018 (Safe mode)
 }
 
 // ────────────────────────────────────────────────────────────────────────────
@@ -42,7 +43,7 @@ pub struct GuildConfig {
 /// Ensure a row exists for the guild and return it.
 pub async fn get_or_create_guild(db: &SqlitePool, guild_id: &str) -> Result<GuildConfig> {
     sqlx::query(
-        "INSERT OR IGNORE INTO guild_config (guild_id, posting_interval_secs, auto_react_enabled, gali_response_enabled) VALUES (?, 60, 1, 1)",
+        "INSERT OR IGNORE INTO guild_config (guild_id, posting_interval_secs, auto_react_enabled, gali_response_enabled, safe_mode_enabled) VALUES (?, 60, 1, 1, 0)",
     )
     .bind(guild_id)
     .execute(db)
@@ -54,7 +55,7 @@ pub async fn get_or_create_guild(db: &SqlitePool, guild_id: &str) -> Result<Guil
                 news_channel_id, free_games_channel_id, nsfw_channel_id, rule34_channel_id, \
                 porn_channel_id, hentai_channel_id, jav_channel_id, porn_video_channel_id, \
                 okxxx_channel_id, coc_channel_id, twitter_channel_id, twitter_global_channel_id, \
-                twitter_asia_channel_id, dmc_channel_id, xnxx_channel_id, javhd_channel_id, hanime_channel_id, pornclips_channel_id, auto_react_enabled, gali_response_enabled \
+                twitter_asia_channel_id, dmc_channel_id, xnxx_channel_id, javhd_channel_id, hanime_channel_id, pornclips_channel_id, auto_react_enabled, gali_response_enabled, safe_mode_enabled \
          FROM guild_config WHERE guild_id = ?",
     )
     .bind(guild_id)
@@ -88,6 +89,7 @@ pub async fn get_or_create_guild(db: &SqlitePool, guild_id: &str) -> Result<Guil
         pornclips_channel_id: row.get("pornclips_channel_id"),
         auto_react_enabled: row.get::<i64, _>("auto_react_enabled") != 0,
         gali_response_enabled: row.get::<i64, _>("gali_response_enabled") != 0,
+        safe_mode_enabled: row.get::<i64, _>("safe_mode_enabled") != 0,
     })
 }
 
@@ -259,6 +261,18 @@ pub async fn set_gali_response_enabled(db: &SqlitePool, guild_id: &str, enabled:
     Ok(())
 }
 
+pub async fn set_safe_mode_enabled(db: &SqlitePool, guild_id: &str, enabled: bool) -> Result<()> {
+    sqlx::query(
+        "INSERT INTO guild_config (guild_id, safe_mode_enabled) VALUES (?, ?) \
+         ON CONFLICT(guild_id) DO UPDATE SET safe_mode_enabled = excluded.safe_mode_enabled",
+    )
+    .bind(guild_id)
+    .bind(if enabled { 1 } else { 0 })
+    .execute(db)
+    .await?;
+    Ok(())
+}
+
 pub async fn set_posting_interval(db: &SqlitePool, guild_id: &str, secs: i64) -> Result<()> {
     sqlx::query(
         "INSERT INTO guild_config (guild_id, posting_interval_secs) \
@@ -280,7 +294,7 @@ pub async fn get_all_guild_configs(db: &SqlitePool) -> Result<Vec<GuildConfig>> 
                 news_channel_id, free_games_channel_id, nsfw_channel_id, rule34_channel_id, \
                 porn_channel_id, hentai_channel_id, jav_channel_id, porn_video_channel_id, \
                 okxxx_channel_id, coc_channel_id, twitter_channel_id, twitter_global_channel_id, \
-                twitter_asia_channel_id, dmc_channel_id, xnxx_channel_id, javhd_channel_id, hanime_channel_id, pornclips_channel_id, auto_react_enabled, gali_response_enabled \
+                twitter_asia_channel_id, dmc_channel_id, xnxx_channel_id, javhd_channel_id, hanime_channel_id, pornclips_channel_id, auto_react_enabled, gali_response_enabled, safe_mode_enabled \
          FROM guild_config",
     )
     .fetch_all(db)
@@ -315,6 +329,7 @@ pub async fn get_all_guild_configs(db: &SqlitePool) -> Result<Vec<GuildConfig>> 
             pornclips_channel_id: r.get("pornclips_channel_id"),
             auto_react_enabled: r.get::<i64, _>("auto_react_enabled") != 0,
             gali_response_enabled: r.get::<i64, _>("gali_response_enabled") != 0,
+            safe_mode_enabled: r.get::<i64, _>("safe_mode_enabled") != 0,
         })
         .collect())
 }
@@ -1229,8 +1244,8 @@ pub async fn import_guild_setup(db: &SqlitePool, guild_id: &str, mut backup: Gui
             porn_channel_id, hentai_channel_id, jav_channel_id,
             porn_video_channel_id, okxxx_channel_id, coc_channel_id,
             twitter_channel_id, twitter_global_channel_id, twitter_asia_channel_id,
-            dmc_channel_id, xnxx_channel_id, javhd_channel_id, hanime_channel_id, pornclips_channel_id, auto_react_enabled, gali_response_enabled
-        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)"
+            dmc_channel_id, xnxx_channel_id, javhd_channel_id, hanime_channel_id, pornclips_channel_id, auto_react_enabled, gali_response_enabled, safe_mode_enabled
+        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)"
     )
     .bind(&backup.config.guild_id)
     .bind(&backup.config.meme_channel_id)
@@ -1258,6 +1273,7 @@ pub async fn import_guild_setup(db: &SqlitePool, guild_id: &str, mut backup: Gui
     .bind(&backup.config.pornclips_channel_id)
     .bind(backup.config.auto_react_enabled)
     .bind(backup.config.gali_response_enabled)
+    .bind(backup.config.safe_mode_enabled)
     .execute(&mut *tx)
     .await?;
 

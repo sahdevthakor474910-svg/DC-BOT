@@ -31,7 +31,8 @@ use crate::db::queries;
         "add_menace_user",
         "remove_menace_user",
         "menace_list",
-        "gali_response"
+        "gali_response",
+        "safe_mode"
     )
 )]
 pub async fn settings(_ctx: Context<'_>) -> Result<(), Error> {
@@ -85,6 +86,28 @@ pub async fn gali_response(ctx: Context<'_>) -> Result<(), Error> {
     queries::set_gali_response_enabled(&ctx.data().db, &guild_id, new_state).await?;
     let label = if new_state { "🟢 **enabled** (Bot will roast anyone using slangs/bad words!)" } else { "🔴 **disabled**" };
     ctx.say(format!("Gali / slang auto-response is now {}", label)).await?;
+    Ok(())
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+
+/// 🛡️ Toggle Safe Mode ON or OFF (suppresses gali/slangs & switches bot to clean PG mode).
+#[poise::command(slash_command, guild_only, rename = "safe-mode")]
+pub async fn safe_mode(
+    ctx: Context<'_>,
+    #[description = "Set safe mode enabled (true/false). Leave empty to toggle."]
+    enabled: Option<bool>,
+) -> Result<(), Error> {
+    let guild_id = ctx.guild_id().unwrap().to_string();
+    let cfg = queries::get_or_create_guild(&ctx.data().db, &guild_id).await?;
+    let new_state = enabled.unwrap_or(!cfg.safe_mode_enabled);
+    queries::set_safe_mode_enabled(&ctx.data().db, &guild_id, new_state).await?;
+
+    if new_state {
+        ctx.say("🛡️ **Safe Mode is now ENABLED!**\n• Gali / abusive slang auto-responses are **disabled**.\n• AI responses switched to clean, witty, family-friendly PG mode.\n• No slangs, swearing, or adult insults.").await?;
+    } else {
+        ctx.say("⚡ **Safe Mode is now DISABLED!**\n• Full savage mode active — raw street slangs, unfiltered roasts, and gali comebacks enabled!").await?;
+    }
     Ok(())
 }
 

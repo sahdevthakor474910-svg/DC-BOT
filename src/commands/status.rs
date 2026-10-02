@@ -50,6 +50,7 @@ pub async fn status(ctx: Context<'_>) -> Result<(), Error> {
 
     let react_status = if cfg.auto_react_enabled { "🟢 On" } else { "🔴 Off" };
     let gali_status  = if cfg.gali_response_enabled { "🟢 On" } else { "🔴 Off" };
+    let safe_mode_status = if cfg.safe_mode_enabled { "🛡️ **Enabled** (PG Clean)" } else { "⚡ **Disabled** (Savage Raw)" };
 
     let interval_secs = cfg.posting_interval_secs;
     let interval_label = if interval_secs < 120 {
@@ -86,6 +87,7 @@ pub async fn status(ctx: Context<'_>) -> Result<(), Error> {
         .field("⏱️ Meme Interval",    interval_label,                            true)
         .field("⚡ Auto-React",        react_status,                             true)
         .field("🤬 Slang Auto-Roast",  gali_status,                              true)
+        .field("🛡️ Safe Mode",         safe_mode_status,                         true)
         .field("😄 Emojis",           emoji_list,                               true)
         .field("📢 React Channels",   ch_list,                                   false)
         .field("👤 React Users",      user_list,                                 false)

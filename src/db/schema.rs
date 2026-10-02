@@ -81,6 +81,10 @@ pub async fn run_migrations(db: &SqlitePool) -> Result<()> {
     let m17 = include_str!("../../migrations/017_gali_response.sql");
     run_migration_alter(db, m17, "017").await?;
 
+    // 🛡️ Migration 018: Safe mode toggle
+    let m18 = include_str!("../../migrations/018_safe_mode.sql");
+    run_migration_alter(db, m18, "018").await?;
+
     info!("Database migrations complete");
     Ok(())
 }

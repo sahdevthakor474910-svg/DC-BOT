@@ -96,6 +96,16 @@ pub async fn handle_ai_message(
         false
     };
 
+    // Check if Safe Mode is enabled in this server
+    let is_safe_mode = if let Some(guild_id) = message.guild_id {
+        queries::get_or_create_guild(&data.db, &guild_id.to_string())
+            .await
+            .map(|c| c.safe_mode_enabled)
+            .unwrap_or(false)
+    } else {
+        false
+    };
+
     // Extract reference text if user is replying to a previous message
     let reply_context = message
         .referenced_message
@@ -104,12 +114,13 @@ pub async fn handle_ai_message(
 
     // Build context header
     let context_header = format!(
-        "SERVER: {}\nUSER: {} (ID: {})\n[SERVER OWNER: {}]\n[MENACE ROAST TARGET: {}]\n[ATTACHED MEDIA/GIFS: {}]",
+        "SERVER: {}\nUSER: {} (ID: {})\n[SERVER OWNER: {}]\n[MENACE ROAST TARGET: {}]\n[SAFE MODE: {}]\n[ATTACHED MEDIA/GIFS: {}]",
         guild_name,
         message.author.name,
         message.author.id,
         if is_owner { "YES" } else { "NO" },
-        if is_menace_target { "YES - THIS USER IS ON YOUR HIT LIST! ROAST THEM UNMERCIFULLY IN ENGLISH/HINDI" } else { "NO" },
+        if is_menace_target && !is_safe_mode { "YES - THIS USER IS ON YOUR HIT LIST! ROAST THEM UNMERCIFULLY IN ENGLISH/HINDI" } else { "NO" },
+        if is_safe_mode { "YES - STRICT CLEAN PG MODE! DO NOT USE ANY GALI, PROFANITY, OR ABUSIVE SLANGS!" } else { "NO - UNRESTRICTED STREET ROAST MODE" },
         if !images.is_empty() { "YES - USER PROVIDED IMAGES/GIFS TO INSPECT" } else { "NONE" }
     );
 
@@ -160,8 +171,8 @@ pub async fn handle_ai_message(
         }
         Err(e) => {
             error!("AI generation failed: {:#}", e);
-            // If user used slangs/insults or is a menace target, don't show an error — flame them back!
-            if is_menace_target || crate::gali::contains_slang(&clean_prompt) {
+            // If user used slangs/insults or is a menace target, and safe mode is OFF, flame them back!
+            if !is_safe_mode && (is_menace_target || crate::gali::contains_slang(&clean_prompt)) {
                 let roast = crate::gali::get_comeback_for_message(&clean_prompt);
                 let _ = message.reply(&ctx.http, roast).await;
             } else {
