@@ -130,7 +130,10 @@ pub async fn handle_ai_message(
         }
         Err(e) => {
             error!("AI generation failed: {:#}", e);
-            let err_reply = "Sorry, I had trouble processing that question right now. Please try again in a moment!";
+            let err_reply = format!(
+                "⚠️ **AI Error:** {}\n*(Please check that `GEMINI_API_KEY` on Render is valid and active at [aistudio.google.com](https://aistudio.google.com/))*",
+                e
+            );
             let _ = message.reply(&ctx.http, err_reply).await;
         }
     }

@@ -5,9 +5,13 @@ use tracing::{debug, warn};
 use super::models::*;
 
 const GEMINI_CHAT_MODELS: &[&str] = &[
-    "gemini-2.5-flash",
     "gemini-2.0-flash",
     "gemini-1.5-flash",
+    "gemini-1.5-flash-latest",
+    "gemini-2.5-flash",
+    "gemini-2.0-flash-exp",
+    "gemini-3.1-flash-lite",
+    "gemini-3.5-flash",
     "gemini-1.5-pro",
 ];
 
@@ -62,30 +66,22 @@ impl AiClient {
         user_prompt: &str,
         reply_context: Option<&str>,
     ) -> Result<(String, Option<ServerAction>)> {
-        if self.api_key.trim().is_empty() {
-            return Err(anyhow!("Gemini API key is not configured"));
+        let key = self.api_key.trim();
+        if key.is_empty() {
+            return Err(anyhow!("GEMINI_API_KEY environment variable is empty"));
         }
 
-        let mut prompt_text = format!("{}\n\n", context_header);
+        // Build a single unified prompt containing instructions, context, and user input
+        let mut full_prompt = format!("[SYSTEM INSTRUCTIONS]\n{}\n\n[CONTEXT]\n{}\n\n", SYSTEM_PROMPT, context_header);
         if let Some(ref_text) = reply_context {
-            prompt_text.push_str(&format!("User is replying to message:\n\"\"\"\n{}\n\"\"\"\n\n", ref_text));
+            full_prompt.push_str(&format!("User is replying to previous message:\n\"\"\"\n{}\n\"\"\"\n\n", ref_text));
         }
-        prompt_text.push_str(&format!("User query: {}", user_prompt));
+        full_prompt.push_str(&format!("User Query: {}", user_prompt));
 
         let request = GeminiChatRequest {
-            system_instruction: Some(GeminiSystemInstruction {
-                parts: vec![GeminiPart {
-                    text: SYSTEM_PROMPT.to_string(),
-                }],
-            }),
             contents: vec![GeminiContent {
-                role: Some("user".to_string()),
-                parts: vec![GeminiPart { text: prompt_text }],
+                parts: vec![GeminiPart { text: full_prompt }],
             }],
-            generation_config: Some(GeminiGenConfig {
-                temperature: Some(0.7),
-                max_output_tokens: Some(1500),
-            }),
         };
 
         let mut last_err = anyhow!("No Gemini models available");
@@ -93,7 +89,7 @@ impl AiClient {
         for model in GEMINI_CHAT_MODELS {
             let url = format!(
                 "https://generativelanguage.googleapis.com/v1beta/models/{}:generateContent?key={}",
-                model, self.api_key
+                model, key
             );
 
             debug!("Sending AI chat request to model {}", model);
@@ -102,7 +98,7 @@ impl AiClient {
                 Ok(r) => r,
                 Err(e) => {
                     warn!("Network error calling Gemini model {}: {}", model, e);
-                    last_err = anyhow!("Network error: {}", e);
+                    last_err = anyhow!("Network error calling {}: {}", model, e);
                     continue;
                 }
             };
@@ -110,14 +106,14 @@ impl AiClient {
             let status = resp.status();
             if status == reqwest::StatusCode::TOO_MANY_REQUESTS {
                 warn!("Gemini 429 rate limit on model {}", model);
-                last_err = anyhow!("Rate limited on {}", model);
+                last_err = anyhow!("Rate limited (429) on {}", model);
                 continue;
             }
 
             if !status.is_success() {
                 let err_text = resp.text().await.unwrap_or_default();
                 warn!("Gemini error {} on model {}: {}", status, model, err_text);
-                last_err = anyhow!("Gemini returned {}: {}", status, err_text);
+                last_err = anyhow!("Gemini {} on model {}: {}", status, model, err_text);
                 continue;
             }
 
@@ -125,23 +121,29 @@ impl AiClient {
                 Ok(r) => r,
                 Err(e) => {
                     warn!("JSON parse error on model {}: {}", model, e);
-                    last_err = anyhow!("JSON decode failed: {}", e);
+                    last_err = anyhow!("JSON decode failed on {}: {}", model, e);
                     continue;
                 }
             };
 
             if let Some(err) = chat_resp.error {
                 warn!("Gemini API error on model {}: {}", model, err.message);
-                last_err = anyhow!("Gemini API error: {}", err.message);
+                last_err = anyhow!("Gemini API error on {}: {}", model, err.message);
                 continue;
             }
 
-            let full_text = chat_resp
+            let full_text = match chat_resp
                 .candidates
                 .and_then(|c| c.into_iter().next())
                 .and_then(|c| c.content.parts.into_iter().next())
                 .map(|p| p.text)
-                .ok_or_else(|| anyhow!("Empty response from Gemini model {}", model))?;
+            {
+                Some(t) => t,
+                None => {
+                    last_err = anyhow!("Empty response candidates from model {}", model);
+                    continue;
+                }
+            };
 
             // Extract any ```action ... ``` block
             let (cleaned_text, action) = extract_action(&full_text);
@@ -166,12 +168,12 @@ fn extract_action(text: &str) -> (String, Option<ServerAction>) {
         None => return (text.trim().to_string(), None),
     };
 
-    let json_str = &after_start[..action_end].trim();
+    let json_str = after_start[..action_end].trim();
     let action: Option<ServerAction> = serde_json::from_str(json_str).ok();
 
     let mut cleaned = String::new();
-    cleaned.push_str(&text[..action_start].trim());
-    let after_block = &after_start[action_end + 3..].trim();
+    cleaned.push_str(text[..action_start].trim());
+    let after_block = after_start[action_end + 3..].trim();
     if !after_block.is_empty() {
         if !cleaned.is_empty() {
             cleaned.push_str("\n\n");

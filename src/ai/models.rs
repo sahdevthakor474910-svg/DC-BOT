@@ -3,29 +3,10 @@ use serde::{Deserialize, Serialize};
 #[derive(Debug, Serialize)]
 pub struct GeminiChatRequest {
     pub contents: Vec<GeminiContent>,
-    #[serde(skip_serializing_if = "Option::is_none")]
-    pub system_instruction: Option<GeminiSystemInstruction>,
-    #[serde(skip_serializing_if = "Option::is_none")]
-    pub generation_config: Option<GeminiGenConfig>,
-}
-
-#[derive(Debug, Serialize)]
-pub struct GeminiSystemInstruction {
-    pub parts: Vec<GeminiPart>,
-}
-
-#[derive(Debug, Serialize)]
-pub struct GeminiGenConfig {
-    #[serde(skip_serializing_if = "Option::is_none")]
-    pub temperature: Option<f32>,
-    #[serde(skip_serializing_if = "Option::is_none")]
-    pub max_output_tokens: Option<u32>,
 }
 
 #[derive(Debug, Serialize, Deserialize)]
 pub struct GeminiContent {
-    #[serde(skip_serializing_if = "Option::is_none")]
-    pub role: Option<String>,
     pub parts: Vec<GeminiPart>,
 }
 
