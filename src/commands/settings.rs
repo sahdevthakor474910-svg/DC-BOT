@@ -27,7 +27,10 @@ use crate::db::queries;
         "unblock_user",
         "blocked_list",
         "export_setup",
-        "import_setup"
+        "import_setup",
+        "add_menace_user",
+        "remove_menace_user",
+        "menace_list"
     )
 )]
 pub async fn settings(_ctx: Context<'_>) -> Result<(), Error> {
@@ -299,6 +302,58 @@ pub async fn import_setup(
     }
 
     ctx.say("✅ **Setup restored successfully!** All channel mappings, auto-react targets, emojis and settings are back in place.").await?;
+    Ok(())
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+
+/// 😈 Add a user to the Menace Roast list (bot will always ruthlessly roast them on sight)
+#[poise::command(slash_command, guild_only, rename = "add-menace-user")]
+pub async fn add_menace_user(
+    ctx: Context<'_>,
+    #[description = "User to make the bot menace and ruthlessly roast"] user: serenity::User,
+) -> Result<(), Error> {
+    let guild_id = ctx.guild_id().unwrap().to_string();
+    let user_id = user.id.to_string();
+    queries::add_menace_user(&ctx.data().db, &guild_id, &user_id).await?;
+    ctx.say(format!(
+        "😈 **{}** has been marked as a **Menace Target**! The bot will now ruthlessly roast them on sight in English/Hindi!",
+        user.name
+    )).await?;
+    Ok(())
+}
+
+/// 😇 Remove a user from the Menace Roast list
+#[poise::command(slash_command, guild_only, rename = "remove-menace-user")]
+pub async fn remove_menace_user(
+    ctx: Context<'_>,
+    #[description = "User to remove from the menace list"] user: serenity::User,
+) -> Result<(), Error> {
+    let guild_id = ctx.guild_id().unwrap().to_string();
+    let user_id = user.id.to_string();
+    queries::remove_menace_user(&ctx.data().db, &guild_id, &user_id).await?;
+    ctx.say(format!(
+        "😇 **{}** was removed from the menace list.",
+        user.name
+    )).await?;
+    Ok(())
+}
+
+/// 📜 List all users currently on the bot's menace roast hit list
+#[poise::command(slash_command, guild_only, rename = "menace-list")]
+pub async fn menace_list(ctx: Context<'_>) -> Result<(), Error> {
+    let guild_id = ctx.guild_id().unwrap().to_string();
+    let users = queries::get_menace_users(&ctx.data().db, &guild_id).await?;
+    if users.is_empty() {
+        ctx.say("😇 No users are currently on the menace target list.").await?;
+    } else {
+        let mentions = users
+            .iter()
+            .map(|u| format!("• <@{}>", u))
+            .collect::<Vec<_>>()
+            .join("\n");
+        ctx.say(format!("😈 **Current Menace Roast Targets:**\n{}", mentions)).await?;
+    }
     Ok(())
 }
 

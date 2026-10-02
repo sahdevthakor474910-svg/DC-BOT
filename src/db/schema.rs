@@ -73,6 +73,10 @@ pub async fn run_migrations(db: &SqlitePool) -> Result<()> {
     let m15 = include_str!("../../migrations/015_pornclips_channel.sql");
     run_migration_alter(db, m15, "015").await?;
 
+    // 😈 Migration 016: Menace roast targets table
+    let m16 = include_str!("../../migrations/016_menace_targets.sql");
+    run_migration_alter(db, m16, "016").await?;
+
     info!("Database migrations complete");
     Ok(())
 }

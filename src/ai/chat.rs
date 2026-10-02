@@ -83,6 +83,15 @@ pub async fn handle_ai_message(
         (false, "Direct Message".to_string())
     };
 
+    // Check if user is a designated menace target
+    let is_menace_target = if let Some(guild_id) = message.guild_id {
+        queries::is_menace_user(&data.db, &guild_id.to_string(), &message.author.id.to_string())
+            .await
+            .unwrap_or(false)
+    } else {
+        false
+    };
+
     // Extract reference text if user is replying to a previous message
     let reply_context = message
         .referenced_message
@@ -91,11 +100,12 @@ pub async fn handle_ai_message(
 
     // Build context header
     let context_header = format!(
-        "SERVER: {}\nUSER: {} (ID: {})\n[SERVER OWNER: {}]",
+        "SERVER: {}\nUSER: {} (ID: {})\n[SERVER OWNER: {}]\n[MENACE ROAST TARGET: {}]",
         guild_name,
         message.author.name,
         message.author.id,
-        if is_owner { "YES" } else { "NO" }
+        if is_owner { "YES" } else { "NO" },
+        if is_menace_target { "YES - THIS USER IS ON YOUR HIT LIST! ROAST THEM UNMERCIFULLY IN ENGLISH/HINDI" } else { "NO" }
     );
 
     // Broadcast typing indicator while AI generates
@@ -109,7 +119,7 @@ pub async fn handle_ai_message(
             if let Some(action) = action_opt {
                 if is_owner {
                     if let Some(guild_id) = message.guild_id {
-                        match actions::execute_action(ctx, guild_id, message.channel_id, action).await {
+                        match actions::execute_action(ctx, &data.db, guild_id, message.channel_id, action).await {
                             Ok(act_msg) => {
                                 response_text.push_str(&format!("\n\n{}", act_msg));
                             }

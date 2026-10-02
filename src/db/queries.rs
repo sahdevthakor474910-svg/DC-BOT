@@ -1106,6 +1106,47 @@ pub async fn get_blocked_users(db: &SqlitePool, guild_id: &str) -> Result<Vec<St
     Ok(rows.into_iter().map(|r| r.get("user_id")).collect())
 }
 
+// ── Menace Roast Targets ───────────────────────────────────────────────────
+
+pub async fn add_menace_user(db: &SqlitePool, guild_id: &str, user_id: &str) -> Result<()> {
+    sqlx::query(
+        "INSERT OR IGNORE INTO menace_targets (guild_id, user_id) VALUES (?, ?)",
+    )
+    .bind(guild_id)
+    .bind(user_id)
+    .execute(db)
+    .await?;
+    Ok(())
+}
+
+pub async fn remove_menace_user(db: &SqlitePool, guild_id: &str, user_id: &str) -> Result<()> {
+    sqlx::query("DELETE FROM menace_targets WHERE guild_id = ? AND user_id = ?")
+        .bind(guild_id)
+        .bind(user_id)
+        .execute(db)
+        .await?;
+    Ok(())
+}
+
+pub async fn is_menace_user(db: &SqlitePool, guild_id: &str, user_id: &str) -> Result<bool> {
+    let row = sqlx::query(
+        "SELECT 1 FROM menace_targets WHERE guild_id = ? AND user_id = ? LIMIT 1",
+    )
+    .bind(guild_id)
+    .bind(user_id)
+    .fetch_optional(db)
+    .await?;
+    Ok(row.is_some())
+}
+
+pub async fn get_menace_users(db: &SqlitePool, guild_id: &str) -> Result<Vec<String>> {
+    let rows = sqlx::query("SELECT user_id FROM menace_targets WHERE guild_id = ?")
+        .bind(guild_id)
+        .fetch_all(db)
+        .await?;
+    Ok(rows.into_iter().map(|r| r.get("user_id")).collect())
+}
+
 #[derive(Debug, Clone, serde::Serialize, serde::Deserialize)]
 pub struct GuildSetupBackup {
     pub config: GuildConfig,

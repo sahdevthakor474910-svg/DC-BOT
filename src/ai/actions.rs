@@ -7,6 +7,7 @@ use super::models::ServerAction;
 /// Executes an authorized server management action on behalf of the server owner.
 pub async fn execute_action(
     ctx: &serenity::Context,
+    db: &sqlx::SqlitePool,
     guild_id: serenity::GuildId,
     current_channel_id: serenity::ChannelId,
     action: ServerAction,
@@ -108,6 +109,24 @@ pub async fn execute_action(
             guild_id.ban_with_reason(&ctx.http, user_id, 0, reason_str).await?;
             info!("🛠️ Banned user {} from guild {}", user_id, guild_id);
             Ok(format!("🔨 Successfully banned <@{}> from the server! Reason: {}", user_id, reason_str))
+        }
+
+        ServerAction::AddMenaceUser { user } => {
+            let user_id = parse_user_id(&user)?;
+            let guild_id_str = guild_id.to_string();
+            let user_id_str = user_id.to_string();
+            crate::db::queries::add_menace_user(db, &guild_id_str, &user_id_str).await?;
+            info!("😈 Added user {} to menace targets in guild {}", user_id, guild_id);
+            Ok(format!("😈 **<@{}>** has been added to the **Menace Hit List**! I will now ruthlessly flame and roast them on sight in English/Hindi.", user_id))
+        }
+
+        ServerAction::RemoveMenaceUser { user } => {
+            let user_id = parse_user_id(&user)?;
+            let guild_id_str = guild_id.to_string();
+            let user_id_str = user_id.to_string();
+            crate::db::queries::remove_menace_user(db, &guild_id_str, &user_id_str).await?;
+            info!("😇 Removed user {} from menace targets in guild {}", user_id, guild_id);
+            Ok(format!("😇 **<@{}>** has been spared and removed from the menace list.", user_id))
         }
     }
 }

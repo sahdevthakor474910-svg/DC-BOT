@@ -70,4 +70,10 @@ pub enum ServerAction {
         #[serde(default)]
         reason: Option<String>,
     },
+    AddMenaceUser {
+        user: String,
+    },
+    RemoveMenaceUser {
+        user: String,
+    },
 }
