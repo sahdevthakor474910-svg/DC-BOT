@@ -200,113 +200,113 @@ pub fn contains_slang(raw_text: &str) -> bool {
 // ─────────────────────────────────────────────────────────────────────────────
 
 const HINDI_GALI_COMEBACKS: &[&str] = &[
-    "Ja na lodu, yahan kyu apni marwa raha hai.",
-    "Chal nikal chutiye, pehli fursat mein kat le yahan se.",
-    "Abey bsdk, aukaat mein reh ke baat kar varna yahi pel dunga.",
-    "Chup baith bkl, tere jaise nalle ko roz joota padta hai.",
-    "Nikal laude, baap ke aage bakchodi mat pel.",
-    "Abey gandu, dimaag bech ke internet chalata hai kya?",
-    "Chal hatt lodu, tere bolne se kutta bhi na dare.",
-    "Chup kar chutiye, muh se hagte ho ya dimaag se?",
-    "Abey madarchod, limit mein reh varna patak ke dho dunga.",
-    "Bhenchod dimaag mat kharab kar, nikal yahan se.",
-    "Chal nikal tmkc, yahan apna randirona band kar.",
-    "Abey jhatu chutiye, aukaat dekh ke bol, yahan sab tere baap baithe hain.",
-    "Chal be lodu, aage badh, faltu ka bheed mat kar.",
-    "Chup be laude, tere jaise 36 aate hain daily rona dhona karne.",
-    "Abey bhadwe, do rupaye ki aukaat nahi aur gali de raha hai chutiye.",
-    "Nikal bkl, yahan beizzati karwane ka itna shauk hai kya?",
-    "Abey saale harami chutiye, ek thappad mein saara chutiyapa nikal dunga.",
-    "Oye bsdk, mute kar du kya ya khud apni aukaat mein aayega?",
-    "Ja na lodu, pehle homework kar le phir aana chaudha hone.",
-    "Bhenchod chup chap baith ja, faltu mein pit ke jayega.",
-    "Chal nikal gandu, tere se baat karna bhi time waste hai.",
-    "Muh band rakh laude, varna aisi beizzati karunga ki Discord delete kar dega.",
-    "Abey chutiye lodu, internet mila toh khud ko don samajh raha hai kya?",
-    "Ja na bkl, jahan se nikla hai wahi wapas ghus ja.",
-    "Teri aisi taisi lodu, pehli fursat mein nikal yahan se.",
-    "Chup kar madarchod, baap ke aage bakwaas karega toh laat padegi.",
-    "Abey gandu, itni kyu jal rahi hai teri? Baraf laga le jaake.",
-    "Chal chutiye, tujhe toh gali dena bhi gali ki beizzati hai.",
-    "Laude chup baith, dimaag ka bhosda mat kar yahan.",
-    "Chup bsdk, tere jaiso ko nashte mein khaa jata hoon.",
-    "Abey lallu chutiye, yahan apna randirona band kar.",
-    "Ja na laude, aukaat nahi hai saamne aane ki aur chat mein sher ban raha hai.",
-    "Bhenchod itna uchhal mat, sadak pe ghis dunga.",
-    "Abey lodu, tere khandaan mein tameez nahi sikhaayi kya kisi ne?",
-    "Oye madarchod, dhang se bol varna 7 pushte yaad rakhengi.",
-    "Chal nikal lodu, yahan apna chutiyapa failana band kar.",
-    "Abey bkl gandu, teri aukaat do kaudi ki nahi hai.",
-    "Muh sambhal ke bol chutiye, varna yahi dhuan nikal dunga.",
-    "Bhenchod chup! Ek lafz aur bola toh gaand laal kar dunga.",
-    "Ja na lodu, pogo dekh, yahan baap ke saamne bakwaas mat kar.",
-    "Abey chutiye, zabaan pe control rakh warna kheench ke baahar nikal dunga.",
-    "Chal be gandu, do kaudi ka insaan aur baatein aasmaan ki.",
-    "Tere jaise lodu ko mirror dekh ke bhi sharam aati hogi.",
-    "Bhenchod khud ki shakal dekh ke baat kar, gawaar kahi ke.",
-    "Ja na laude, kisi aur ke samne apni hekdhi dikhana, yahan nahi chalegi.",
-    "Abey bkl, dimaag ghutne mein hai kya jo har jagah beizzati karwata hai?",
-    "Aukaat mein reh lodu, agli baar bola toh nanga karke pelunga.",
-    "Chup baith madarchod, teri bakwaas se sar dard ho raha hai.",
-    "Abey saale chutiye, pura kachra kar diya aake.",
-    "Chal kat le lodu, tere se baat karna matlab kachre mein patthar maarna.",
-    "Chup baith bkl rndy, zyada phadphada mat.",
-    "Chal be tmkc, aukaat dekh ke gali de varna chat se gayab kar dunga.",
-    "Abey bkl, muh band rakh varna ulti khopdi kar dunga.",
-    "Ja na rndy, kisi aur ke aage ro, yahan sab tere baap baithe hain.",
-    "Chal nikal tmkc, faltu ka gyan mat pel.",
-    "Abey bkl chutiye, dimaag kachre mein fek ke aaya hai kya?",
-    "Oye rndy ke pille, limit mein reh varna yahi zameen mein gaad dunga.",
-    "Chal hatt bkl, baap ke aage bakchodi karega toh dho dunga.",
-    "Tmkc nikal yahan se, faltu mein kutte ki maut marega.",
-    "Abey bkl rndy, shakal dekh ke baat kar lodu.",
-    "Chal nikal bkl, tere jaise 36 aate hain daily yahan randirona karne.",
-    "Tmkc chup baith, ek lafz aur mat bol.",
-    "Abey bkl, itna kyu kud raha hai? Aukaat mein reh.",
-    "Nikal tmkc, faltu mein gaand marwane ka shauk hai kya?",
-    "Chup kar rndy, baap se bakwaas karega toh yahi pel dunga.",
-    "Tmkc aukaat mein reh, ek chamaat mein saara nasha utaar dunga.",
-    "Chal kat le rndy, tere jaise chutiye ko reply dena bhi time waste hai.",
-    "Abey lodu bhadwe, tameez se baat kar varna yahi ulti taangein baandh dunga.",
-    "Bhenchod zabaan ladana band kar aur chup chap kone mein baith.",
-    "Chal nikal lawde, faltu mein apni beizzati mat karwa.",
+    "Tujhse behtar comeback toh auto-correct de deta hai bkl.",
+    "Pehli baar internet mila hai kya jo yahan itna uchhal raha hai chutiye?",
+    "Itna vella baitha hai ki chat mein aake beizzati karwa raha hai lodu.",
+    "Aukaat do rupaye ki nahi hai aur baatein aasmaan ki pel raha hai bsdk.",
+    "Tera dimaag offline hai ya bachpan se hi software crash hai bkl?",
+    "Shakal aisi hai ki aaina bhi dekh ke error dikha de, aur akad dekho tmkc.",
+    "Do line bolne ki aukaat nahi aur yahan gyan baantne chala hai chutiya.",
+    "Tujhe lagta hai tu cool lag raha hai? Joker lag raha hai lawde.",
+    "Aisa joota padega na ki 3 din tak date aur time bhool jayega bkl.",
+    "Chup baith bsdk, tere jaise sadak chhaap roz gali sun ke jaate hain.",
+    "Bina dimaag ke bolne ki aadat daal li hai kya tune gandu?",
+    "Dhang se type karna sikh pehle, phir aana baap se behas karne laude.",
+    "Pura khandaan milke bhi tere liye ek dhang ka dimaag nahi la sakta chutiye.",
+    "Yahan aake apna randirona mat pel, chup chap nikal le tmkc.",
+    "Teri bakwaas sun ke lag raha hai school ka fees barbaad kiya tere baap ne.",
+    "Itna confidence late kahan se ho be? Do kaudi ki akal nahi hai tere paas.",
+    "Zabaan sambhal ke baat kar varna yahi aukaat dikha dunga bkl.",
+    "Khud ka career bana pehle, yahan chat mein sher mat ban lodu.",
+    "Tujhe reply dena matlab kachre ke dibbe mein patthar phekna hai.",
+    "Aaina dekh le ek baar, saari akad 2 second mein hawa ho jayegi bsdk.",
+    "Aankhein khol ke dekh, koi tujhe poochh bhi nahi raha yahan pe rndy.",
+    "Ghar walo ko pata hai tu internet pe aisi beizzati karwata hai chutiye?",
+    "Ek thappad mein saari hawa nikal jayegi, zyada udd mat lawde.",
+    "Jitna dimaag tere paas hai, utne mein toh calculator bhi nahi chalta bkl.",
+    "Chup chap kone mein baith ja, faltu ka scene mat create kar tmkc.",
+    "Tujhe dekh ke lagta hai bhagwan akal dete time tujhe bhool gaya tha.",
+    "Baat karne ki tameez nahi hai aur aa gaya yahan chaude mein bsdk.",
+    "Jo bolna hai dhang se bol, varna pehli fursat mein patak ke pelunga lodu.",
+    "Tujhe laga tu bohot bada teer maar liya? Khota sikka hai tu chutiye.",
+    "Aisi gaaliyan sunega na ki dictionary choti pad jayegi, isliye chup reh bkl.",
+    "Tera ye roz ka rona dekh ke taras aata hai teri zindagi pe rndy.",
+    "Aage badh lawde, yahan faltu bheed mat badha.",
+    "Tere jaise nallo ki wajah se hi internet sasta hona band hona chahiye tmkc.",
+    "Muh se kachra nikalna band kar aur dhang ki baat seekh bsdk.",
+    "Lagta hai subah se kisi ne zillat nahi di tujhe, isliye yahan aa gaya chutiye.",
+    "Limit cross mat kar, varna aisi beizzati hogi ki account delete karega bkl.",
+    "Tere bolne ka koi matlab nahi hai, bilkul mute ho ja lodu.",
+    "Akal ghaas charne gayi hai ya paidaishi aise hi namoone ho?",
+    "Aukaat mein reh ke bol varna chat se aisi laat padegi ki yaad rakhega tmkc.",
+    "Chal kat le, tere se muh lagna bhi time kharaab karna hai.",
+    "Har jagah aake apni beizzati karwana compulsory hai kya tera bsdk?",
+    "Aadha kilo dimaag khareed le jaake, yahan be-matlab ki ulti mat kar laude.",
+    "Tere logic dekh ke lagta hai dimaag ke naam pe ghutna fit hai chutiye.",
+    "Bina kisi aukaat ke chat mein bakwaas karna band kar bkl rndy.",
+    "Jitna chilla raha hai na, utne mein tera hi blood pressure badhega lodu.",
+    "Tu rehne de bhai, tere bas ki baat hi nahi hai dhang se baat karna.",
+    "Bhenchod chup chap nikal, yahan sab tera tamasha dekh rahe hain.",
+    "Aise baatein kar raha hai jaise bohot bada don ho, asal mein do rupaye ka chirkut hai.",
+    "Teri aukat sirf screen ke peeche se bhaukne ki hai bsdk.",
+    "Chal nikal, tere jaiso ko bhaav dena hi sabse badi galti hai.",
+    "Agle janam mein thoda dimaag leke paida hona lodu.",
+    "Bhenchod shakal se gawaar aur baaton se nalla lagta hai tu.",
+    "Chat mein sher aur real life mein kutte ki tarah darta hai chutiye.",
+    "Tmkc itna shauk hai beizzati ka toh mirror ke samne khade ho ja.",
+    "Aukaat dekh ke pange liya kar varna sadak pe ghis ke pel dunga bkl.",
+    "Tera pura wajood hi ek galat decision lagta hai rndy.",
+    "Apna ye ghatiya attitude leke kisi aur ke aage ja, yahan tera baap khada hai.",
+    "Do shabd dhang se bol nahi paata aur gali sikh ke hero ban raha hai bsdk.",
+    "Bina sir pair ki baatein karna band kar aur chup chap dafa ho ja lodu.",
+    "Tujhse baat karke mere hi neurons mar rahe hain chutiye.",
 ];
 
 // ─────────────────────────────────────────────────────────────────────────────
-// Pure 2026 Gen Z & Instagram Reels Comment Section Roasts (For English)
+// Creative, Diverse Modern Internet Roasts (For English)
 // ─────────────────────────────────────────────────────────────────────────────
 
 const GENZ_ENGLISH_COMEBACKS: &[&str] = &[
-    "Lil bro really thought he did something 😭🙏 sit down.",
-    "Bro is yapping with negative aura 📉 touch grass.",
-    "Blud thinks he's the main character 💀 who invited you?",
-    "Bro cooked absolutely nothing, pure clown behavior 🫵😂",
-    "Major L + ratio, digital footprint cooked 🥀",
-    "Bro is tweaking over Discord pixels 😭🙏 go outside.",
-    "0 rizz, -100,000 aura, 100% cooked 📉",
-    "Bro really typed that and felt like a sigma 😭🙏 embarrassing.",
-    "Lil bro's whole personality is crying in chat 💀 pipe down.",
-    "Nah bro is fighting for his life in the comments 😭🙏",
-    "Bro is NOT the thinker 🫵😂 pack it up lil bro.",
-    "Bro's aura evaporated in 2 seconds 📉",
-    "Bro's battery is on 1% and so is his brain 🪫",
-    "The delusion needs to be studied at Harvard 🔬💀",
-    "Ain't no way bro typed this with full confidence 😭🙏",
-    "Bro thought he was him 💀 pack it up lil bro 🚪",
-    "Bro had one job and fumbled with zero motion 💀",
-    "Nah who let bro cook 😭🙏 call the fire department.",
-    "Bro really woke up and chose to embarrass himself 💀",
-    "Bro got that 1000-yard stare after typing that 👁️👄👁️",
-    "Bro's aura is in severe national debt 📉",
-    "Blud really dropped the most NPC line ever 😭🙏",
-    "Bro think he carti 💀 calm down lil bro.",
-    "Ain't no way lil bro is barking in the comments 💀 mute yourself.",
-    "Bro is cooked to medium rare 🥩😭 log off.",
-    "Bro is yapping to a brick wall 🧱 touch grass.",
-    "The audacity is genuinely astronomical 🪐💀",
-    "Bro really thought we was gonna agree with him 🫵😂",
-    "Bro got caught in 4K with negative motion 🥀",
-    "Unc is tweaking again 💀 someone take bro's phone away.",
+    "You really spent precious minutes of your life typing that out 😭🙏",
+    "Not a single thought went into that sentence and it genuinely shows 💀",
+    "Delete this before anyone else sees how embarrassing you are 🥀",
+    "Talking with this much confidence with zero facts to back it up 🫵😂",
+    "Your screen time needs to be revoked immediately 📉",
+    "Imagine getting cooked this bad in public chat 😭🙏",
+    "You're fighting an uphill battle with a severe IQ disadvantage 💀",
+    "Even the bots in this server are feeling second-hand embarrassment for you 🥀",
+    "Log out, reconsider your life choices, and try again tomorrow 🪫",
+    "Confidence at 100%, competence sitting at absolute zero 📉",
+    "Whoever told you that was a good comeback lied directly to your face 💀",
+    "You typed all that just to deliver absolutely zero impact 🫵😂",
+    "Every time you speak the collective IQ of this channel takes a nosedive 📉",
+    "You're loud and completely wrong, pick a struggle 😭🙏",
+    "Please don't hurt yourself trying to formulate another sentence 💀",
+    "That insult had the devastating impact of a wet paper towel 🥀",
+    "You really thought you did something special there 🫵😂",
+    "There's still time to pretend your cat walked across your keyboard 😭🙏",
+    "Standing on business with absolutely no business to stand on 📉",
+    "You're one bad argument away from completely deactivating your account 💀",
+    "Taking an L of this magnitude in public takes genuine talent 🥀",
+    "The silence from everyone else was your cue to pack it up 🫵😂",
+    "You're arguing for third place in a two-man race 😭🙏",
+    "Zero substance, zero accuracy, 100% emotional damage 📉",
+    "Wrap it up, the audience has completely checked out 🚪💀",
+    "Your Wi-Fi is doing all that heavy lifting just for you to post garbage 🥀",
+    "Self-awareness has completely abandoned you today 😭🙏",
+    "I've seen smarter arguments come out of an auto-correct glitch 💀",
+    "You really felt proud pressing send on that mess 🫵😂",
+    "You're swinging at shadows in the dark and still missing 📉",
+    "Don't flatter yourself, nobody was intimidated by that nonsense 💀",
+    "You're embarrassing yourself for free when you could just stay quiet 😭🙏",
+    "That comeback expired back in 2016, update your material 🥀",
+    "Speechless from how tragic that attempt at an insult was 🫵😂",
+    "You woke up today and chose pure unprovoked public embarrassment 💀",
+    "Go touch some real grass, the digital world is chewing you up 📉",
+    "Your arguments are held together by Scotch tape and wishful thinking 😭🙏",
+    "You brought butter knives to a verbal gunfight 💀",
+    "Mute yourself before you dig an even deeper hole 🪫",
+    "A masterclass in saying a lot of words while making zero points 🫵😂",
 ];
 
 const HINDI_DETECT_WORDS: &[&str] = &[
@@ -358,34 +358,56 @@ pub fn is_hindi_message(text: &str) -> bool {
     false
 }
 
-/// Pick an appropriate comeback based on message language:
-/// - Hindi slang/message -> Pure Hindi street comeback
-/// - English message -> Pure 2026 Gen Z English roast
-pub fn get_comeback_for_message(message: &str) -> &'static str {
+static RECENT_COMEBACKS: Mutex<Option<std::collections::VecDeque<&'static str>>> = Mutex::new(None);
+
+/// Pick a comeback avoiding recently chosen ones to eliminate repetitive lines
+fn pick_non_recent(pool: &[&'static str]) -> &'static str {
     let mut rng = rand::thread_rng();
-    if is_hindi_message(message) {
-        HINDI_GALI_COMEBACKS.choose(&mut rng).copied().unwrap_or(
-            "Ja na lodu, aukaat dekh ke baat kar! 🤡",
-        )
+    if let Ok(mut lock) = RECENT_COMEBACKS.lock() {
+        let queue = lock.get_or_insert_with(std::collections::VecDeque::new);
+
+        let candidates: Vec<&'static str> = pool
+            .iter()
+            .copied()
+            .filter(|item| !queue.contains(item))
+            .collect();
+
+        let chosen = if !candidates.is_empty() {
+            *candidates.choose(&mut rng).unwrap_or(&pool[0])
+        } else {
+            queue.clear();
+            *pool.choose(&mut rng).unwrap_or(&pool[0])
+        };
+
+        queue.push_back(chosen);
+        if queue.len() > 15 {
+            queue.pop_front();
+        }
+
+        chosen
     } else {
-        GENZ_ENGLISH_COMEBACKS.choose(&mut rng).copied().unwrap_or(
-            "Lil bro really thought he did something 💀 sit down.",
-        )
+        *pool.choose(&mut rng).unwrap_or(&pool[0])
     }
 }
 
-/// Pick a random comeback (50/50 Hindi or Gen Z English)
+/// Pick an appropriate comeback based on message language:
+/// - Hindi slang/message -> Pure Hindi street comeback
+/// - English message -> Creative, sharp English roast
+pub fn get_comeback_for_message(message: &str) -> &'static str {
+    if is_hindi_message(message) {
+        pick_non_recent(HINDI_GALI_COMEBACKS)
+    } else {
+        pick_non_recent(GENZ_ENGLISH_COMEBACKS)
+    }
+}
+
+/// Pick a random comeback (50/50 Hindi or English)
 pub fn get_random_gali_comeback() -> &'static str {
-    let mut rng = rand::thread_rng();
     let is_hindi: bool = rand::random();
     if is_hindi {
-        HINDI_GALI_COMEBACKS.choose(&mut rng).copied().unwrap_or(
-            "Ja na lodu, aukaat dekh ke baat kar! 🤡",
-        )
+        pick_non_recent(HINDI_GALI_COMEBACKS)
     } else {
-        GENZ_ENGLISH_COMEBACKS.choose(&mut rng).copied().unwrap_or(
-            "Lil bro really thought he did something 💀 sit down.",
-        )
+        pick_non_recent(GENZ_ENGLISH_COMEBACKS)
     }
 }
 

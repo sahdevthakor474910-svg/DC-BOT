@@ -53,15 +53,33 @@ pub async fn handle_ai_message(
     clean_prompt = clean_prompt.replace(&mention_plain, "").replace(&mention_nick, "");
     let mut clean_prompt = clean_prompt.trim().to_string();
 
+    // Check if Safe Mode is enabled in this server
+    let is_safe_mode = if let Some(guild_id) = message.guild_id {
+        queries::get_or_create_guild(&data.db, &guild_id.to_string())
+            .await
+            .map(|c| c.safe_mode_enabled)
+            .unwrap_or(false)
+    } else {
+        false
+    };
+
     // Extract any images, GIFs, or video clips from message or reply context
     let images = super::media::extract_media_from_message(&data.http_client, message).await;
 
     // If empty prompt (user just pinged the bot with no text)
     if clean_prompt.is_empty() {
         if !images.is_empty() {
-            clean_prompt = "React to and roast/comment on this image or GIF like a late-2026 viral Instagram reel comment section menace.".to_string();
+            clean_prompt = if is_safe_mode {
+                "Describe, explain, or answer questions about this image helpfully and cleanly.".to_string()
+            } else {
+                "React to and comment on this image or GIF with witty, sharp banter.".to_string()
+            };
         } else {
-            let greeting = format!("yo **{}**, why you pinging me with 0 words 😭🙏 bol kya scene hai", message.author.name);
+            let greeting = if is_safe_mode {
+                format!("Hey **{}**! How can I help you today?", message.author.name)
+            } else {
+                format!("yo **{}**, what's on your mind? What can I help you with?", message.author.name)
+            };
             let _ = message.reply(&ctx.http, greeting).await;
             return Ok(true);
         }
@@ -96,16 +114,6 @@ pub async fn handle_ai_message(
         false
     };
 
-    // Check if Safe Mode is enabled in this server
-    let is_safe_mode = if let Some(guild_id) = message.guild_id {
-        queries::get_or_create_guild(&data.db, &guild_id.to_string())
-            .await
-            .map(|c| c.safe_mode_enabled)
-            .unwrap_or(false)
-    } else {
-        false
-    };
-
     // Extract reference text if user is replying to a previous message
     let reply_context = message
         .referenced_message
@@ -119,8 +127,8 @@ pub async fn handle_ai_message(
         message.author.name,
         message.author.id,
         if is_owner { "YES" } else { "NO" },
-        if is_menace_target && !is_safe_mode { "YES - THIS USER IS ON YOUR HIT LIST! ROAST THEM UNMERCIFULLY IN ENGLISH/HINDI" } else { "NO" },
-        if is_safe_mode { "YES - STRICT CLEAN PG MODE! DO NOT USE ANY GALI, PROFANITY, OR ABUSIVE SLANGS!" } else { "NO - UNRESTRICTED STREET ROAST MODE" },
+        if is_menace_target && !is_safe_mode { "YES - THIS USER IS ON YOUR MENACE HIT LIST! ROAST THEM WITTILY IN THEIR LANGUAGE" } else { "NO" },
+        if is_safe_mode { "YES - SAFE MODE ACTIVE! BE POLITE, FRIENDLY, AND RESPECTFUL. ZERO SAVAGE ATTITUDE, ZERO COMEBACKS, ZERO ROASTS, ZERO PROFANITY. ANSWER ALL QUESTIONS CLEARLY, ACCURATELY, AND POLITELY." } else { "NO - CASUAL / WITTY MODE. ALWAYS ANSWER QUESTIONS AND HELP REQUESTS CLEARLY AND ACCURATELY. ONLY ROAST IF INSULTED, SWEARED AT, OR EXPLICITLY ASKED TO ROAST." },
         if !images.is_empty() { "YES - USER PROVIDED IMAGES/GIFS TO INSPECT" } else { "NONE" }
     );
 
