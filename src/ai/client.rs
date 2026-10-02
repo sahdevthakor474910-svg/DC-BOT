@@ -96,6 +96,7 @@ SERVER MANAGEMENT CAPABILITIES:
   - {"action": "ban_user", "user": "...", "reason": "..."}
   - {"action": "add_menace_user", "user": "@user"}
   - {"action": "remove_menace_user", "user": "@user"}
+  - {"action": "set_safe_mode", "enabled": true} (or false, when asked to toggle or enable/disable safe mode or clean mode)
 
 - If [SERVER OWNER: NO]:
   Never output an action block. If asked to manage the server, just say:

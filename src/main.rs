@@ -108,6 +108,17 @@ async fn event_handler(
             info!("⚡ InteractionCreate event: kind={:?}, id={}", interaction.kind(), interaction.id());
         }
 
+        serenity::FullEvent::GuildCreate { guild, is_new } => {
+            if is_new.unwrap_or(false) {
+                info!("🎉 Joined new guild: {} ({}) - registering commands", guild.name, guild.id);
+                if let Err(e) = poise::builtins::register_in_guild(ctx, &_framework.options().commands, guild.id).await {
+                    tracing::warn!("Failed to register commands in new guild {}: {:?}", guild.id, e);
+                } else {
+                    info!("⚡ Registered commands instantly in new guild {}", guild.id);
+                }
+            }
+        }
+
         _ => {}
     }
 
@@ -229,26 +240,40 @@ async fn main() -> Result<()> {
             }),
             ..Default::default()
         })
-        .setup(move |ctx, _ready, framework| {
+        .setup(move |ctx, ready, framework| {
             let bot_data = bot_data.clone();
             let http     = Arc::clone(&ctx.http);
 
             Box::pin(async move {
-                // Register slash commands globally
+                // Register slash commands globally (takes up to 1h for Discord global CDN cache)
                 poise::builtins::register_globally(ctx, &framework.options().commands).await?;
                 info!("📋 Slash commands registered globally");
 
-                // Also register commands directly into all configured guilds for instant availability
+                // Collect all guild IDs from Gateway Ready event, Cache, and DB configs for INSTANT 0s availability
+                let mut guild_ids = std::collections::HashSet::new();
+
+                for unavailable_guild in &ready.guilds {
+                    guild_ids.insert(unavailable_guild.id);
+                }
+
+                for guild_id in ctx.cache.guilds() {
+                    guild_ids.insert(guild_id);
+                }
+
                 if let Ok(configs) = crate::db::queries::get_all_guild_configs(&bot_data.db).await {
                     for cfg in configs {
                         if let Ok(guild_id_num) = cfg.guild_id.parse::<u64>() {
-                            let guild_id = serenity::GuildId::new(guild_id_num);
-                            if let Err(e) = poise::builtins::register_in_guild(ctx, &framework.options().commands, guild_id).await {
-                                tracing::warn!("Could not register commands in guild {}: {:?}", cfg.guild_id, e);
-                            } else {
-                                info!("⚡ Slash commands registered instantly in guild {}", cfg.guild_id);
-                            }
+                            guild_ids.insert(serenity::GuildId::new(guild_id_num));
                         }
+                    }
+                }
+
+                info!("⚡ Registering slash commands instantly across {} guild(s)...", guild_ids.len());
+                for guild_id in guild_ids {
+                    if let Err(e) = poise::builtins::register_in_guild(ctx, &framework.options().commands, guild_id).await {
+                        tracing::warn!("Could not register commands in guild {}: {:?}", guild_id, e);
+                    } else {
+                        info!("⚡ Slash commands registered instantly in guild {}", guild_id);
                     }
                 }
 

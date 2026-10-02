@@ -123,4 +123,7 @@ pub enum ServerAction {
     RemoveMenaceUser {
         user: String,
     },
+    SetSafeMode {
+        enabled: bool,
+    },
 }

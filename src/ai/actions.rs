@@ -128,6 +128,17 @@ pub async fn execute_action(
             info!("😇 Removed user {} from menace targets in guild {}", user_id, guild_id);
             Ok(format!("😇 **<@{}>** has been spared and removed from the menace list.", user_id))
         }
+
+        ServerAction::SetSafeMode { enabled } => {
+            let guild_id_str = guild_id.to_string();
+            crate::db::queries::set_safe_mode_enabled(db, &guild_id_str, enabled).await?;
+            info!("🛡️ Safe mode set to {} in guild {}", enabled, guild_id);
+            if enabled {
+                Ok("🛡️ **Safe Mode is now ENABLED!** Gali/slang auto-responses are turned off and the bot is running in clean, family-friendly PG mode.".to_string())
+            } else {
+                Ok("⚡ **Safe Mode is now DISABLED!** Full savage mode active — raw street slangs, unfiltered roasts, and gali comebacks are back ON!".to_string())
+            }
+        }
     }
 }
 

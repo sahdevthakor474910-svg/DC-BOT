@@ -6,7 +6,7 @@ use crate::db::queries;
     slash_command,
     guild_only,
     check = "crate::commands::checks::is_admin_check",
-    rename = "safemode"
+    description_localized("en-US", "Toggle Safe Mode ON or OFF (clean PG mode vs unfiltered savage mode)")
 )]
 pub async fn safemode(
     ctx: Context<'_>,
