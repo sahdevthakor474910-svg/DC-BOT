@@ -8,6 +8,7 @@ pub mod help;
 pub mod ping;
 pub mod roast;
 pub mod safemode;
+pub mod response;
 
 // Legacy modules kept for reference — no longer registered as commands
 // pub mod admin;
@@ -30,5 +31,6 @@ pub fn all() -> Vec<poise::Command<Data, Error>> {
         ping::ping(),
         roast::roast(),
         safemode::safemode(),
+        response::response(),
     ]
 }

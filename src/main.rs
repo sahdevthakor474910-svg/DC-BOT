@@ -110,12 +110,9 @@ async fn event_handler(
 
         serenity::FullEvent::GuildCreate { guild, is_new } => {
             if is_new.unwrap_or(false) {
-                info!("🎉 Joined new guild: {} ({}) - registering commands", guild.name, guild.id);
-                if let Err(e) = poise::builtins::register_in_guild(ctx, &_framework.options().commands, guild.id).await {
-                    tracing::warn!("Failed to register commands in new guild {}: {:?}", guild.id, e);
-                } else {
-                    info!("⚡ Registered commands instantly in new guild {}", guild.id);
-                }
+                info!("🎉 Joined new guild: {} ({}) - ensuring no duplicate guild commands", guild.name, guild.id);
+                let empty_cmds: &[poise::Command<Data, Error>] = &[];
+                let _ = poise::builtins::register_in_guild(ctx, empty_cmds, guild.id).await;
             }
         }
 
@@ -245,11 +242,12 @@ async fn main() -> Result<()> {
             let http     = Arc::clone(&ctx.http);
 
             Box::pin(async move {
-                // Register slash commands globally (takes up to 1h for Discord global CDN cache)
+                // Register slash commands globally (single source of truth for all servers)
                 poise::builtins::register_globally(ctx, &framework.options().commands).await?;
-                info!("📋 Slash commands registered globally");
+                info!("📋 Slash commands registered globally (single source of truth)");
 
-                // Collect all guild IDs from Gateway Ready event, Cache, and DB configs for INSTANT 0s availability
+                // Collect all guild IDs to clear any leftover guild-scoped commands
+                // so Discord does not display duplicate slash commands in the client!
                 let mut guild_ids = std::collections::HashSet::new();
 
                 for unavailable_guild in &ready.guilds {
@@ -268,12 +266,12 @@ async fn main() -> Result<()> {
                     }
                 }
 
-                info!("⚡ Registering slash commands instantly across {} guild(s)...", guild_ids.len());
+                let empty_cmds: &[poise::Command<Data, Error>] = &[];
                 for guild_id in guild_ids {
-                    if let Err(e) = poise::builtins::register_in_guild(ctx, &framework.options().commands, guild_id).await {
-                        tracing::warn!("Could not register commands in guild {}: {:?}", guild_id, e);
+                    if let Err(e) = poise::builtins::register_in_guild(ctx, empty_cmds, guild_id).await {
+                        tracing::warn!("Could not clear guild commands in {}: {:?}", guild_id, e);
                     } else {
-                        info!("⚡ Slash commands registered instantly in guild {}", guild_id);
+                        info!("🧹 Cleared guild-scoped commands in guild {} (preventing duplicates)", guild_id);
                     }
                 }
 

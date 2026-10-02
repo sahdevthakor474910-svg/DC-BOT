@@ -92,36 +92,49 @@ pub async fn handle(
         }
     }
 
-    // ── AI Conversation & Server Management ──────────────────────────────────
-    // If the message mentions the bot or replies to one of the bot's messages,
-    // process it conversationally and execute any authorized owner server actions.
-    if crate::ai::chat::handle_ai_message(ctx, message, data).await? {
-        return Ok(());
-    }
-
-    // ── Automatic Slang / Gali Response ──────────────────────────────────────
-    // If someone in the server uses bad words or slangs (without mentioning the bot),
-    // and gali response is enabled, slap back with a savage comeback!
-    if let Some(guild_id) = message.guild_id {
+    // ── Check if bot chat responses are enabled for this server ─────────────
+    let bot_response_enabled = if let Some(guild_id) = message.guild_id {
         let guild_id_str = guild_id.to_string();
-        if let Ok(cfg) = queries::get_or_create_guild(&data.db, &guild_id_str).await {
-            if cfg.gali_response_enabled && !cfg.safe_mode_enabled {
-                let user_id_str = message.author.id.to_string();
-                let is_blocked = queries::is_user_blocked(&data.db, &guild_id_str, &user_id_str)
-                    .await
-                    .unwrap_or(false);
+        queries::get_or_create_guild(&data.db, &guild_id_str)
+            .await
+            .map(|c| c.bot_response_enabled)
+            .unwrap_or(true)
+    } else {
+        true
+    };
 
-                if !is_blocked && crate::gali::contains_slang(&message.content) {
-                    if crate::gali::check_and_update_cooldown(message.author.id.get(), message.channel_id.get()) {
-                        info!(
-                            "🤬 Slang detected from {} in channel {}. Sending gali comeback!",
-                            message.author.name, message.channel_id
-                        );
-                        let comeback = crate::gali::get_comeback_for_message(&message.content);
-                        if let Err(e) = message.reply(&ctx.http, comeback).await {
-                            warn!("Failed to send gali response: {}", e);
+    if bot_response_enabled {
+        // ── AI Conversation & Server Management ──────────────────────────────
+        // If the message mentions the bot or replies to one of the bot's messages,
+        // process it conversationally and execute any authorized owner server actions.
+        if crate::ai::chat::handle_ai_message(ctx, message, data).await? {
+            return Ok(());
+        }
+
+        // ── Automatic Slang / Gali Response ──────────────────────────────────
+        // If someone in the server uses bad words or slangs (without mentioning the bot),
+        // and gali response is enabled, slap back with a savage comeback!
+        if let Some(guild_id) = message.guild_id {
+            let guild_id_str = guild_id.to_string();
+            if let Ok(cfg) = queries::get_or_create_guild(&data.db, &guild_id_str).await {
+                if cfg.gali_response_enabled && !cfg.safe_mode_enabled {
+                    let user_id_str = message.author.id.to_string();
+                    let is_blocked = queries::is_user_blocked(&data.db, &guild_id_str, &user_id_str)
+                        .await
+                        .unwrap_or(false);
+
+                    if !is_blocked && crate::gali::contains_slang(&message.content) {
+                        if crate::gali::check_and_update_cooldown(message.author.id.get(), message.channel_id.get()) {
+                            info!(
+                                "🤬 Slang detected from {} in channel {}. Sending gali comeback!",
+                                message.author.name, message.channel_id
+                            );
+                            let comeback = crate::gali::get_comeback_for_message(&message.content);
+                            if let Err(e) = message.reply(&ctx.http, comeback).await {
+                                warn!("Failed to send gali response: {}", e);
+                            }
+                            return Ok(());
                         }
-                        return Ok(());
                     }
                 }
             }
