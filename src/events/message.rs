@@ -99,6 +99,35 @@ pub async fn handle(
         return Ok(());
     }
 
+    // ── Automatic Slang / Gali Response ──────────────────────────────────────
+    // If someone in the server uses bad words or slangs (without mentioning the bot),
+    // and gali response is enabled, slap back with a savage comeback!
+    if let Some(guild_id) = message.guild_id {
+        let guild_id_str = guild_id.to_string();
+        if let Ok(cfg) = queries::get_or_create_guild(&data.db, &guild_id_str).await {
+            if cfg.gali_response_enabled {
+                let user_id_str = message.author.id.to_string();
+                let is_blocked = queries::is_user_blocked(&data.db, &guild_id_str, &user_id_str)
+                    .await
+                    .unwrap_or(false);
+
+                if !is_blocked && crate::gali::contains_slang(&message.content) {
+                    if crate::gali::check_and_update_cooldown(message.author.id.get(), message.channel_id.get()) {
+                        info!(
+                            "🤬 Slang detected from {} in channel {}. Sending gali comeback!",
+                            message.author.name, message.channel_id
+                        );
+                        let comeback = crate::gali::get_comeback_for_message(&message.content);
+                        if let Err(e) = message.reply(&ctx.http, comeback).await {
+                            warn!("Failed to send gali response: {}", e);
+                        }
+                        return Ok(());
+                    }
+                }
+            }
+        }
+    }
+
     // Only the remainder operates inside guilds for auto-reacting
     let guild_id = match message.guild_id {
         Some(id) => id.to_string(),

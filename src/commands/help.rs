@@ -38,12 +38,13 @@ pub async fn help(ctx: Context<'_>) -> Result<(), Error> {
             false,
         )
 
-        // ── /post, /status, /ping ───────────────────────────────────────────
+        // ── /post, /status, /ping, /roast ────────────────────────────────────
         .field(
             "⚡ Utility Commands",
             "• `/post` — Instantly triggers all active content feeds right now (without double posting)\n\
              • `/status` — Displays configured channels, current reaction lists, and block settings\n\
-             • `/ping` — Checks the bot server response latency",
+             • `/ping` — Checks the bot server response latency\n\
+             • `/roast [@user]` — 🔥 Unleashes a savage Desi / Hindi roast on someone or yourself!",
             false,
         )
 
@@ -51,6 +52,7 @@ pub async fn help(ctx: Context<'_>) -> Result<(), Error> {
         .field(
             "🤖 AI Assistant & Server Management",
             "• **Chat & Q&A:** Mention `@Honored one` or reply to any bot message to ask questions or chat!\n\
+             • **Gali & Slang Detection:** If anyone uses bad words or slangs in chat, the bot automatically claps back with savage Desi roasts!\n\
              • **Owner Server Control:** The server owner can ask the bot to manage the server (e.g. `@Honored one create a channel called chill-zone`, `@Honored one delete channel #test`, `@Honored one set slowmode to 5s`). Non-owners cannot run management actions.",
             false,
         )
@@ -59,6 +61,7 @@ pub async fn help(ctx: Context<'_>) -> Result<(), Error> {
         .field(
             "⚙️ Bot Settings (`/settings <subcommand>`)",
             "• **interval** → `/settings interval <seconds>` (adjust posting frequency; min 60s)\n\
+             • **gali-response** → `/settings gali-response` (toggle automatic slang/gali roast responses ON/OFF)\n\
              • **clear-cache** → `/settings clear-cache` (wipe posting history to re-post hottest entries)\n\n\
              **Reaction settings:**\n\
              • `/settings auto-react` → Enforce/disable automatic reactions globally\n\

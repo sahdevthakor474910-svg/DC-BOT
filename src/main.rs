@@ -9,6 +9,7 @@ mod db;
 mod dmc;
 mod events;
 mod freegames;
+mod gali;
 mod hanime;
 mod jav;
 mod javhd;

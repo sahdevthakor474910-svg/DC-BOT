@@ -1,8 +1,26 @@
 use serde::{Deserialize, Serialize};
 
 #[derive(Debug, Serialize)]
+pub struct GeminiSafetySetting {
+    pub category: String,
+    pub threshold: String,
+}
+
+#[derive(Debug, Serialize)]
+pub struct GeminiGenerationConfig {
+    #[serde(rename = "maxOutputTokens", skip_serializing_if = "Option::is_none")]
+    pub max_output_tokens: Option<u32>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub temperature: Option<f32>,
+}
+
+#[derive(Debug, Serialize)]
 pub struct GeminiChatRequest {
     pub contents: Vec<GeminiContent>,
+    #[serde(rename = "safetySettings", skip_serializing_if = "Option::is_none")]
+    pub safety_settings: Option<Vec<GeminiSafetySetting>>,
+    #[serde(rename = "generationConfig", skip_serializing_if = "Option::is_none")]
+    pub generation_config: Option<GeminiGenerationConfig>,
 }
 
 #[derive(Debug, Serialize, Deserialize)]

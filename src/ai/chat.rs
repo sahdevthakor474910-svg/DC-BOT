@@ -55,10 +55,7 @@ pub async fn handle_ai_message(
 
     // If empty prompt (user just pinged the bot with no text)
     if clean_prompt.is_empty() {
-        let greeting = format!(
-            "👋 Hello **{}**! How can I help you today? You can ask me any question or chat with me!",
-            message.author.name
-        );
+        let greeting = format!("yo **{}**, why you pinging me with 0 words 💀 bol kya scene hai", message.author.name);
         let _ = message.reply(&ctx.http, greeting).await;
         return Ok(true);
     }
@@ -108,12 +105,27 @@ pub async fn handle_ai_message(
         if is_menace_target { "YES - THIS USER IS ON YOUR HIT LIST! ROAST THEM UNMERCIFULLY IN ENGLISH/HINDI" } else { "NO" }
     );
 
+    // Fetch last 10 messages from the channel to analyze the past conversation
+    let history_builder = serenity::GetMessages::new().before(message.id).limit(10);
+    let mut history_text = String::new();
+    if let Ok(mut past_messages) = message.channel_id.messages(&ctx.http, history_builder).await {
+        past_messages.reverse(); // reverse to chronological order (oldest to newest)
+        for past_msg in past_messages {
+            let content = past_msg.content.trim();
+            if !content.is_empty() && !content.starts_with('/') {
+                history_text.push_str(&format!("{}: {}\n", past_msg.author.name, content));
+            }
+        }
+    }
+
     // Broadcast typing indicator while AI generates
     let _ = ctx.http.broadcast_typing(message.channel_id).await;
 
     let ai_client = AiClient::new(data.config.gemini_api_key.clone());
 
-    match ai_client.chat(&context_header, &clean_prompt, reply_context).await {
+    let history_opt = if history_text.is_empty() { None } else { Some(history_text.as_str()) };
+
+    match ai_client.chat(&context_header, &clean_prompt, reply_context, history_opt).await {
         Ok((mut response_text, action_opt)) => {
             // If an action was extracted
             if let Some(action) = action_opt {
@@ -140,11 +152,17 @@ pub async fn handle_ai_message(
         }
         Err(e) => {
             error!("AI generation failed: {:#}", e);
-            let err_reply = format!(
-                "⚠️ **AI Error:** {}\n*(Please check that `GEMINI_API_KEY` on Render is valid and active at [aistudio.google.com](https://aistudio.google.com/))*",
-                e
-            );
-            let _ = message.reply(&ctx.http, err_reply).await;
+            // If user used slangs/insults or is a menace target, don't show an error — flame them back!
+            if is_menace_target || crate::gali::contains_slang(&clean_prompt) {
+                let roast = crate::gali::get_comeback_for_message(&clean_prompt);
+                let _ = message.reply(&ctx.http, roast).await;
+            } else {
+                let err_reply = format!(
+                    "⚠️ **AI Error:** {}\n*(Please check that `GEMINI_API_KEY` on Render is valid and active at [aistudio.google.com](https://aistudio.google.com/))*",
+                    e
+                );
+                let _ = message.reply(&ctx.http, err_reply).await;
+            }
         }
     }
 

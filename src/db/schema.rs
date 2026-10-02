@@ -77,6 +77,10 @@ pub async fn run_migrations(db: &SqlitePool) -> Result<()> {
     let m16 = include_str!("../../migrations/016_menace_targets.sql");
     run_migration_alter(db, m16, "016").await?;
 
+    // 🤬 Migration 017: Gali / slang auto-response toggle
+    let m17 = include_str!("../../migrations/017_gali_response.sql");
+    run_migration_alter(db, m17, "017").await?;
+
     info!("Database migrations complete");
     Ok(())
 }

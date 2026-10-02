@@ -30,7 +30,8 @@ use crate::db::queries;
         "import_setup",
         "add_menace_user",
         "remove_menace_user",
-        "menace_list"
+        "menace_list",
+        "gali_response"
     )
 )]
 pub async fn settings(_ctx: Context<'_>) -> Result<(), Error> {
@@ -70,6 +71,20 @@ pub async fn auto_react(ctx: Context<'_>) -> Result<(), Error> {
     queries::set_auto_react_enabled(&ctx.data().db, &guild_id, new_state).await?;
     let label = if new_state { "🟢 **enabled**" } else { "🔴 **disabled**" };
     ctx.say(format!("Auto-react is now {}", label)).await?;
+    Ok(())
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+
+/// 🤬 Toggle automatic savage slang / gali responses ON or OFF.
+#[poise::command(slash_command, guild_only, rename = "gali-response")]
+pub async fn gali_response(ctx: Context<'_>) -> Result<(), Error> {
+    let guild_id = ctx.guild_id().unwrap().to_string();
+    let cfg = queries::get_or_create_guild(&ctx.data().db, &guild_id).await?;
+    let new_state = !cfg.gali_response_enabled;
+    queries::set_gali_response_enabled(&ctx.data().db, &guild_id, new_state).await?;
+    let label = if new_state { "🟢 **enabled** (Bot will roast anyone using slangs/bad words!)" } else { "🔴 **disabled**" };
+    ctx.say(format!("Gali / slang auto-response is now {}", label)).await?;
     Ok(())
 }
 
