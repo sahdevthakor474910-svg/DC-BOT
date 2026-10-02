@@ -51,13 +51,20 @@ pub async fn handle_ai_message(
     let mention_plain = format!("<@{}>", bot_user_id);
     let mention_nick = format!("<@!{}>", bot_user_id);
     clean_prompt = clean_prompt.replace(&mention_plain, "").replace(&mention_nick, "");
-    let clean_prompt = clean_prompt.trim().to_string();
+    let mut clean_prompt = clean_prompt.trim().to_string();
+
+    // Extract any images, GIFs, or video clips from message or reply context
+    let images = super::media::extract_media_from_message(&data.http_client, message).await;
 
     // If empty prompt (user just pinged the bot with no text)
     if clean_prompt.is_empty() {
-        let greeting = format!("yo **{}**, why you pinging me with 0 words 💀 bol kya scene hai", message.author.name);
-        let _ = message.reply(&ctx.http, greeting).await;
-        return Ok(true);
+        if !images.is_empty() {
+            clean_prompt = "React to and roast/comment on this image or GIF like a late-2026 viral Instagram reel comment section menace.".to_string();
+        } else {
+            let greeting = format!("yo **{}**, why you pinging me with 0 words 😭🙏 bol kya scene hai", message.author.name);
+            let _ = message.reply(&ctx.http, greeting).await;
+            return Ok(true);
+        }
     }
 
     // Check if Gemini API key is configured
@@ -97,12 +104,13 @@ pub async fn handle_ai_message(
 
     // Build context header
     let context_header = format!(
-        "SERVER: {}\nUSER: {} (ID: {})\n[SERVER OWNER: {}]\n[MENACE ROAST TARGET: {}]",
+        "SERVER: {}\nUSER: {} (ID: {})\n[SERVER OWNER: {}]\n[MENACE ROAST TARGET: {}]\n[ATTACHED MEDIA/GIFS: {}]",
         guild_name,
         message.author.name,
         message.author.id,
         if is_owner { "YES" } else { "NO" },
-        if is_menace_target { "YES - THIS USER IS ON YOUR HIT LIST! ROAST THEM UNMERCIFULLY IN ENGLISH/HINDI" } else { "NO" }
+        if is_menace_target { "YES - THIS USER IS ON YOUR HIT LIST! ROAST THEM UNMERCIFULLY IN ENGLISH/HINDI" } else { "NO" },
+        if !images.is_empty() { "YES - USER PROVIDED IMAGES/GIFS TO INSPECT" } else { "NONE" }
     );
 
     // Fetch last 10 messages from the channel to analyze the past conversation
@@ -125,7 +133,7 @@ pub async fn handle_ai_message(
 
     let history_opt = if history_text.is_empty() { None } else { Some(history_text.as_str()) };
 
-    match ai_client.chat(&context_header, &clean_prompt, reply_context, history_opt).await {
+    match ai_client.chat(&context_header, &clean_prompt, reply_context, history_opt, images).await {
         Ok((mut response_text, action_opt)) => {
             // If an action was extracted
             if let Some(action) = action_opt {

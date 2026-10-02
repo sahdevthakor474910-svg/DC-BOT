@@ -28,9 +28,38 @@ pub struct GeminiContent {
     pub parts: Vec<GeminiPart>,
 }
 
-#[derive(Debug, Serialize, Deserialize)]
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct GeminiInlineData {
+    #[serde(rename = "mimeType")]
+    pub mime_type: String,
+    pub data: String, // base64 encoded
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct GeminiPart {
-    pub text: String,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub text: Option<String>,
+    #[serde(rename = "inlineData", skip_serializing_if = "Option::is_none")]
+    pub inline_data: Option<GeminiInlineData>,
+}
+
+impl GeminiPart {
+    pub fn text(t: impl Into<String>) -> Self {
+        Self {
+            text: Some(t.into()),
+            inline_data: None,
+        }
+    }
+
+    pub fn inline_data(mime_type: impl Into<String>, base64_data: impl Into<String>) -> Self {
+        Self {
+            text: None,
+            inline_data: Some(GeminiInlineData {
+                mime_type: mime_type.into(),
+                data: base64_data.into(),
+            }),
+        }
+    }
 }
 
 #[derive(Debug, Deserialize)]
