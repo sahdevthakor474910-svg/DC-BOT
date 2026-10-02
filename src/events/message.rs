@@ -92,6 +92,13 @@ pub async fn handle(
         }
     }
 
+    // ── AI Conversation & Server Management ──────────────────────────────────
+    // If the message mentions the bot or replies to one of the bot's messages,
+    // process it conversationally and execute any authorized owner server actions.
+    if crate::ai::chat::handle_ai_message(ctx, message, data).await? {
+        return Ok(());
+    }
+
     // Only the remainder operates inside guilds for auto-reacting
     let guild_id = match message.guild_id {
         Some(id) => id.to_string(),

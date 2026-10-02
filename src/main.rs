@@ -1,5 +1,6 @@
 #![allow(dead_code)]
 
+mod ai;
 mod commands;
 mod config;
 mod coc;

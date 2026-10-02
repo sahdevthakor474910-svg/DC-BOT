@@ -47,6 +47,14 @@ pub async fn help(ctx: Context<'_>) -> Result<(), Error> {
             false,
         )
 
+        // ── AI Assistant & Server Management ─────────────────────────────────
+        .field(
+            "🤖 AI Assistant & Server Management",
+            "• **Chat & Q&A:** Mention `@Honored one` or reply to any bot message to ask questions or chat!\n\
+             • **Owner Server Control:** The server owner can ask the bot to manage the server (e.g. `@Honored one create a channel called chill-zone`, `@Honored one delete channel #test`, `@Honored one set slowmode to 5s`). Non-owners cannot run management actions.",
+            false,
+        )
+
         // ── /settings ────────────────────────────────────────────────────────
         .field(
             "⚙️ Bot Settings (`/settings <subcommand>`)",
