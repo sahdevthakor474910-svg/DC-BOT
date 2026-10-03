@@ -58,7 +58,7 @@ pub async fn post(
     #[description = "Force post even if already posted/seen before (default: false)"]
     force: Option<bool>,
 ) -> Result<(), Error> {
-    ctx.defer().await?;
+    let _ = ctx.defer().await;
 
     let data = ctx.data().clone();
     let http: Arc<serenity::Http> = Arc::clone(&ctx.serenity_context().http);

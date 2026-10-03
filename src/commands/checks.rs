@@ -96,7 +96,6 @@ pub async fn is_not_blocked_check(ctx: crate::data::Context<'_>) -> Result<bool,
             let _ = ctx.send(
                 poise::CreateReply::default()
                     .content("🚫 You have been blocked from using bot commands in this server.")
-                    .ephemeral(true)
             ).await;
             Ok(false)
         }
