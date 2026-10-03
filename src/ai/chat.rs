@@ -70,15 +70,15 @@ pub async fn handle_ai_message(
     if clean_prompt.is_empty() {
         if !images.is_empty() {
             clean_prompt = if is_safe_mode {
-                "Describe, explain, or answer questions about this image helpfully and cleanly.".to_string()
+                "Describe this image briefly and helpfully.".to_string()
             } else {
-                "React to and comment on this image or GIF with witty, sharp banter.".to_string()
+                "React to this image with a short witty comment.".to_string()
             };
         } else {
             let greeting = if is_safe_mode {
-                format!("Hey **{}**! How can I help you today?", message.author.name)
+                format!("hey **{}**! bol kya help chahiye? 😊", message.author.name)
             } else {
-                format!("yo **{}**, what's on your mind? What can I help you with?", message.author.name)
+                format!("yo **{}** bol kya scene hai", message.author.name)
             };
             let _ = message.reply(&ctx.http, greeting).await;
             return Ok(true);
@@ -127,9 +127,9 @@ pub async fn handle_ai_message(
         message.author.name,
         message.author.id,
         if is_owner { "YES" } else { "NO" },
-        if is_menace_target && !is_safe_mode { "YES - THIS USER IS ON YOUR MENACE HIT LIST! ROAST THEM WITTILY IN THEIR LANGUAGE" } else { "NO" },
-        if is_safe_mode { "YES - SAFE MODE ACTIVE! BE POLITE, FRIENDLY, AND RESPECTFUL. ZERO SAVAGE ATTITUDE, ZERO COMEBACKS, ZERO ROASTS, ZERO PROFANITY. ANSWER ALL QUESTIONS CLEARLY, ACCURATELY, AND POLITELY." } else { "NO - CASUAL / WITTY MODE. ALWAYS ANSWER QUESTIONS AND HELP REQUESTS CLEARLY AND ACCURATELY. ONLY ROAST IF INSULTED, SWEARED AT, OR EXPLICITLY ASKED TO ROAST." },
-        if !images.is_empty() { "YES - USER PROVIDED IMAGES/GIFS TO INSPECT" } else { "NONE" }
+        if is_menace_target && !is_safe_mode { "YES — ROAST THIS USER EVERY TIME, MIX GALI WITH WIT" } else { "NO" },
+        if is_safe_mode { "YES — BE POLITE AND CLEAN, ZERO GALI" } else { "NO — CASUAL MODE, GALI ALLOWED WHEN TRIGGERED" },
+        if !images.is_empty() { "YES" } else { "NONE" }
     );
 
     // Fetch last 10 messages from the channel to analyze the past conversation
