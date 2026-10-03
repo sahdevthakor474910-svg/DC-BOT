@@ -119,6 +119,17 @@ async fn event_handler(
             }
         }
 
+        serenity::FullEvent::Ratelimit { data } => {
+            warn!(
+                "⚠️ Discord rate-limited! timeout: {:?}, limit: {}, method: {:?}, path: {:?}, global: {}",
+                data.timeout, data.limit, data.method, data.path, data.global
+            );
+        }
+
+        serenity::FullEvent::Resume { .. } => {
+            info!("🔄 Gateway session resumed");
+        }
+
         _ => {}
     }
 
@@ -414,75 +425,12 @@ async fn main() -> Result<()> {
         token.len(),
         &token[..token.len().min(10)]
     );
-    eprintln!(">>> [DIAG] About to test Discord API reachability…");
-
-    // ── Wait for Discord API to be reachable and NOT rate-limited ──────────
-    // When Render shares egress IPs, Cloudflare or Discord sometimes issues a
-    // temporary 429. If we exit immediately, Render crash-loops and extends the block.
-    // Instead, we wait here while keeping the web server alive (so Render stays healthy).
-    {
-        let diag_client = reqwest::Client::builder()
-            .timeout(std::time::Duration::from_secs(15))
-            .user_agent("DiscordBot (https://github.com/sahdevthakor474910-svg/DC-BOT, 1.0)")
-            .build()
-            .unwrap();
-        let diag_url = "https://discord.com/api/v10/gateway/bot";
-
-        let mut backoff = 30u64;
-        let mut attempt = 1;
-        loop {
-            info!("🔍 Testing Discord API reachability (attempt {})...", attempt);
-            match diag_client
-                .get(diag_url)
-                .header("Authorization", format!("Bot {}", token))
-                .header("User-Agent", "DiscordBot (https://github.com/sahdevthakor474910-svg/DC-BOT, 1.0)")
-                .send()
-                .await
-            {
-                Ok(resp) => {
-                    let status = resp.status();
-                    if status == reqwest::StatusCode::TOO_MANY_REQUESTS {
-                        let retry_header = resp.headers().get("retry-after").and_then(|v| v.to_str().ok()).unwrap_or("none").to_string();
-                        let cf_ray = resp.headers().get("cf-ray").and_then(|v| v.to_str().ok()).unwrap_or("none").to_string();
-                        let body = resp.text().await.unwrap_or_default();
-                        warn!(
-                            "⏳ Discord API 429 [retry-after: {}, cf-ray: {}]: {}. Pausing for {}s...",
-                            retry_header,
-                            cf_ray,
-                            &body[..body.len().min(120)],
-                            backoff
-                        );
-                        tokio::time::sleep(std::time::Duration::from_secs(backoff)).await;
-                        backoff = (backoff + 30).min(120);
-                        attempt += 1;
-                        continue;
-                    } else if status.is_success() {
-                        info!("✅ Discord API is reachable and healthy (status 200)!");
-                        break;
-                    } else {
-                        let body = resp.text().await.unwrap_or_default();
-                        warn!("⚠️ Discord API returned status {}: {}. Retrying in 15s...", status, &body[..body.len().min(150)]);
-                        tokio::time::sleep(std::time::Duration::from_secs(15)).await;
-                        attempt += 1;
-                        continue;
-                    }
-                }
-                Err(e) => {
-                    warn!("⚠️ Network error reaching Discord API: {}. Retrying in 15s...", e);
-                    tokio::time::sleep(std::time::Duration::from_secs(15)).await;
-                    attempt += 1;
-                    continue;
-                }
-            }
-        }
-    }
-
     info!("🚀 Building Discord client and connecting to Gateway...");
 
-    // Wrap the builder in a timeout so it can't hang forever (serenity calls
-    // GET /gateway/bot here, which could hang on DNS/TLS issues).
+    // Build the serenity client. Serenity internally calls GET /gateway/bot
+    // and has its own built-in rate-limit handling. No custom pre-check needed.
     let client_res = tokio::time::timeout(
-        std::time::Duration::from_secs(60),
+        std::time::Duration::from_secs(90),
         serenity::ClientBuilder::new(token, intents).framework(framework),
     )
     .await;
@@ -490,37 +438,64 @@ async fn main() -> Result<()> {
     let mut client = match client_res {
         Ok(Ok(c)) => {
             info!("✅ Discord client built successfully!");
-            eprintln!(">>> [DIAG] ✅ Client built OK");
             c
         }
         Ok(Err(e)) => {
             error!("❌ CRITICAL: Failed to build Discord client: {:#}", e);
-            eprintln!(">>> [DIAG] ❌ Client build error: {:#}", e);
             error!("❌ Check that DISCORD_TOKEN is valid in Render dashboard.");
+            // Keep the web server alive so Render doesn't crash-loop,
+            // but don't exit — that would cause repeated restarts which
+            // extend any rate-limit block.
             loop {
                 tokio::time::sleep(std::time::Duration::from_secs(3600)).await;
             }
         }
         Err(_) => {
-            error!("❌ CRITICAL: Discord client builder TIMED OUT after 60s!");
-            eprintln!(">>> [DIAG] ❌ Client builder TIMED OUT after 60s!");
+            error!("❌ CRITICAL: Discord client builder TIMED OUT after 90s!");
             error!("❌ This usually means Render cannot reach Discord API (DNS/TLS/firewall).");
-            error!("❌ Will retry in 30s…");
-            tokio::time::sleep(std::time::Duration::from_secs(30)).await;
-            // Exit so Render restarts us
+            error!("❌ Sleeping 120s before exit to avoid crash-loop rate-limit escalation…");
+            tokio::time::sleep(std::time::Duration::from_secs(120)).await;
             std::process::exit(1);
         }
     };
 
-    // Run the gateway connection in a loop (reconnect on disconnect)
+    // Run the gateway connection with exponential backoff on disconnect.
+    // Serenity's gateway handles rate-limits internally; we only need to
+    // handle unexpected disconnects/errors at this level.
+    let mut reconnect_backoff = 10u64;
     loop {
         info!("🚀 Connecting to Discord Gateway…");
-        if let Err(e) = client.start().await {
-            error!("❌ Discord client error / disconnected: {:#}. Reconnecting in 10s…", e);
-        } else {
-            info!("Discord client exited cleanly. Reconnecting in 5s…");
+        match client.start().await {
+            Err(e) => {
+                let err_str = format!("{:#}", e);
+                // Check if the error message suggests a rate-limit
+                let is_rate_limited = err_str.contains("429")
+                    || err_str.to_lowercase().contains("rate limit");
+
+                if is_rate_limited {
+                    // On rate-limit errors, use a long backoff to let the block expire
+                    let wait = reconnect_backoff.max(300); // at least 5 minutes
+                    error!(
+                        "❌ Discord gateway rate-limited: {}. Waiting {}s before retry…",
+                        err_str, wait
+                    );
+                    tokio::time::sleep(std::time::Duration::from_secs(wait)).await;
+                    reconnect_backoff = (reconnect_backoff * 2).min(600);
+                } else {
+                    error!(
+                        "❌ Discord client error / disconnected: {}. Reconnecting in {}s…",
+                        err_str, reconnect_backoff
+                    );
+                    tokio::time::sleep(std::time::Duration::from_secs(reconnect_backoff)).await;
+                    reconnect_backoff = (reconnect_backoff * 2).min(320);
+                }
+            }
+            Ok(()) => {
+                info!("Discord client exited cleanly. Reconnecting in 10s…");
+                reconnect_backoff = 10; // reset on clean exit
+                tokio::time::sleep(std::time::Duration::from_secs(10)).await;
+            }
         }
-        tokio::time::sleep(std::time::Duration::from_secs(10)).await;
     }
 }
 
