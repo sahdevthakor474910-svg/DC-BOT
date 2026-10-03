@@ -75,11 +75,6 @@ pub async fn is_admin_check(ctx: Context<'_>) -> Result<bool, Error> {
 /// Returns `Ok(false)` (silently blocks) if the invoking user is on the
 /// guild's blocklist. Admins and the server owner are never blocked.
 pub async fn is_not_blocked_check(ctx: crate::data::Context<'_>) -> Result<bool, crate::data::Error> {
-    // Immediately acknowledge to Discord right away (<20ms) to kill the 3s timeout
-    if let poise::Context::Application(_) = ctx {
-        let _ = ctx.defer().await;
-    }
-
     // Only applies inside guilds
     let guild_id = match ctx.guild_id() {
         Some(id) => id.to_string(),
@@ -92,11 +87,6 @@ pub async fn is_not_blocked_check(ctx: crate::data::Context<'_>) -> Result<bool,
     match crate::db::queries::is_user_blocked(db, &guild_id, &user_id).await {
         Ok(true) => {
             info!("Blocked user {} tried to use /{} in {}", user_id, ctx.command().name, guild_id);
-            // Reply ephemerally so only they see it, then return false
-            let _ = ctx.send(
-                poise::CreateReply::default()
-                    .content("🚫 You have been blocked from using bot commands in this server.")
-            ).await;
             Ok(false)
         }
         Ok(false) => Ok(true),

@@ -245,11 +245,7 @@ async fn main() -> Result<()> {
             let http     = Arc::clone(&ctx.http);
 
             Box::pin(async move {
-                // Register slash commands globally (for all servers & direct installs)
-                poise::builtins::register_globally(ctx, &framework.options().commands).await?;
-                info!("📋 Slash commands registered globally");
-
-                // Collect all guild IDs from Gateway Ready event, Cache, and DB configs for INSTANT 0s availability
+                // Collect all guild IDs from Gateway Ready event, Cache, and DB configs
                 let mut guild_ids = std::collections::HashSet::new();
 
                 for unavailable_guild in &ready.guilds {
@@ -268,14 +264,19 @@ async fn main() -> Result<()> {
                     }
                 }
 
-                info!("⚡ Registering slash commands instantly across {} guild(s)...", guild_ids.len());
-                for guild_id in guild_ids {
-                    if let Err(e) = poise::builtins::register_in_guild(ctx, &framework.options().commands, guild_id).await {
+                // Register slash commands in each guild (instant 0s availability)
+                // Small delay between guilds to avoid Discord 429 rate limits
+                info!("⚡ Registering slash commands across {} guild(s)...", guild_ids.len());
+                for guild_id in &guild_ids {
+                    if let Err(e) = poise::builtins::register_in_guild(ctx, &framework.options().commands, *guild_id).await {
                         tracing::warn!("Could not register commands in guild {}: {:?}", guild_id, e);
                     } else {
-                        info!("⚡ Slash commands registered instantly in guild {}", guild_id);
+                        info!("⚡ Slash commands registered in guild {}", guild_id);
                     }
+                    // Small delay to avoid hitting Discord rate limits
+                    tokio::time::sleep(std::time::Duration::from_millis(500)).await;
                 }
+                info!("✅ Slash commands registered in all {} guild(s)", guild_ids.len());
 
                 // ── Spawn background tasks ──────────────────────────────
                 {
@@ -449,7 +450,7 @@ async fn main() -> Result<()> {
     // Wrap the builder in a timeout so it can't hang forever (serenity calls
     // GET /gateway/bot here, which could hang on DNS/TLS issues).
     let client_res = tokio::time::timeout(
-        std::time::Duration::from_secs(30),
+        std::time::Duration::from_secs(60),
         serenity::ClientBuilder::new(token, intents).framework(framework),
     )
     .await;
@@ -469,8 +470,8 @@ async fn main() -> Result<()> {
             }
         }
         Err(_) => {
-            error!("❌ CRITICAL: Discord client builder TIMED OUT after 30s!");
-            eprintln!(">>> [DIAG] ❌ Client builder TIMED OUT after 30s!");
+            error!("❌ CRITICAL: Discord client builder TIMED OUT after 60s!");
+            eprintln!(">>> [DIAG] ❌ Client builder TIMED OUT after 60s!");
             error!("❌ This usually means Render cannot reach Discord API (DNS/TLS/firewall).");
             error!("❌ Will retry in 30s…");
             tokio::time::sleep(std::time::Duration::from_secs(30)).await;
