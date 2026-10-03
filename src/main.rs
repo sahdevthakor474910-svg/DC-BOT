@@ -96,6 +96,9 @@ async fn event_handler(
                 data_about_bot.user.name,
                 data_about_bot.user.id
             );
+            if let Ok(mut lock) = bot_data.status.write() {
+                *lock = format!("Online as {} ({})", data_about_bot.user.name, data_about_bot.user.id);
+            }
         }
 
         serenity::FullEvent::Message { new_message } => {
@@ -124,6 +127,9 @@ async fn event_handler(
                 "⚠️ Discord rate-limited! timeout: {:?}, limit: {}, method: {:?}, path: {:?}, global: {}",
                 data.timeout, data.limit, data.method, data.path, data.global
             );
+            if let Ok(mut lock) = bot_data.status.write() {
+                *lock = format!("Rate-limited: timeout={:?}, path={:?}", data.timeout, data.path);
+            }
         }
 
         serenity::FullEvent::Resume { .. } => {
@@ -153,8 +159,9 @@ async fn main() -> Result<()> {
     // Initialise structured logging with two layers:
     // 1. fmt::Layer → writes to stdout (default, non-blocking)
     // 2. RingBufferLayer → captures lines into an in-memory ring buffer for /logs
+    let default_filter = format!("{},serenity::http=debug,serenity::client=debug", app_config.log_level);
     let filter = EnvFilter::try_from_default_env()
-        .unwrap_or_else(|_| EnvFilter::new(&app_config.log_level));
+        .unwrap_or_else(|_| EnvFilter::new(&default_filter));
     let fmt_layer = fmt::layer().with_target(false);
     let ring_layer = RingBufferLayer(log_buffer.clone());
     tracing_subscriber::registry()
@@ -193,14 +200,130 @@ async fn main() -> Result<()> {
     let bot_data = Data::new(db, app_config.clone())
         .context("Failed to initialise bot data")?;
 
+    // ── Start web server FIRST so Render health check passes immediately ─────
+    // Render scans for an open port right after process start. If we wait until
+    // the Discord handshake completes (can take minutes if rate-limited), Render times out
+    // and kills the container. We spawn the web server here with endpoints that return
+    // 200 OK immediately, keeping Render happy regardless of Discord gateway status.
+    {
+        let port = std::env::var("PORT").unwrap_or_else(|_| "10000".to_string());
+        let addr = format!("0.0.0.0:{}", port);
+        info!("📡 Starting web server on {} (before Discord connect)…", addr);
+        let logs_clone = log_buffer.clone();
+        let status_clone = bot_data.status.clone();
+        tokio::spawn(async move {
+            use axum::{routing::get, Router};
+            let app = Router::new()
+                .route("/", get(|| async { "OK" }))
+                .route("/health", get(|| async { "OK" }))
+                .route("/status", get(move || {
+                    let status = status_clone.clone();
+                    async move {
+                        status
+                            .read()
+                            .map(|s| s.clone())
+                            .unwrap_or_else(|_| "Unknown".to_string())
+                    }
+                }))
+                .route("/logs", get(move || {
+                    let logs = logs_clone.clone();
+                    async move {
+                        let lock = logs.lock().unwrap();
+                        lock.iter().cloned().collect::<Vec<_>>().join("")
+                    }
+                }));
+            match tokio::net::TcpListener::bind(&addr).await {
+                Ok(listener) => {
+                    info!("📡 Web server listening on http://{}", addr);
+                    if let Err(e) = axum::serve(listener, app).await {
+                        error!("❌ Web server failed: {}", e);
+                    }
+                }
+                Err(e) => error!("❌ Web server failed to bind to {}: {}", addr, e),
+            }
+        });
+    }
+
     // Gateway intents
     // MESSAGE_CONTENT is privileged — must be enabled in the Developer Portal.
     let intents = serenity::GatewayIntents::non_privileged()
         | serenity::GatewayIntents::GUILD_MESSAGES
         | serenity::GatewayIntents::MESSAGE_CONTENT;
 
-    // Build the Poise framework
-    let framework = poise::Framework::builder()
+    // Start Serenity client with automatic reconnect loop
+    let token = app_config.discord_token.clone();
+    info!(
+        "🔧 Discord config: client_id: {}, token_len: {}, token_prefix: {}…",
+        app_config.discord_client_id,
+        token.len(),
+        &token[..token.len().min(10)]
+    );
+
+    let mut attempt = 1u64;
+    loop {
+        info!("🚀 Connecting to Discord Gateway (attempt {})...", attempt);
+        if let Ok(mut lock) = bot_data.status.write() {
+            *lock = format!("Connecting to Discord Gateway (attempt {})...", attempt);
+        }
+
+        let framework = build_framework(bot_data.clone());
+        let builder = serenity::ClientBuilder::new(&token, intents).framework(framework);
+
+        // Allow up to 15 minutes (900s) for Serenity to wait out any global 429 rate limit.
+        // We NEVER exit the process with exit(1) on failure or timeout.
+        // Exiting causes Render to restart the container, which immediately sends another
+        // request to Discord and resets/extends the rate limit block.
+        // The web server on port 10000 stays alive so Render considers the service healthy throughout.
+        match tokio::time::timeout(std::time::Duration::from_secs(900), builder).await {
+            Ok(Ok(mut client)) => {
+                info!("✅ Discord client built successfully! Starting gateway connection…");
+                attempt = 1; // reset on successful build
+
+                match client.start().await {
+                    Ok(()) => {
+                        info!("Discord client session exited cleanly. Reconnecting in 10s…");
+                        if let Ok(mut lock) = bot_data.status.write() {
+                            *lock = "Disconnected cleanly. Reconnecting in 10s…".to_string();
+                        }
+                        tokio::time::sleep(std::time::Duration::from_secs(10)).await;
+                    }
+                    Err(e) => {
+                        let err_str = format!("{:#}", e);
+                        error!("❌ Discord client error / disconnected: {}. Reconnecting in 30s…", err_str);
+                        if let Ok(mut lock) = bot_data.status.write() {
+                            *lock = format!("Disconnected: {}. Reconnecting in 30s…", err_str);
+                        }
+                        tokio::time::sleep(std::time::Duration::from_secs(30)).await;
+                    }
+                }
+            }
+            Ok(Err(e)) => {
+                let err_str = format!("{:#}", e);
+                error!("❌ Failed to build Discord client: {}. Waiting 60s before retry…", err_str);
+                if let Ok(mut lock) = bot_data.status.write() {
+                    *lock = format!("Failed to build client: {}. Retrying in 60s…", err_str);
+                }
+                tokio::time::sleep(std::time::Duration::from_secs(60)).await;
+                attempt += 1;
+            }
+            Err(_) => {
+                warn!("⚠️ Discord client builder timed out after 15 minutes. Retrying in 30s…");
+                if let Ok(mut lock) = bot_data.status.write() {
+                    *lock = "Client builder timed out (15m). Retrying in 30s…".to_string();
+                }
+                tokio::time::sleep(std::time::Duration::from_secs(30)).await;
+                attempt += 1;
+            }
+        }
+    }
+}
+
+// ────────────────────────────────────────────────────────────────────────────
+// Framework builder
+// ────────────────────────────────────────────────────────────────────────────
+
+fn build_framework(bot_data: Data) -> poise::Framework<Data, Error> {
+    poise::Framework::builder()
         .options(poise::FrameworkOptions {
             commands: commands::all(),
             event_handler: |ctx, event, framework, data| {
@@ -374,129 +497,10 @@ async fn main() -> Result<()> {
                 }
                 info!("⏱️  Porn Clips task spawned (every 10 min — RedGIFs short clips)");
 
-                // ── Web Server for Health Check + Media Stream Player ────
-                // NOTE: The web server is now started in main() BEFORE Discord connects,
-                // so Render's port scanner finds it immediately. See below.
-
                 Ok(bot_data)
             })
         })
-        .build();
-
-    // ── Start web server FIRST so Render health check passes immediately ─────
-    // Render scans for an open port right after process start. If we wait until
-    // the Discord handshake completes (can take 30-60s), Render times out and
-    // kills the container. We spawn the web server here with a minimal router
-    // that returns 200 OK immediately, even before Discord is connected.
-    {
-        let port = std::env::var("PORT").unwrap_or_else(|_| "10000".to_string());
-        let addr = format!("0.0.0.0:{}", port);
-        info!("📡 Starting web server on {} (before Discord connect)…", addr);
-        let logs_clone = log_buffer.clone();
-        tokio::spawn(async move {
-            use axum::{routing::get, Router};
-            let app = Router::new()
-                .route("/", get(|| async { "OK" }))
-                .route("/health", get(|| async { "OK" }))
-                .route("/logs", get(move || {
-                    let logs = logs_clone.clone();
-                    async move {
-                        let lock = logs.lock().unwrap();
-                        lock.iter().cloned().collect::<Vec<_>>().join("")
-                    }
-                }));
-            match tokio::net::TcpListener::bind(&addr).await {
-                Ok(listener) => {
-                    info!("📡 Web server listening on http://{}", addr);
-                    if let Err(e) = axum::serve(listener, app).await {
-                        error!("❌ Web server failed: {}", e);
-                    }
-                }
-                Err(e) => error!("❌ Web server failed to bind to {}: {}", addr, e),
-            }
-        });
-    }
-
-    // Start Serenity client with automatic reconnect loop
-    let token = &app_config.discord_token;
-    info!(
-        "🔧 Initializing Discord client builder (client_id: {}, token_len: {}, token_prefix: {}…)",
-        app_config.discord_client_id,
-        token.len(),
-        &token[..token.len().min(10)]
-    );
-    info!("🚀 Building Discord client and connecting to Gateway...");
-
-    // Build the serenity client. Serenity internally calls GET /gateway/bot
-    // and has its own built-in rate-limit handling. No custom pre-check needed.
-    let client_res = tokio::time::timeout(
-        std::time::Duration::from_secs(90),
-        serenity::ClientBuilder::new(token, intents).framework(framework),
-    )
-    .await;
-
-    let mut client = match client_res {
-        Ok(Ok(c)) => {
-            info!("✅ Discord client built successfully!");
-            c
-        }
-        Ok(Err(e)) => {
-            error!("❌ CRITICAL: Failed to build Discord client: {:#}", e);
-            error!("❌ Check that DISCORD_TOKEN is valid in Render dashboard.");
-            // Keep the web server alive so Render doesn't crash-loop,
-            // but don't exit — that would cause repeated restarts which
-            // extend any rate-limit block.
-            loop {
-                tokio::time::sleep(std::time::Duration::from_secs(3600)).await;
-            }
-        }
-        Err(_) => {
-            error!("❌ CRITICAL: Discord client builder TIMED OUT after 90s!");
-            error!("❌ This usually means Render cannot reach Discord API (DNS/TLS/firewall).");
-            error!("❌ Sleeping 120s before exit to avoid crash-loop rate-limit escalation…");
-            tokio::time::sleep(std::time::Duration::from_secs(120)).await;
-            std::process::exit(1);
-        }
-    };
-
-    // Run the gateway connection with exponential backoff on disconnect.
-    // Serenity's gateway handles rate-limits internally; we only need to
-    // handle unexpected disconnects/errors at this level.
-    let mut reconnect_backoff = 10u64;
-    loop {
-        info!("🚀 Connecting to Discord Gateway…");
-        match client.start().await {
-            Err(e) => {
-                let err_str = format!("{:#}", e);
-                // Check if the error message suggests a rate-limit
-                let is_rate_limited = err_str.contains("429")
-                    || err_str.to_lowercase().contains("rate limit");
-
-                if is_rate_limited {
-                    // On rate-limit errors, use a long backoff to let the block expire
-                    let wait = reconnect_backoff.max(300); // at least 5 minutes
-                    error!(
-                        "❌ Discord gateway rate-limited: {}. Waiting {}s before retry…",
-                        err_str, wait
-                    );
-                    tokio::time::sleep(std::time::Duration::from_secs(wait)).await;
-                    reconnect_backoff = (reconnect_backoff * 2).min(600);
-                } else {
-                    error!(
-                        "❌ Discord client error / disconnected: {}. Reconnecting in {}s…",
-                        err_str, reconnect_backoff
-                    );
-                    tokio::time::sleep(std::time::Duration::from_secs(reconnect_backoff)).await;
-                    reconnect_backoff = (reconnect_backoff * 2).min(320);
-                }
-            }
-            Ok(()) => {
-                info!("Discord client exited cleanly. Reconnecting in 10s…");
-                reconnect_backoff = 10; // reset on clean exit
-                tokio::time::sleep(std::time::Duration::from_secs(10)).await;
-            }
-        }
-    }
+        .build()
 }
 
 #[cfg(test)]

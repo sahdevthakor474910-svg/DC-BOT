@@ -30,6 +30,8 @@ pub struct Data {
     pub http_client: reqwest::Client,
     /// Static application config (env-vars).
     pub config: Arc<AppConfig>,
+    /// Live bot status string (e.g. "Online", "Connecting…", "Rate-limited")
+    pub status: Arc<std::sync::RwLock<String>>,
 }
 
 impl Data {
@@ -44,6 +46,7 @@ impl Data {
             reddit: Arc::new(reddit),
             http_client,
             config: Arc::new(config),
+            status: Arc::new(std::sync::RwLock::new("Starting up…".to_string())),
         })
     }
 }
