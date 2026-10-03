@@ -28,7 +28,7 @@ use std::sync::{Arc, Mutex};
 use anyhow::{Context as _, Result};
 use poise::serenity_prelude as serenity;
 use sqlx::sqlite::{SqliteConnectOptions, SqlitePoolOptions};
-use tracing::{error, info};
+use tracing::{error, info, warn};
 use tracing_subscriber::{fmt, layer::SubscriberExt, util::SubscriberInitExt, EnvFilter};
 
 use crate::data::{Data, Error};
@@ -416,36 +416,64 @@ async fn main() -> Result<()> {
     );
     eprintln!(">>> [DIAG] About to test Discord API reachability…");
 
-    // ── Diagnostic: test Discord API reachability before ClientBuilder ───
-    // ClientBuilder internally calls GET /gateway/bot. If this hangs, we know
-    // it's a network issue on Render, not a code bug.
+    // ── Wait for Discord API to be reachable and NOT rate-limited ──────────
+    // When Render shares egress IPs, Cloudflare or Discord sometimes issues a
+    // temporary 429. If we exit immediately, Render crash-loops and extends the block.
+    // Instead, we wait here while keeping the web server alive (so Render stays healthy).
     {
         let diag_client = reqwest::Client::builder()
             .timeout(std::time::Duration::from_secs(15))
+            .user_agent("DiscordBot (https://github.com/sahdevthakor474910-svg/DC-BOT, 1.0)")
             .build()
             .unwrap();
         let diag_url = "https://discord.com/api/v10/gateway/bot";
-        eprintln!(">>> [DIAG] GET {} …", diag_url);
-        match diag_client
-            .get(diag_url)
-            .header("Authorization", format!("Bot {}", token))
-            .send()
-            .await
-        {
-            Ok(resp) => {
-                let status = resp.status();
-                let body = resp.text().await.unwrap_or_default();
-                info!("🔍 Discord API diagnostic: status={}, body={}", status, &body[..body.len().min(200)]);
-                eprintln!(">>> [DIAG] Discord API responded: status={}, body={}", status, &body[..body.len().min(200)]);
-            }
-            Err(e) => {
-                error!("❌ Discord API diagnostic FAILED: {:#}", e);
-                eprintln!(">>> [DIAG] Discord API FAILED: {:#}", e);
+
+        let mut backoff = 30u64;
+        let mut attempt = 1;
+        loop {
+            info!("🔍 Testing Discord API reachability (attempt {})...", attempt);
+            match diag_client
+                .get(diag_url)
+                .header("Authorization", format!("Bot {}", token))
+                .header("User-Agent", "DiscordBot (https://github.com/sahdevthakor474910-svg/DC-BOT, 1.0)")
+                .send()
+                .await
+            {
+                Ok(resp) => {
+                    let status = resp.status();
+                    if status == reqwest::StatusCode::TOO_MANY_REQUESTS {
+                        let body = resp.text().await.unwrap_or_default();
+                        warn!(
+                            "⏳ Discord API 429 (Rate Limit / Cloudflare temporary block on Render's IP): {}. Pausing for {}s to let block clear (web server is active)...",
+                            &body[..body.len().min(150)],
+                            backoff
+                        );
+                        tokio::time::sleep(std::time::Duration::from_secs(backoff)).await;
+                        backoff = (backoff + 30).min(120);
+                        attempt += 1;
+                        continue;
+                    } else if status.is_success() {
+                        info!("✅ Discord API is reachable and healthy (status 200)!");
+                        break;
+                    } else {
+                        let body = resp.text().await.unwrap_or_default();
+                        warn!("⚠️ Discord API returned status {}: {}. Retrying in 15s...", status, &body[..body.len().min(150)]);
+                        tokio::time::sleep(std::time::Duration::from_secs(15)).await;
+                        attempt += 1;
+                        continue;
+                    }
+                }
+                Err(e) => {
+                    warn!("⚠️ Network error reaching Discord API: {}. Retrying in 15s...", e);
+                    tokio::time::sleep(std::time::Duration::from_secs(15)).await;
+                    attempt += 1;
+                    continue;
+                }
             }
         }
     }
 
-    eprintln!(">>> [DIAG] About to call ClientBuilder::new().framework().await …");
+    info!("🚀 Building Discord client and connecting to Gateway...");
 
     // Wrap the builder in a timeout so it can't hang forever (serenity calls
     // GET /gateway/bot here, which could hang on DNS/TLS issues).
