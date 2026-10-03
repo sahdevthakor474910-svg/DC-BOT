@@ -67,34 +67,29 @@ pub async fn status(ctx: Context<'_>) -> Result<(), Error> {
         .field("🖼️ Memes",           ch(cfg.meme_channel_id.as_ref()),          true)
         .field("📰 Gaming News",      ch(cfg.news_channel_id.as_ref()),          true)
         .field("🎁 Free Games",       ch(cfg.free_games_channel_id.as_ref()),    true)
-        .field("🔞 NSFW",             ch(cfg.nsfw_channel_id.as_ref()),          true)
-        .field("🎌 JAV Videos",       ch(cfg.jav_channel_id.as_ref()),           true)
-        .field("🔥 Porn Videos",      ch(cfg.porn_video_channel_id.as_ref()),    true)
-        .field("🌶️ OK.XXX",           ch(cfg.okxxx_channel_id.as_ref()),         true)
         .field("⚔️ Clash of Clans",   ch(cfg.coc_channel_id.as_ref()),          true)
         .field("🌍 X Global",         ch(cfg.twitter_global_channel_id.as_ref()),true)
         .field("🌏 X Asia",           ch(cfg.twitter_asia_channel_id.as_ref()),  true)
-        .field("📸 Hot Photos",       ch(cfg.porn_channel_id.as_ref()),          true)
         .field("🎮 DMC Boss Results",  ch(cfg.dmc_channel_id.as_ref()),           true)
-        .field("🔥 XNXX",              ch(cfg.xnxx_channel_id.as_ref()),          true)
+        .field("🔞 NSFW (Reddit)",    ch(cfg.nsfw_channel_id.as_ref()),          true)
+        .field("📸 Hot Photos",       ch(cfg.porn_channel_id.as_ref()),          true)
+        .field("🎬 Porn Clips",        ch(cfg.pornclips_channel_id.as_ref()),     true)
+        .field("🎌 JAV (Eporner)",    ch(cfg.jav_channel_id.as_ref()),           true)
         .field("🎌 JAVHD",             ch(cfg.javhd_channel_id.as_ref()),         true)
         .field("🔮 Hentai Videos",     ch(cfg.hanime_channel_id.as_ref()),        true)
-        .field("🎬 Porn Clips",        ch(cfg.pornclips_channel_id.as_ref()),     true)
-        // ── Extra NSFW splits (collapsed) ────────────────────────────────────
-        .field("🔞 Rule34",           ch(cfg.rule34_channel_id.as_ref()),        true)
-        .field("🔞 Hentai",           ch(cfg.hentai_channel_id.as_ref()),        true)
-        .field("🧠 Brainrot",         ch(cfg.brainrot_channel_id.as_ref()),      true)
-        // ── Settings ─────────────────────────────────────────────────────────
+        .field("🔥 Porn Videos",      ch(cfg.porn_video_channel_id.as_ref()),    true)
+        .field("🌶️ OK.XXX",           ch(cfg.okxxx_channel_id.as_ref()),         true)
+        .field("🔥 XNXX",              ch(cfg.xnxx_channel_id.as_ref()),          true)
+        // ── Settings & Features ──────────────────────────────────────────────
         .field("⏱️ Meme Interval",    interval_label,                            true)
         .field("⚡ Auto-React",        react_status,                             true)
         .field("💬 Chat Responses",    response_status,                          true)
         .field("🤬 Slang Auto-Roast",  gali_status,                              true)
         .field("🛡️ Safe Mode",         safe_mode_status,                         true)
         .field("😄 Emojis",           emoji_list,                               true)
-        .field("📢 React Channels",   ch_list,                                   false)
-        .field("👤 React Users",      user_list,                                 false)
+        .field("🎯 Reaction Targets", format!("• **Channels:** {}\n• **Users:** {}", ch_list, user_list), false)
         .footer(serenity::CreateEmbedFooter::new(
-            "Memes: configurable (default 60s) • News: 5min • Free Games: 15min • JAV: 15min • Porn: 20min • OK.XXX: 25min • Clash of Clans: 10min | /setup to change channels • /post to post now"
+            "Memes: configurable (default 60s) • News: 5min • Free Games: 15min • JAV: 15min • Porn: 20min • OK.XXX: 25min • CoC: 10min | /setup to change channels • /post to post now"
         ));
 
     ctx.send(poise::CreateReply::default().embed(embed)).await?;

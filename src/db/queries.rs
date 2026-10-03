@@ -6,6 +6,7 @@ use sqlx::{Row, SqlitePool};
 // ────────────────────────────────────────────────────────────────────────────
 
 #[derive(Debug, Clone, serde::Serialize, serde::Deserialize)]
+#[serde(default)]
 pub struct GuildConfig {
     pub guild_id: String,
     pub meme_channel_id: Option<String>,
@@ -35,6 +36,41 @@ pub struct GuildConfig {
     pub gali_response_enabled: bool,              // added via migration 017 (Gali response)
     pub safe_mode_enabled: bool,                  // added via migration 018 (Safe mode)
     pub bot_response_enabled: bool,               // added via migration 019 (Bot response master toggle)
+}
+
+impl Default for GuildConfig {
+    fn default() -> Self {
+        Self {
+            guild_id: String::new(),
+            meme_channel_id: None,
+            posting_interval_secs: 60,
+            brainrot_channel_id: None,
+            shitposting_channel_id: None,
+            instagram_channel_id: None,
+            news_channel_id: None,
+            free_games_channel_id: None,
+            nsfw_channel_id: None,
+            rule34_channel_id: None,
+            porn_channel_id: None,
+            hentai_channel_id: None,
+            jav_channel_id: None,
+            porn_video_channel_id: None,
+            okxxx_channel_id: None,
+            coc_channel_id: None,
+            twitter_channel_id: None,
+            twitter_global_channel_id: None,
+            twitter_asia_channel_id: None,
+            dmc_channel_id: None,
+            xnxx_channel_id: None,
+            javhd_channel_id: None,
+            hanime_channel_id: None,
+            pornclips_channel_id: None,
+            auto_react_enabled: true,
+            gali_response_enabled: true,
+            safe_mode_enabled: false,
+            bot_response_enabled: true,
+        }
+    }
 }
 
 // ────────────────────────────────────────────────────────────────────────────
@@ -1192,7 +1228,8 @@ pub async fn get_menace_users(db: &SqlitePool, guild_id: &str) -> Result<Vec<Str
     Ok(rows.into_iter().map(|r| r.get("user_id")).collect())
 }
 
-#[derive(Debug, Clone, serde::Serialize, serde::Deserialize)]
+#[derive(Debug, Clone, Default, serde::Serialize, serde::Deserialize)]
+#[serde(default)]
 pub struct GuildSetupBackup {
     pub config: GuildConfig,
     pub reaction_channels: Vec<String>,
