@@ -442,10 +442,14 @@ async fn main() -> Result<()> {
                 Ok(resp) => {
                     let status = resp.status();
                     if status == reqwest::StatusCode::TOO_MANY_REQUESTS {
+                        let retry_header = resp.headers().get("retry-after").and_then(|v| v.to_str().ok()).unwrap_or("none").to_string();
+                        let cf_ray = resp.headers().get("cf-ray").and_then(|v| v.to_str().ok()).unwrap_or("none").to_string();
                         let body = resp.text().await.unwrap_or_default();
                         warn!(
-                            "⏳ Discord API 429 (Rate Limit / Cloudflare temporary block on Render's IP): {}. Pausing for {}s to let block clear (web server is active)...",
-                            &body[..body.len().min(150)],
+                            "⏳ Discord API 429 [retry-after: {}, cf-ray: {}]: {}. Pausing for {}s...",
+                            retry_header,
+                            cf_ray,
+                            &body[..body.len().min(120)],
                             backoff
                         );
                         tokio::time::sleep(std::time::Duration::from_secs(backoff)).await;
