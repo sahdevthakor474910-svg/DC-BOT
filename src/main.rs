@@ -268,14 +268,11 @@ async fn main() -> Result<()> {
 
         let framework = build_framework(bot_data.clone());
         let builder = serenity::ClientBuilder::new(&token, intents).framework(framework);
-
-        // Allow up to 15 minutes (900s) for Serenity to wait out any global 429 rate limit.
-        // We NEVER exit the process with exit(1) on failure or timeout.
-        // Exiting causes Render to restart the container, which immediately sends another
-        // request to Discord and resets/extends the rate limit block.
-        // The web server on port 10000 stays alive so Render considers the service healthy throughout.
-        match tokio::time::timeout(std::time::Duration::from_secs(900), builder).await {
-            Ok(Ok(mut client)) => {
+        // Let Serenity resolve the gateway and wait out any rate limit naturally.
+        // Serenity's built-in ratelimiter will sleep for the exact duration specified
+        // by Discord/Cloudflare in the Retry-After header.
+        match builder.await {
+            Ok(mut client) => {
                 info!("✅ Discord client built successfully! Starting gateway connection…");
                 attempt = 1; // reset on successful build
 
@@ -297,21 +294,13 @@ async fn main() -> Result<()> {
                     }
                 }
             }
-            Ok(Err(e)) => {
+            Err(e) => {
                 let err_str = format!("{:#}", e);
                 error!("❌ Failed to build Discord client: {}. Waiting 60s before retry…", err_str);
                 if let Ok(mut lock) = bot_data.status.write() {
                     *lock = format!("Failed to build client: {}. Retrying in 60s…", err_str);
                 }
                 tokio::time::sleep(std::time::Duration::from_secs(60)).await;
-                attempt += 1;
-            }
-            Err(_) => {
-                warn!("⚠️ Discord client builder timed out after 15 minutes. Retrying in 30s…");
-                if let Ok(mut lock) = bot_data.status.write() {
-                    *lock = "Client builder timed out (15m). Retrying in 30s…".to_string();
-                }
-                tokio::time::sleep(std::time::Duration::from_secs(30)).await;
                 attempt += 1;
             }
         }
