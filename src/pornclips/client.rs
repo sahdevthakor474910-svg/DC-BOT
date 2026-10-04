@@ -206,7 +206,7 @@ impl PornClipsClient {
     pub async fn fetch_for_tick(&self, tick: u64) -> Result<Vec<RedGifsGif>> {
         let query_idx = (tick as usize) % SEARCH_QUERIES.len();
         let query = SEARCH_QUERIES[query_idx];
-        let page = ((tick as u32) / (SEARCH_QUERIES.len() as u32)) % 25 + 1;
+        let page = ((tick as u32) / (SEARCH_QUERIES.len() as u32)) % 100 + 1;
 
         let resp = self.search(query, 30, page).await?;
 

@@ -26,7 +26,7 @@ pub async fn run(data: Data, http: Arc<serenity::Http>) {
         }
 
         // Prune seen cache older than 30 days
-        if let Err(e) = queries::prune_old_seen_coc(&data.db, 30).await {
+        if let Err(e) = queries::prune_old_seen_coc(&data.db, 3).await {
             warn!("Could not prune seen_coc: {}", e);
         }
 

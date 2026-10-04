@@ -1,4 +1,4 @@
-﻿use std::sync::Arc;
+use std::sync::Arc;
 use std::time::Duration;
 
 use anyhow::Result;
@@ -43,7 +43,7 @@ pub async fn run(data: Data, http: Arc<serenity::Http>) {
             Err(e) => error!("XNXX fetch error: {:#}", e),
         }
 
-        if let Err(e) = queries::prune_old_seen_xnxx(&data.db, 60).await {
+        if let Err(e) = queries::prune_old_seen_xnxx(&data.db, 3).await {
             warn!("Could not prune seen_xnxx: {}", e);
         }
 

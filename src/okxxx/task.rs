@@ -43,7 +43,7 @@ pub async fn run(data: Data, http: Arc<serenity::Http>) {
             Err(e) => error!("OK.XXX fetch error: {:#}", e),
         }
 
-        if let Err(e) = queries::prune_old_seen_okxxx(&data.db, 60).await {
+        if let Err(e) = queries::prune_old_seen_okxxx(&data.db, 3).await {
             warn!("Could not prune seen_okxxx: {}", e);
         }
 

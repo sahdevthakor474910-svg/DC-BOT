@@ -5,7 +5,7 @@ use scraper::{Html, Selector};
 use super::models::XnxxVideo;
 
 const BASE_URL: &str = "https://www.xnxx.com";
-const MAX_PAGE: u32 = 5;
+const MAX_PAGE: u32 = 15;
 
 pub struct XnxxClient {
     http: Client,

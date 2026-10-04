@@ -49,7 +49,7 @@ pub async fn run(data: Data, http: Arc<serenity::Http>) {
             Err(e) => error!("Hentai fetch error: {:#}", e),
         }
 
-        if let Err(e) = queries::prune_old_seen_hanime(&data.db, 30).await {
+        if let Err(e) = queries::prune_old_seen_hanime(&data.db, 3).await {
             warn!("Could not prune seen_hanime: {}", e);
         }
 

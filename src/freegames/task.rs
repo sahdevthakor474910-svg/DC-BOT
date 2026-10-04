@@ -25,7 +25,7 @@ pub async fn run(data: Data, http: Arc<serenity::Http>) {
             Err(e) => error!("Free-games task error: {:#}", e),
         }
 
-        if let Err(e) = queries::prune_old_seen_giveaways(&data.db, 60).await {
+        if let Err(e) = queries::prune_old_seen_giveaways(&data.db, 7).await {
             warn!("Could not prune seen_giveaways: {}", e);
         }
 

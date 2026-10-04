@@ -10,14 +10,22 @@ const BASE_URL: &str = "https://hentaigasm.com";
 
 /// Pages to rotate through for variety each tick
 const PAGES: &[&str] = &[
-    "/",                          // Latest (homepage)
-    "/?orderby=views",            // Most viewed all time
-    "/page/2/",                   // Latest page 2
-    "/genre/uncensored/",         // Uncensored
-    "/page/3/",                   // Latest page 3
-    "/genre/uncensored/page/2/",  // Uncensored page 2
-    "/page/4/",                   // Latest page 4
-    "/?orderby=views&paged=2",    // Most viewed page 2
+    "/",
+    "/page/2/",
+    "/page/3/",
+    "/page/4/",
+    "/page/5/",
+    "/page/6/",
+    "/page/7/",
+    "/page/8/",
+    "/page/9/",
+    "/page/10/",
+    "/?orderby=views",
+    "/?orderby=views&paged=2",
+    "/?orderby=views&paged=3",
+    "/genre/uncensored/",
+    "/genre/uncensored/page/2/",
+    "/genre/uncensored/page/3/",
 ];
 
 /// Encodes spaces and brackets in URLs so Discord accepts them as valid URIs

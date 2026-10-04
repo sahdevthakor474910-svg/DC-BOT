@@ -39,7 +39,7 @@ pub async fn run(data: Data, http: Arc<serenity::Http>) {
             Err(e) => error!("JAV task error: {:#}", e),
         }
 
-        if let Err(e) = queries::prune_old_seen_jav(&data.db, 30).await {
+        if let Err(e) = queries::prune_old_seen_jav(&data.db, 3).await {
             warn!("Could not prune seen_jav: {}", e);
         }
 

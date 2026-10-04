@@ -75,7 +75,7 @@ pub async fn run(data: Data, http: Arc<serenity::Http>) {
 
         tick_count += 1;
 
-        if let Err(e) = queries::prune_old_seen_porn_videos(&data.db, 60).await {
+        if let Err(e) = queries::prune_old_seen_porn_videos(&data.db, 3).await {
             warn!("Could not prune seen_porn_videos: {}", e);
         }
 

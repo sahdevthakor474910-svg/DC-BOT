@@ -12,6 +12,16 @@ const API_CONFIGS: &[(bool, u32, u32)] = &[
     (false, 10, 25),  // Most popular
     (true,  10, 10),  // Page 2
     (false, 10, 30),  // Page 3
+    (true,  10, 20),
+    (false, 10, 40),
+    (false, 10, 50),
+    (true,  10, 30),
+    (false, 10, 60),
+    (false, 10, 70),
+    (true,  10, 40),
+    (false, 10, 80),
+    (false, 10, 90),
+    (true,  10, 50),
 ];
 
 pub struct JavhdClient {

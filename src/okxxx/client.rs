@@ -8,7 +8,7 @@ const BASE_URL: &str = "https://ok.xxx";
 
 /// Pages to rotate through for a fresh feed each tick.
 /// Each page index maps to https://ok.xxx/<n>/ (except 1 → https://ok.xxx/)
-const MAX_PAGE: u32 = 5;
+const MAX_PAGE: u32 = 15;
 
 pub struct OkXxxClient {
     http: Client,
