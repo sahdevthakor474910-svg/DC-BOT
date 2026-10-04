@@ -31,15 +31,16 @@ pub async fn run(data: Data, http: Arc<serenity::Http>) {
 
     loop {
         let query = JAV_SEARCHES[search_index % JAV_SEARCHES.len()];
+        let page = (search_index / JAV_SEARCHES.len() % 50 + 1) as u32;
         search_index += 1;
 
-        match tick_with_query(&data, &http, &client, query, false).await {
-            Ok(n) if n > 0 => info!("🎌 Posted {} JAV video(s) for query \"{}\"", n, query),
+        match tick_with_query(&data, &http, &client, query, page, false).await {
+            Ok(n) if n > 0 => info!("🎌 Posted {} JAV video(s) for query \"{}\" (page {})", n, query, page),
             Ok(_) => {}
             Err(e) => error!("JAV task error: {:#}", e),
         }
 
-        if let Err(e) = queries::prune_old_seen_jav(&data.db, 3).await {
+        if let Err(e) = queries::prune_old_seen_jav(&data.db, 90).await {
             warn!("Could not prune seen_jav: {}", e);
         }
 
@@ -50,7 +51,7 @@ pub async fn run(data: Data, http: Arc<serenity::Http>) {
 
 async fn tick(data: &Data, http: &Arc<serenity::Http>, force: bool) -> Result<usize> {
     let client = EpornerClient::new()?;
-    let videos = client.fetch_jav_videos("japanese uncensored", 8).await?;
+    let videos = client.fetch_jav_videos("japanese uncensored", 8, 1).await?;
     post_videos(data, http, &videos, force).await
 }
 
@@ -59,9 +60,10 @@ async fn tick_with_query(
     http: &Arc<serenity::Http>,
     client: &EpornerClient,
     query: &str,
+    page: u32,
     force: bool,
 ) -> Result<usize> {
-    let videos = client.fetch_jav_videos(query, 8).await?;
+    let videos = client.fetch_jav_videos(query, 8, page).await?;
     post_videos(data, http, &videos, force).await
 }
 

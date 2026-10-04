@@ -43,7 +43,7 @@ pub async fn run(data: Data, http: Arc<serenity::Http>) {
             Err(e) => error!("JAVHD fetch error: {:#}", e),
         }
 
-        if let Err(e) = queries::prune_old_seen_javhd(&data.db, 3).await {
+        if let Err(e) = queries::prune_old_seen_javhd(&data.db, 90).await {
             warn!("Could not prune seen_javhd: {}", e);
         }
 

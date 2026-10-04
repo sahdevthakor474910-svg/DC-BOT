@@ -36,7 +36,7 @@ impl PornClient {
     }
 
     /// Fetch the most recent videos for a given search term.
-    pub async fn fetch_videos(&self, search: &str, count: u8) -> Result<Vec<RedTubeVideo>> {
+    pub async fn fetch_videos(&self, search: &str, count: u8, page: u32) -> Result<Vec<RedTubeVideo>> {
         let resp = self
             .http
             .get(REDTUBE_API)
@@ -47,6 +47,7 @@ impl PornClient {
                 ("thumbsize", "medium2"),   // 320x240 — good for Discord embed
                 ("ordering", "most_recent"),
                 ("count", &count.to_string()),
+                ("page", &page.to_string()),
             ])
             .send()
             .await?
@@ -204,9 +205,14 @@ impl BeegTvClient {
 
     /// Fetch the latest videos from beeg.tv homepage.
     /// Returns up to `limit` videos by scraping the SSR HTML.
-    pub async fn fetch_latest(&self, limit: usize) -> Result<Vec<super::models::BeegTvVideo>> {
+    pub async fn fetch_latest(&self, limit: usize, page: u32) -> Result<Vec<super::models::BeegTvVideo>> {
+        let url = if page <= 1 {
+            BEEGTV_BASE.to_string()
+        } else {
+            format!("{}/index/{}", BEEGTV_BASE, page)
+        };
         let html = self.http
-            .get(BEEGTV_BASE)
+            .get(&url)
             .header("Accept", "text/html,application/xhtml+xml")
             .send()
             .await?

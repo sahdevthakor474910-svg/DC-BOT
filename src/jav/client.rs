@@ -43,15 +43,20 @@ impl EpornerClient {
 
     /// Search for videos using eporner's Webmasters API.
     /// Returns raw entries (no MP4 URL yet — need to scrape page).
-    pub async fn search(&self, query: &str, count: u32) -> Result<Vec<EpornerVideoEntry>> {
+    pub async fn search(&self, query: &str, count: u32, page: u32) -> Result<Vec<EpornerVideoEntry>> {
+        let orders = ["top-weekly", "top-monthly", "most-popular", "latest"];
+        static ORDER_IDX: std::sync::atomic::AtomicUsize = std::sync::atomic::AtomicUsize::new(0);
+        let order = orders[ORDER_IDX.fetch_add(1, std::sync::atomic::Ordering::Relaxed) % orders.len()];
+
         let resp = self
             .http
             .get(EPORNER_API)
             .query(&[
                 ("query", query),
                 ("per_page", &count.to_string()),
+                ("page", &page.to_string()),
                 ("format", "json"),
-                ("order", "top-weekly"),
+                ("order", order),
                 ("gay", "0"),
                 ("thumbsize", "big"),
             ])
@@ -184,8 +189,8 @@ impl EpornerClient {
 
     /// Full pipeline: search → for each result, resolve MP4 URL.
     /// Returns only videos where MP4 extraction succeeded.
-    pub async fn fetch_jav_videos(&self, query: &str, count: u32) -> Result<Vec<EpornerVideo>> {
-        let entries = self.search(query, count).await?;
+    pub async fn fetch_jav_videos(&self, query: &str, count: u32, page: u32) -> Result<Vec<EpornerVideo>> {
+        let entries = self.search(query, count, page).await?;
         let mut results = Vec::new();
 
         for entry in entries {

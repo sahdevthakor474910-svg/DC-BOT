@@ -17,7 +17,7 @@ pub async fn run_once(data: &Data, http: &Arc<serenity::Http>) -> Result<usize> 
 
     // Also pull a batch from beeg.tv on manual refresh
     let beegtv = BeegTvClient::new()?;
-    match beegtv.fetch_latest(10).await {
+    match beegtv.fetch_latest(10, 1).await {
         Ok(bv) => {
             let n2 = post_beegtv_videos(data, http, &bv, true).await?;
             Ok(n + n2)
@@ -46,14 +46,16 @@ pub async fn run(data: Data, http: Arc<serenity::Http>) {
     let mut category_index = 0usize;
 
     loop {
+        let page = (tick_count % 50 + 1) as u32;
+
         // Alternate: even ticks → RedTube, odd ticks → Beeg.tv
         if tick_count % 2 == 0 {
             let search = PORN_SEARCHES[category_index % PORN_SEARCHES.len()];
             category_index += 1;
-            match redtube.fetch_videos(search, 10).await {
+            match redtube.fetch_videos(search, 10, page).await {
                 Ok(videos) => {
                     match post_redtube_videos(&data, &http, &videos, false).await {
-                        Ok(n) if n > 0 => info!("🔞 Posted {} RedTube video(s) [{}]", n, search),
+                        Ok(n) if n > 0 => info!("🔞 Posted {} RedTube video(s) [{} - page {}]", n, search, page),
                         Ok(_) => {}
                         Err(e) => error!("RedTube post error: {:#}", e),
                     }
@@ -61,7 +63,7 @@ pub async fn run(data: Data, http: Arc<serenity::Http>) {
                 Err(e) => error!("RedTube fetch error ({}): {:#}", search, e),
             }
         } else {
-            match beegtv.fetch_latest(10).await {
+            match beegtv.fetch_latest(10, page).await {
                 Ok(videos) => {
                     match post_beegtv_videos(&data, &http, &videos, false).await {
                         Ok(n) if n > 0 => info!("🔞 Posted {} Beeg.tv video(s)", n),
@@ -75,7 +77,7 @@ pub async fn run(data: Data, http: Arc<serenity::Http>) {
 
         tick_count += 1;
 
-        if let Err(e) = queries::prune_old_seen_porn_videos(&data.db, 3).await {
+        if let Err(e) = queries::prune_old_seen_porn_videos(&data.db, 90).await {
             warn!("Could not prune seen_porn_videos: {}", e);
         }
 

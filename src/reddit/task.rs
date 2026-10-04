@@ -43,7 +43,7 @@ pub async fn run(data: Data, http: Arc<serenity::Http>) {
         }
 
         // Prune old deduplication records once per tick
-        if let Err(e) = queries::prune_old_seen_posts(&data.db, 3).await {
+        if let Err(e) = queries::prune_old_seen_posts(&data.db, 90).await {
             warn!("Could not prune seen_posts: {}", e);
         }
 
@@ -258,17 +258,26 @@ async fn tick(data: &Data, http: &Arc<serenity::Http>, force: bool) -> Result<us
 
     for cfg in configs {
         // ── memesguy.com SFW Memes ─────────────────────────────────────────
-        if !memesguy_posts.is_empty() {
-            if let Some(ref ch) = cfg.meme_channel_id {
+        if let Some(ref ch) = cfg.meme_channel_id {
+            if !memesguy_posts.is_empty() {
                 total_posted += post_memesguy_to_channel(data, http, &cfg.guild_id, ch, &memesguy_posts, force).await;
             }
-            if let Some(ref ch) = cfg.shitposting_channel_id {
-                total_posted += post_memesguy_to_channel(data, http, &cfg.guild_id, ch, &memesguy_posts, force).await;
+            for sub in ["dankmemes", "memes", "me_irl", "wholesomememes"] {
+                total_posted += post_subreddit(data, http, &cfg.guild_id, sub, ch, force, 2).await;
             }
-            if let Some(ref ch) = cfg.brainrot_channel_id {
-                total_posted += post_memesguy_to_channel(data, http, &cfg.guild_id, ch, &memesguy_posts, force).await;
+        }
+        if let Some(ref ch) = cfg.shitposting_channel_id {
+            for sub in ["shitposting", "whenthe", "196"] {
+                total_posted += post_subreddit(data, http, &cfg.guild_id, sub, ch, force, 2).await;
             }
-            if let Some(ref ch) = cfg.instagram_channel_id {
+        }
+        if let Some(ref ch) = cfg.brainrot_channel_id {
+            for sub in ["brainrot"] {
+                total_posted += post_subreddit(data, http, &cfg.guild_id, sub, ch, force, 2).await;
+            }
+        }
+        if let Some(ref ch) = cfg.instagram_channel_id {
+            if !memesguy_posts.is_empty() {
                 total_posted += post_memesguy_to_channel(data, http, &cfg.guild_id, ch, &memesguy_posts, force).await;
             }
         }

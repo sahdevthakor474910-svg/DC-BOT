@@ -6,6 +6,11 @@ use tracing::{debug, warn};
 
 use super::models::{RedditPost, RedditResponse};
 
+pub fn iterators() -> &'static std::sync::Mutex<std::collections::HashMap<String, String>> {
+    static ITERS: std::sync::OnceLock<std::sync::Mutex<std::collections::HashMap<String, String>>> = std::sync::OnceLock::new();
+    ITERS.get_or_init(|| std::sync::Mutex::new(std::collections::HashMap::new()))
+}
+
 /// Subreddits to poll for memes.
 pub const SUBREDDITS: &[&str] = &["memes", "dankmemes", "shitposting", "brainrot", "196", "whenthe"];
 
@@ -47,6 +52,8 @@ struct MemeApiPost {
 }
 
 // ────────────────────────────────────────────────────────────────────────────
+
+static MEMESGUY_INDEX: std::sync::atomic::AtomicUsize = std::sync::atomic::AtomicUsize::new(0);
 
 pub struct RedditClient {
     client: Client,
@@ -223,12 +230,13 @@ impl RedditClient {
     /// Fetch posts from Scrolller GraphQL API for NSFW subreddits.
     async fn fetch_from_scrolller(&self, subreddit: &str, limit: u32) -> Result<Vec<RedditPost>> {
         let query = r#"
-            query SubredditQuery($url: String!, $limit: Int!) {
-              getSubreddit(data: { url: $url, limit: $limit }) {
+            query SubredditQuery($url: String!, $limit: Int!, $iterator: String) {
+              getSubreddit(data: { url: $url, limit: $limit, iterator: $iterator }) {
                 id
                 url
                 title
                 children {
+                  iterator
                   items {
                     id
                     url
@@ -245,10 +253,18 @@ impl RedditClient {
             }
         "#;
 
-        let variables = serde_json::json!({
-            "url": format!("/r/{}", subreddit),
+        let iter_key = format!("/r/{}", subreddit);
+        let iterator = {
+            let iters = crate::reddit::client::iterators().lock().unwrap();
+            iters.get(&iter_key).cloned()
+        };
+        let mut variables = serde_json::json!({
+            "url": iter_key.clone(),
             "limit": limit
         });
+        if let Some(it) = iterator {
+            variables.as_object_mut().unwrap().insert("iterator".to_string(), serde_json::json!(it));
+        }
 
         let payload = serde_json::json!({
             "query": query,
@@ -274,6 +290,10 @@ impl RedditClient {
                 return Ok(vec![]);
             }
         };
+
+        if let Some(it) = &subreddit_data.children.iterator {
+            crate::reddit::client::iterators().lock().unwrap().insert(iter_key, it.clone());
+        }
 
         let mut posts = Vec::new();
         for item in subreddit_data.children.items {
@@ -315,8 +335,17 @@ impl RedditClient {
 
     /// Fetch latest memes from memesguy.com by scraping the homepage.
     pub async fn fetch_memesguy_memes(&self) -> Result<Vec<MemeGuyPost>> {
-        debug!("Fetching memes from memesguy.com");
-        let html = self.client.get("https://memesguy.com/")
+        let urls = [
+            "https://memesguy.com/",
+            "https://memesguy.com/timeline",
+            "https://memesguy.com/year/2026",
+            "https://memesguy.com/year/2025",
+            "https://memesguy.com/year/2024",
+        ];
+        let idx = MEMESGUY_INDEX.fetch_add(1, std::sync::atomic::Ordering::Relaxed) % urls.len();
+        let target_url = urls[idx];
+        debug!("Fetching memes from {}", target_url);
+        let html = self.client.get(target_url)
             .send()
             .await?
             .text()
@@ -385,6 +414,7 @@ struct ScrolllerSubreddit {
 
 #[derive(Deserialize, Debug)]
 struct ScrolllerChildren {
+    iterator: Option<String>,
     items: Vec<ScrolllerItem>,
 }
 
