@@ -202,34 +202,35 @@ impl PornClipsClient {
         Ok(resp.json().await?)
     }
 
-    /// Fetch clips for a given tick, rotating queries and pages with strict straight/female filtering
+    /// Fetch clips for a given tick, rotating queries and pages with fallback across queries to guarantee clips
     pub async fn fetch_for_tick(&self, tick: u64) -> Result<Vec<RedGifsGif>> {
-        let query_idx = (tick as usize) % SEARCH_QUERIES.len();
-        let query = SEARCH_QUERIES[query_idx];
-        let page = ((tick as u32) / (SEARCH_QUERIES.len() as u32)) % 100 + 1;
+        let mut results = Vec::new();
+        let base_idx = (tick as usize) % SEARCH_QUERIES.len();
+        let base_page = ((tick as u32) / (SEARCH_QUERIES.len() as u32)) % 50 + 1;
 
-        let resp = self.search(query, 30, page).await?;
+        // Try up to 3 queries to guarantee enough fresh clips
+        for offset in 0..3 {
+            let query_idx = (base_idx + offset) % SEARCH_QUERIES.len();
+            let query = SEARCH_QUERIES[query_idx];
+            let page = (base_page + offset as u32) % 50 + 1;
 
-        // Filter: only keep straight/female clips with SD URL and duration under 60 seconds
-        let clips: Vec<RedGifsGif> = resp
-            .gifs
-            .into_iter()
-            .filter(|g| {
-                g.urls.sd.is_some()
-                    && g.duration <= 60.0
-                    && g.duration > 3.0
-                    && is_straight_female_content(g)
-            })
-            .collect();
+            if let Ok(resp) = self.search(query, 80, page).await {
+                for g in resp.gifs {
+                    let has_sd = g.urls.as_ref().and_then(|u| u.sd.as_ref()).is_some();
+                    let dur = g.duration.unwrap_or(15.0);
+                    if has_sd && dur <= 60.0 && dur >= 2.0 && is_straight_female_content(&g) {
+                        results.push(g);
+                    }
+                }
+            }
 
-        debug!(
-            "🎬 PornClips: query='{}', page={}, kept {} straight/female clips",
-            query,
-            page,
-            clips.len()
-        );
+            if results.len() >= 15 {
+                break;
+            }
+        }
 
-        Ok(clips)
+        debug!("🎬 PornClips: collected {} valid clips for tick {}", results.len(), tick);
+        Ok(results)
     }
 
     /// Download raw MP4 bytes from a URL

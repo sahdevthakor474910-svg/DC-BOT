@@ -194,6 +194,12 @@ pub struct BeegTvClient {
     http: Client,
 }
 
+const BEEG_CATEGORIES: &[&str] = &[
+    "amateur", "anal", "asian", "babe", "big-ass", "big-tits",
+    "blowjob", "brunette", "creampie", "cumshot", "hardcore",
+    "latina", "lesbian", "milf", "pov", "teen",
+];
+
 impl BeegTvClient {
     pub fn new() -> Result<Self> {
         let http = Client::builder()
@@ -203,13 +209,14 @@ impl BeegTvClient {
         Ok(Self { http })
     }
 
-    /// Fetch the latest videos from beeg.tv homepage.
+    /// Fetch latest videos from beeg.tv homepage or rotating categories.
     /// Returns up to `limit` videos by scraping the SSR HTML.
     pub async fn fetch_latest(&self, limit: usize, page: u32) -> Result<Vec<super::models::BeegTvVideo>> {
-        let url = if page <= 1 {
+        let url = if page == 0 {
             BEEGTV_BASE.to_string()
         } else {
-            format!("{}/index/{}", BEEGTV_BASE, page)
+            let cat = BEEG_CATEGORIES[(page as usize) % BEEG_CATEGORIES.len()];
+            format!("{}/category/{}", BEEGTV_BASE, cat)
         };
         let html = self.http
             .get(&url)

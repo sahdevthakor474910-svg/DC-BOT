@@ -111,7 +111,7 @@ async fn post_clips(
                 }
             }
 
-            let sd_url = match clip.urls.sd.as_deref() {
+            let sd_url = match clip.urls.as_ref().and_then(|u| u.sd.as_deref()) {
                 Some(u) if !u.is_empty() => u,
                 _ => continue,
             };
@@ -133,10 +133,11 @@ async fn post_clips(
             };
 
             // Format duration as mm:ss
-            let dur_secs = clip.duration as u64;
+            let dur_secs = clip.duration.unwrap_or(15.0) as u64;
             let dur_str = format!("{}:{:02}", dur_secs / 60, dur_secs % 60);
 
-            let views_str = format_views(clip.views);
+            let views_str = format_views(clip.views.unwrap_or(0));
+            let author_name = clip.user_name.as_deref().unwrap_or("Anonymous");
 
             let tags_preview = clip.tags.iter().take(3)
                 .map(|t| t.as_str())
@@ -144,14 +145,14 @@ async fn post_clips(
                 .join(" • ");
 
             let title = if clip.tags.is_empty() {
-                format!("🔥 Clip by {}", clip.user_name)
+                format!("🔥 Clip by {}", author_name)
             } else {
                 format!("🔥 {}", tags_preview)
             };
 
             let footer = format!(
                 "🎬 Porn Clips • ⏱️ {} • 👁️ {} views • by {}",
-                dur_str, views_str, clip.user_name
+                dur_str, views_str, author_name
             );
 
             let page_url = format!("https://www.redgifs.com/watch/{}", clip.id);

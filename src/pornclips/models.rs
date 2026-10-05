@@ -7,40 +7,46 @@ pub struct RedGifsAuthResponse {
 
 #[derive(Debug, Clone, Deserialize)]
 pub struct RedGifsSearchResponse {
+    #[serde(default)]
     pub gifs: Vec<RedGifsGif>,
-    pub page: u32,
-    pub pages: u32,
-    pub total: u64,
+    #[serde(default)]
+    pub page: Option<u32>,
+    #[serde(default)]
+    pub pages: Option<u32>,
+    #[serde(default)]
+    pub total: Option<u64>,
 }
 
 #[derive(Debug, Clone, Deserialize)]
 pub struct RedGifsGif {
     pub id: String,
-    pub duration: f64,
+    #[serde(default)]
+    pub duration: Option<f64>,
     #[serde(default)]
     pub description: Option<String>,
     #[serde(rename = "hasAudio", default)]
-    pub has_audio: bool,
+    pub has_audio: Option<bool>,
     #[serde(default)]
-    pub height: u32,
+    pub height: Option<u32>,
     #[serde(default)]
-    pub width: u32,
+    pub width: Option<u32>,
     #[serde(default)]
-    pub likes: u64,
+    pub likes: Option<u64>,
     #[serde(default)]
-    pub views: u64,
+    pub views: Option<u64>,
     #[serde(default)]
     pub tags: Vec<String>,
     #[serde(rename = "userName", default)]
-    pub user_name: String,
+    pub user_name: Option<String>,
     #[serde(rename = "contentType", default)]
     pub content_type: Option<String>,
     #[serde(default)]
     pub sexuality: Vec<String>,
-    pub urls: RedGifsUrls,
+    #[serde(default)]
+    pub urls: Option<RedGifsUrls>,
 }
 
-#[derive(Debug, Clone, Deserialize)]
+#[derive(Debug, Clone, Deserialize, Default)]
 pub struct RedGifsUrls {
     #[serde(default)]
     pub hd: Option<String>,
