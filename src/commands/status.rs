@@ -51,6 +51,7 @@ pub async fn status(ctx: Context<'_>) -> Result<(), Error> {
     let react_status = if cfg.auto_react_enabled { "🟢 On" } else { "🔴 Off" };
     let gali_status  = if cfg.gali_response_enabled { "🟢 On" } else { "🔴 Off" };
     let safe_mode_status = if cfg.safe_mode_enabled { "🛡️ **Enabled** (PG Clean)" } else { "⚡ **Disabled** (Savage Raw)" };
+    let sassy_status = if cfg.sassy_mode_enabled { "💅 **Enabled** (Flirty & Cheesy)" } else { "🖤 Disabled" };
     let response_status = if cfg.bot_response_enabled { "🟢 Enabled" } else { "🔴 Disabled (Silent)" };
 
     let interval_secs = cfg.posting_interval_secs;
@@ -86,6 +87,7 @@ pub async fn status(ctx: Context<'_>) -> Result<(), Error> {
         .field("💬 Chat Responses",    response_status,                          true)
         .field("🤬 Slang Auto-Roast",  gali_status,                              true)
         .field("🛡️ Safe Mode",         safe_mode_status,                         true)
+        .field("💅 Sassy Mode",        sassy_status,                             true)
         .field("😄 Emojis",           emoji_list,                               true)
         .field("🎯 Reaction Targets", format!("• **Channels:** {}\n• **Users:** {}", ch_list, user_list), false)
         .footer(serenity::CreateEmbedFooter::new(

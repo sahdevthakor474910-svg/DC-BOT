@@ -501,7 +501,7 @@ mod tests {
     async fn test_jav_eporner_search() {
         // JAV now uses eporner.com — searches for "japanese uncensored" via free Webmasters API
         let client = jav::client::EpornerClient::new().unwrap();
-        let results = client.search("japanese uncensored", 3).await;
+        let results = client.search("japanese uncensored", 3, 1).await;
         assert!(results.is_ok(), "Failed to search eporner: {:?}", results.err());
         let results = results.unwrap();
         println!("eporner search results: {:?}", results.iter().map(|v| &v.title).collect::<Vec<_>>());
@@ -534,7 +534,7 @@ mod tests {
     #[tokio::test]
     async fn test_redtube_fetch() {
         let client = porn::client::PornClient::new().unwrap();
-        let videos = client.fetch_videos("naughty america", 3).await;
+        let videos = client.fetch_videos("naughty america", 3, 1).await;
         assert!(videos.is_ok(), "Failed to fetch RedTube videos: {:?}", videos.err());
         let videos = videos.unwrap();
         println!("Fetched RedTube videos: {:?}", videos);

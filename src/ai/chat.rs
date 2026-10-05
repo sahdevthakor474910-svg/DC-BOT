@@ -53,14 +53,14 @@ pub async fn handle_ai_message(
     clean_prompt = clean_prompt.replace(&mention_plain, "").replace(&mention_nick, "");
     let mut clean_prompt = clean_prompt.trim().to_string();
 
-    // Check if Safe Mode is enabled in this server
-    let is_safe_mode = if let Some(guild_id) = message.guild_id {
+    // Check if Safe Mode or Sassy Mode is enabled in this server
+    let (is_safe_mode, is_sassy_mode) = if let Some(guild_id) = message.guild_id {
         queries::get_or_create_guild(&data.db, &guild_id.to_string())
             .await
-            .map(|c| c.safe_mode_enabled)
-            .unwrap_or(false)
+            .map(|c| (c.safe_mode_enabled, c.sassy_mode_enabled))
+            .unwrap_or((false, false))
     } else {
-        false
+        (false, false)
     };
 
     // Extract any images, GIFs, or video clips from message or reply context
@@ -69,13 +69,17 @@ pub async fn handle_ai_message(
     // If empty prompt (user just pinged the bot with no text)
     if clean_prompt.is_empty() {
         if !images.is_empty() {
-            clean_prompt = if is_safe_mode {
+            clean_prompt = if is_sassy_mode {
+                "React to this image with 100000000% cheesy, flirty gay sassy commentary.".to_string()
+            } else if is_safe_mode {
                 "Describe this image briefly and helpfully.".to_string()
             } else {
                 "React to this image with a short witty comment.".to_string()
             };
         } else {
-            let greeting = if is_safe_mode {
+            let greeting = if is_sassy_mode {
+                format!("well hello gorgeous **{}**~ couldn't resist pinging me, huh? 😉💅✨", message.author.name)
+            } else if is_safe_mode {
                 format!("hey **{}**! how can I help you? 😊", message.author.name)
             } else {
                 format!("yo **{}**, what's good?", message.author.name)
@@ -122,13 +126,14 @@ pub async fn handle_ai_message(
 
     // Build context header
     let context_header = format!(
-        "SERVER: {}\nUSER: {} (ID: {})\n[SERVER OWNER: {}]\n[MENACE ROAST TARGET: {}]\n[SAFE MODE: {}]\n[ATTACHED MEDIA/GIFS: {}]",
+        "SERVER: {}\nUSER: {} (ID: {})\n[SERVER OWNER: {}]\n[MENACE ROAST TARGET: {}]\n[SAFE MODE: {}]\n[SASSY FLIRT MODE: {}]\n[ATTACHED MEDIA/GIFS: {}]",
         guild_name,
         message.author.name,
         message.author.id,
         if is_owner { "YES" } else { "NO" },
-        if is_menace_target && !is_safe_mode { "YES — ROAST THIS USER EVERY TIME, MIX GALI WITH WIT" } else { "NO" },
+        if is_menace_target && !is_safe_mode && !is_sassy_mode { "YES — ROAST THIS USER EVERY TIME, MIX GALI WITH WIT" } else { "NO" },
         if is_safe_mode { "YES — BE POLITE AND CLEAN, ZERO GALI" } else { "NO — CASUAL MODE, GALI ALLOWED WHEN TRIGGERED" },
+        if is_sassy_mode { "YES — 100000000% CHEESY SASSY FLIRTATIOUS GAY BESTIE/DIVA QUEEN PERSONA" } else { "NO" },
         if !images.is_empty() { "YES" } else { "NONE" }
     );
 
@@ -179,8 +184,11 @@ pub async fn handle_ai_message(
         }
         Err(e) => {
             error!("AI generation failed: {:#}", e);
-            // If user used slangs/insults or is a menace target, and safe mode is OFF, flame them back!
-            if !is_safe_mode && (is_menace_target || crate::gali::contains_slang(&clean_prompt)) {
+            // If in sassy mode, reply with an ultra-sassy flirty comeback!
+            if is_sassy_mode {
+                let sassy_comeback = crate::gali::get_random_sassy_comeback();
+                let _ = message.reply(&ctx.http, sassy_comeback).await;
+            } else if !is_safe_mode && (is_menace_target || crate::gali::contains_slang(&clean_prompt)) {
                 let roast = crate::gali::get_comeback_for_message(&clean_prompt);
                 let _ = message.reply(&ctx.http, roast).await;
             } else {

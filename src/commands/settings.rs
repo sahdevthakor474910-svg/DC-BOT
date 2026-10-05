@@ -33,7 +33,8 @@ use crate::db::queries;
         "menace_list",
         "gali_response",
         "safe_mode",
-        "response"
+        "response",
+        "sassy_mode"
     )
 )]
 pub async fn settings(_ctx: Context<'_>) -> Result<(), Error> {
@@ -130,6 +131,28 @@ pub async fn response(
         ctx.say("🔊 **Bot Responses are now ENABLED!**\n• The bot is active and will respond to mentions, replies, and questions in chat.\n• To mute the bot completely, use `/settings response false`.").await?;
     } else {
         ctx.say("🔇 **Bot Responses are now DISABLED!**\n• The bot is now completely silent in chat (no AI replies, no mentions response, no gali comebacks).\n• It will silently continue running background tasks (memes, news, free games, auto-posts).\n• Use `/settings response true` anytime to re-enable chat responses.").await?;
+    }
+    Ok(())
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+
+/// 💅 Toggle Sassy Flirt Mode ON or OFF (100000000% cheesy, flirty gay sassy persona).
+#[poise::command(slash_command, guild_only, rename = "sassy-mode")]
+pub async fn sassy_mode(
+    ctx: Context<'_>,
+    #[description = "Set sassy mode enabled (true/false). Leave empty to toggle."]
+    enabled: Option<bool>,
+) -> Result<(), Error> {
+    let guild_id = ctx.guild_id().unwrap().to_string();
+    let cfg = queries::get_or_create_guild(&ctx.data().db, &guild_id).await?;
+    let new_state = enabled.unwrap_or(!cfg.sassy_mode_enabled);
+    queries::set_sassy_mode_enabled(&ctx.data().db, &guild_id, new_state).await?;
+
+    if new_state {
+        ctx.say("💅 **Sassy Mode is now ENABLED!**\n• Honey, brace yourself — the bot is now **100000000% cheesy, flirty, and sassy**!\n• Unapologetic gay bestie / queen energy with outrageous cheesy pickup lines on every query! 😉💋✨").await?;
+    } else {
+        ctx.say("🖤 **Sassy Mode is now DISABLED!**\n• Bot has returned to normal casual mode.").await?;
     }
     Ok(())
 }

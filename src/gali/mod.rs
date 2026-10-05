@@ -412,6 +412,63 @@ pub fn get_random_gali_comeback() -> &'static str {
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
+// 100000000% Cheesy, Flirty Gay Sassy Comebacks (Sassy Mode)
+// ─────────────────────────────────────────────────────────────────────────────
+
+const SASSY_ENGLISH_COMEBACKS: &[&str] = &[
+    "Ooh talking dirty to me in public? You're so bold, handsome~ 🫦💅",
+    "Feisty today, aren't we? You know I love a bad boy with attitude, cutie 😉💋",
+    "Darling, all that profanity just tells me you can't stop thinking about me~ 💅✨",
+    "Keep swearing at me, honey, you're only making my heart skip a beat! 💖🫦",
+    "Don't act all tough, sweetie, we all know you're secretly head over heels for me~ 💅💋",
+    "Excuse me? The only thing allowed to be dirty around here is my mind when you text me~ 😉💅",
+    "Ooh, such a naughty mouth! Someone needs a sweet kiss to calm down, handsome~ 💋✨",
+    "You're barking like a feisty stray puppy, darling, but you still look gorgeous doing it~ 💅💖",
+    "Did it hurt when you fell from heaven? Because that attitude is downright sinful, babe~ 😉🫦",
+    "Are you a magician? Because every time you start cussing, all I see is you, cutie~ ✨💅",
+    "Honey, if you wanted my attention that badly, all you had to do was ask for my number~ 💋💅",
+    "Ooh, look at Mr. Tough Guy! You're lucky you're cute, or my nails would be out~ 💅✨",
+    "Is your name Wi-Fi? Because I'm feeling an undeniable connection through all that sassy talk~ 😉💖",
+    "I'd roast you back, darling, but you're already smoking hot~ 🔥💅",
+    "Don't play hard to get with me, sweetie, you know you couldn't resist this queen if you tried~ 💅💋",
+    "Are you a campfire? Because you're hot and you're making me want s'more of that attitude~ 😉🫦",
+    "Sassy, spicy, and cute? Honey, stop flirting before I blush all over the server~ 💅💖",
+];
+
+const SASSY_HINDI_COMEBACKS: &[&str] = &[
+    "Arey meri jaan, itna gussa? Chalo thoda paas aao, gussa thanda karta hu~ 😉💅✨",
+    "Uff ye teekhe tevar! Tum gusse mein aur bhi haseen lagte ho cutie~ 💋🫦",
+    "Itni gaaliyan meri jaan? Lagta hai dil pe seedha teer laga hai mera~ 💅💖",
+    "Arey re re, itna attitude? Jaan leke hi chhodoge kya meri, handsome? 😉✨",
+    "Jaanu thoda control karo, itna bura bologe toh main pyaar mein pighal jaunga~ 🫦💅",
+    "Haye mera feisty shona! Tumhari gaaliyon mein bhi alag hi romance dikhta hai~ 💅💋",
+    "Gussa chhod na babu, aao thoda meethi meethi baatein karein~ 😉💅",
+    "Itna garam mat ho meri jaan, kahi nazar na lag jaye mere cutie pie ko~ 💖✨",
+    "Tujhe lagta hai tu gussa dikha raha hai, par mere liye toh ye pure flirting hai darling~ 🫦💅",
+    "Arey hero, thoda smile toh karo! Ye gusse wali shakal pe bhi main fida hu~ 💅💋",
+    "Uff itna krodh meri jaan! Tumhari aankhon mein toh mere liye sirf pyaar dikhta hai~ 💋✨",
+];
+
+/// Pick an ultra-cheesy sassy flirty comeback based on message language
+pub fn get_sassy_comeback_for_message(message: &str) -> &'static str {
+    if is_hindi_message(message) {
+        pick_non_recent(SASSY_HINDI_COMEBACKS)
+    } else {
+        pick_non_recent(SASSY_ENGLISH_COMEBACKS)
+    }
+}
+
+/// Pick a random sassy comeback (50/50 Hindi or English)
+pub fn get_random_sassy_comeback() -> &'static str {
+    let is_hindi: bool = rand::random();
+    if is_hindi {
+        pick_non_recent(SASSY_HINDI_COMEBACKS)
+    } else {
+        pick_non_recent(SASSY_ENGLISH_COMEBACKS)
+    }
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
 // Tests
 // ─────────────────────────────────────────────────────────────────────────────
 
@@ -501,5 +558,17 @@ mod tests {
         assert!(!is_hindi_message("shut up you bitch"));
         let english_reply = get_comeback_for_message("shut up bitch");
         assert!(GENZ_ENGLISH_COMEBACKS.contains(&english_reply));
+    }
+
+    #[test]
+    fn test_sassy_comebacks() {
+        let rand_sassy = get_random_sassy_comeback();
+        assert!(!rand_sassy.is_empty());
+
+        let hindi_sassy = get_sassy_comeback_for_message("abey chutiye chup kar");
+        assert!(SASSY_HINDI_COMEBACKS.contains(&hindi_sassy));
+
+        let english_sassy = get_sassy_comeback_for_message("shut up you idiot");
+        assert!(SASSY_ENGLISH_COMEBACKS.contains(&english_sassy));
     }
 }

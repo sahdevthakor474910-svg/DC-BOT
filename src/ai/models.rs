@@ -126,4 +126,7 @@ pub enum ServerAction {
     SetSafeMode {
         enabled: bool,
     },
+    SetSassyMode {
+        enabled: bool,
+    },
 }

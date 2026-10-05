@@ -139,6 +139,17 @@ pub async fn execute_action(
                 Ok("⚡ **Safe Mode is now DISABLED!** Full savage mode active — raw street slangs, unfiltered roasts, and gali comebacks are back ON!".to_string())
             }
         }
+
+        ServerAction::SetSassyMode { enabled } => {
+            let guild_id_str = guild_id.to_string();
+            crate::db::queries::set_sassy_mode_enabled(db, &guild_id_str, enabled).await?;
+            info!("💅 Sassy mode set to {} in guild {}", enabled, guild_id);
+            if enabled {
+                Ok("💅 **Sassy Mode is now ENABLED!**\n• Honey, hold onto your seat — 100000000% cheesy, flirty gay sassy queen energy is officially unleashed! 😉✨💋".to_string())
+            } else {
+                Ok("🖤 **Sassy Mode is now DISABLED!** Bot returned to standard casual mode.".to_string())
+            }
+        }
     }
 }
 

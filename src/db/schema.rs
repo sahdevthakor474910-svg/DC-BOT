@@ -89,6 +89,10 @@ pub async fn run_migrations(db: &SqlitePool) -> Result<()> {
     let m19 = include_str!("../../migrations/019_bot_response.sql");
     run_migration_alter(db, m19, "019").await?;
 
+    // 💅 Migration 020: Sassy flirty mode toggle
+    let m20 = include_str!("../../migrations/020_sassy_mode.sql");
+    run_migration_alter(db, m20, "020").await?;
+
     info!("Database migrations complete");
     Ok(())
 }

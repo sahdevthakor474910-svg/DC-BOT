@@ -38,7 +38,7 @@ pub async fn help(ctx: Context<'_>) -> Result<(), Error> {
             false,
         )
 
-        // ── /post, /status, /ping, /roast, /safemode, /response ────────────
+        // ── /post, /status, /ping, /roast, /safemode, /response, /sassymode ────
         .field(
             "⚡ Utility Commands",
             "• `/post` — Instantly triggers all active content feeds right now (without double posting)\n\
@@ -46,7 +46,8 @@ pub async fn help(ctx: Context<'_>) -> Result<(), Error> {
              • `/ping` — Checks the bot server response latency\n\
              • `/roast [@user]` — 🔥 Unleashes a savage Desi / Hindi roast on someone or yourself!\n\
              • `/safemode [enabled]` — 🛡️ Toggles Safe Mode ON/OFF (clean PG mode vs savage slangs/gali mode)\n\
-             • `/response [enabled]` — 💬 Toggles all chat responses ON/OFF (completely silence the bot in chat)",
+             • `/response [enabled]` — 💬 Toggles all chat responses ON/OFF (completely silence the bot in chat)\n\
+             • `/sassymode [enabled]` — 💅 Toggles Sassy Flirt Mode ON/OFF (100000000% cheesy, flirty gay sassy persona)",
             false,
         )
 
@@ -54,7 +55,8 @@ pub async fn help(ctx: Context<'_>) -> Result<(), Error> {
         .field(
             "🤖 AI Assistant & Server Management",
             "• **Chat & Q&A:** Mention `@Honored one` or reply to any bot message to ask questions or chat!\n\
-             • **Gali & Slang Detection:** If anyone uses bad words or slangs in chat, the bot automatically claps back with savage Desi roasts!\n\
+             • **Sassy Mode:** Ask `@Honored one enable sassy mode` to turn the bot into an ultra-flirty, 100000000% cheesy sassy queen!\n\
+             • **Gali & Slang Detection:** If anyone uses bad words or slangs in chat, the bot automatically claps back with savage Desi roasts (or flirty comebacks in sassy mode)!\n\
              • **Safe Mode:** Ask `@Honored one enable safe mode` to switch to clean PG mode anytime!\n\
              • **Toggle Responses:** Use `/response false` if you want the bot to sit quietly without replying to anyone in chat!\n\
              • **Owner Server Control:** The server owner can ask the bot to manage the server (e.g. `@Honored one create a channel called chill-zone`, `@Honored one delete channel #test`, `@Honored one set slowmode to 5s`). Non-owners cannot run management actions.",
@@ -67,6 +69,7 @@ pub async fn help(ctx: Context<'_>) -> Result<(), Error> {
             "• **interval** → `/settings interval <seconds>` (adjust posting frequency; min 60s)\n\
              • **response** → `/settings response [enabled]` (toggle all chat responses ON/OFF)\n\
              • **safe-mode** → `/settings safe-mode [enabled]` (toggle clean PG mode ON/OFF)\n\
+             • **sassy-mode** → `/settings sassy-mode [enabled]` (toggle 100000000% cheesy flirty sassy mode ON/OFF)\n\
              • **gali-response** → `/settings gali-response` (toggle automatic slang/gali roast responses ON/OFF)\n\
              • **clear-cache** → `/settings clear-cache` (wipe posting history to re-post hottest entries)\n\n\
              **Reaction settings:**\n\
@@ -92,7 +95,7 @@ pub async fn help(ctx: Context<'_>) -> Result<(), Error> {
         )
 
         .footer(serenity::CreateEmbedFooter::new(
-            "Quick Reference: /setup • /unset • /post • /status • /settings • /safemode • /response • /help"
+            "Quick Reference: /setup • /unset • /post • /status • /settings • /safemode • /sassymode • /response • /help"
         ));
 
     ctx.send(poise::CreateReply::default().embed(embed)).await?;

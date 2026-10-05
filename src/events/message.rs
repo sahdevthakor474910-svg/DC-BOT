@@ -129,9 +129,13 @@ pub async fn handle(
                                 "🤬 Slang detected from {} in channel {}. Sending gali comeback!",
                                 message.author.name, message.channel_id
                             );
-                            let comeback = crate::gali::get_comeback_for_message(&message.content);
+                            let comeback = if cfg.sassy_mode_enabled {
+                                crate::gali::get_sassy_comeback_for_message(&message.content)
+                            } else {
+                                crate::gali::get_comeback_for_message(&message.content)
+                            };
                             if let Err(e) = message.reply(&ctx.http, comeback).await {
-                                warn!("Failed to send gali response: {}", e);
+                                warn!("Failed to send gali/sassy response: {}", e);
                             }
                             return Ok(());
                         }
