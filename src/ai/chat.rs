@@ -76,9 +76,9 @@ pub async fn handle_ai_message(
             };
         } else {
             let greeting = if is_safe_mode {
-                format!("hey **{}**! bol kya help chahiye? 😊", message.author.name)
+                format!("hey **{}**! how can I help you? 😊", message.author.name)
             } else {
-                format!("yo **{}** bol kya scene hai", message.author.name)
+                format!("yo **{}**, what's good?", message.author.name)
             };
             let _ = message.reply(&ctx.http, greeting).await;
             return Ok(true);
