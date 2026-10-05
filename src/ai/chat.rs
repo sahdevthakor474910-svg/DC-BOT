@@ -192,11 +192,8 @@ pub async fn handle_ai_message(
                 let roast = crate::gali::get_comeback_for_message(&clean_prompt);
                 let _ = message.reply(&ctx.http, roast).await;
             } else {
-                let err_reply = format!(
-                    "⚠️ **AI Error:** {}\n*(Please check that `GEMINI_API_KEY` on Render is valid and active at [aistudio.google.com](https://aistudio.google.com/))*",
-                    e
-                );
-                let _ = message.reply(&ctx.http, err_reply).await;
+                // Keep internal/JSON technical errors invisible to users; show clean message
+                let _ = message.reply(&ctx.http, "⚠️ An error occurred while generating a response. Please try again in a moment!").await;
             }
         }
     }

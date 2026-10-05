@@ -5,10 +5,12 @@ use tracing::{debug, warn};
 use super::models::*;
 
 const GEMINI_CHAT_MODELS: &[&str] = &[
+    "gemini-3.5-flash-lite",
+    "gemini-3.1-flash-lite",
+    "gemini-flash-lite-latest",
     "gemini-3.8-flash",
     "gemini-3.5-flash",
     "gemini-flash-latest",
-    "gemini-3.1-flash-lite",
 ];
 
 const SYSTEM_PROMPT: &str = r#"You are "Honored one", a Discord bot with an authentic modern personality. You talk like a real person in a Discord server — short, punchy, casual.
@@ -202,15 +204,27 @@ impl AiClient {
 
             let status = resp.status();
             if status == reqwest::StatusCode::TOO_MANY_REQUESTS {
-                warn!("Gemini 429 rate limit on model {}", model);
+                warn!("Gemini 429 quota/rate limit on model {}, trying next model...", model);
                 last_err = anyhow!("Rate limited (429) on {}", model);
+                continue;
+            }
+
+            if status == reqwest::StatusCode::SERVICE_UNAVAILABLE {
+                warn!("Gemini 503 high demand on model {}, trying next model...", model);
+                last_err = anyhow!("Service unavailable (503) on {}", model);
+                tokio::time::sleep(std::time::Duration::from_millis(500)).await;
                 continue;
             }
 
             if !status.is_success() {
                 let err_text = resp.text().await.unwrap_or_default();
                 warn!("Gemini error {} on model {}: {}", status, model, err_text);
-                last_err = anyhow!("Gemini {} on model {}: {}", status, model, err_text);
+                let clean_msg = serde_json::from_str::<GeminiChatResponse>(&err_text)
+                    .ok()
+                    .and_then(|r| r.error)
+                    .map(|e| e.message)
+                    .unwrap_or_else(|| err_text.trim().to_string());
+                last_err = anyhow!("Gemini {} on model {}: {}", status, model, clean_msg);
                 continue;
             }
 
