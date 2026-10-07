@@ -112,7 +112,11 @@ fn is_straight_female_content(gif: &RedGifsGif) -> bool {
         }
     }
 
-    // 5. Positive female / heterosexual indicator required:
+    // 5. Positive female / heterosexual indicator or search query match:
+    if text.is_empty() {
+        return true;
+    }
+
     const POSITIVE_FEMALE: &[&str] = &[
         "pussy", "tits", "boobs", "milf", "amateur", "babe", "teen", "ass",
         "blowjob", "creampie", "doggystyle", "cowgirl", "riding", "facial",
@@ -205,14 +209,23 @@ impl PornClipsClient {
     /// Fetch clips for a given tick, rotating queries and pages with fallback across queries to guarantee clips
     pub async fn fetch_for_tick(&self, tick: u64) -> Result<Vec<RedGifsGif>> {
         let mut results = Vec::new();
-        let base_idx = (tick as usize) % SEARCH_QUERIES.len();
-        let base_page = ((tick as u32) / (SEARCH_QUERIES.len() as u32)) % 50 + 1;
 
-        // Try up to 3 queries to guarantee enough fresh clips
-        for offset in 0..3 {
+        let now_secs = std::time::SystemTime::now()
+            .duration_since(std::time::UNIX_EPOCH)
+            .map(|d| d.as_secs())
+            .unwrap_or(tick);
+
+        // Changes every 10-minute block (600s). Never resets to 0 across restarts!
+        let time_block = now_secs / 600;
+
+        let base_idx = ((time_block + tick) as usize) % SEARCH_QUERIES.len();
+        let base_page = (((time_block + tick) as u32) % 40) + 1;
+
+        // Try up to 4 queries across pages to guarantee plenty of fresh clips
+        for offset in 0..4 {
             let query_idx = (base_idx + offset) % SEARCH_QUERIES.len();
             let query = SEARCH_QUERIES[query_idx];
-            let page = (base_page + offset as u32) % 50 + 1;
+            let page = ((base_page + offset as u32) % 40) + 1;
 
             if let Ok(resp) = self.search(query, 80, page).await {
                 for g in resp.gifs {
@@ -224,7 +237,7 @@ impl PornClipsClient {
                 }
             }
 
-            if results.len() >= 15 {
+            if results.len() >= 20 {
                 break;
             }
         }

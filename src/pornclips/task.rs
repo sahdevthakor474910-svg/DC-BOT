@@ -116,20 +116,12 @@ async fn post_clips(
                 _ => continue,
             };
 
-            // Download MP4 on demand only for unseen clips
-            let bytes = match client.download_bytes(sd_url).await {
-                Ok(b) => {
-                    // Skip files larger than 24MB (Discord limit)
-                    if b.len() > 24 * 1024 * 1024 {
-                        debug!("🎬 Skipping clip {} — too large ({}MB)", item_id, b.len() / (1024 * 1024));
-                        continue;
-                    }
-                    b
-                }
-                Err(e) => {
-                    debug!("🎬 Failed to download clip {}: {}", item_id, e);
-                    continue;
-                }
+            // Attempt to download MP4 if small enough (< 8MB) to send as file attachment.
+            // If download fails, file is too big, or upload fails, we seamlessly post the RedGIFs URL
+            // which Discord embeds natively with its built-in video player!
+            let maybe_bytes = match client.download_bytes(sd_url).await {
+                Ok(b) if b.len() <= 8 * 1024 * 1024 => Some(b),
+                _ => None,
             };
 
             // Format duration as mm:ss
@@ -163,18 +155,33 @@ async fn post_clips(
                 .color(0xE91E63)
                 .footer(serenity::CreateEmbedFooter::new(footer));
 
-            // Create attachment from downloaded bytes — Discord will play it inline natively
-            let filename = format!("{}.mp4", clip.id);
-            let attachment = serenity::CreateAttachment::bytes(
-                bytes,
-                filename,
-            );
+            let send_result = if let Some(bytes) = maybe_bytes {
+                let filename = format!("{}.mp4", clip.id);
+                let attachment = serenity::CreateAttachment::bytes(bytes, filename);
+                let msg = serenity::CreateMessage::new()
+                    .embed(embed.clone())
+                    .add_file(attachment);
+                channel.send_message(http, msg).await
+            } else {
+                let msg = serenity::CreateMessage::new()
+                    .content(&page_url)
+                    .embed(embed.clone());
+                channel.send_message(http, msg).await
+            };
 
-            let msg = serenity::CreateMessage::new()
-                .embed(embed)
-                .add_file(attachment);
+            // If attachment upload failed (e.g. Discord 413 Payload Too Large), retry immediately with native URL!
+            let final_result = match send_result {
+                Ok(m) => Ok(m),
+                Err(e) => {
+                    warn!("Attachment upload failed for clip {}, falling back to native URL embed: {:#}", item_id, e);
+                    let fallback_msg = serenity::CreateMessage::new()
+                        .content(&page_url)
+                        .embed(embed);
+                    channel.send_message(http, fallback_msg).await
+                }
+            };
 
-            match channel.send_message(http, msg).await {
+            match final_result {
                 Ok(_) => {
                     info!("🎬 Posted Porn Clip {} to guild {}", item_id, cfg.guild_id);
                     if let Err(e) = queries::mark_pornclips_seen(&data.db, &cfg.guild_id, &item_id).await {
