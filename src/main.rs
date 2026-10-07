@@ -325,10 +325,14 @@ async fn main() -> Result<()> {
             }
         }
 
-        let framework = build_framework(bot_data.clone());
-        let builder = serenity::ClientBuilder::new(&token, intents).framework(framework);
+        let http = serenity::http::HttpBuilder::new(&token)
+            .ratelimiter_disabled(true)
+            .build();
 
-        // Cap builder with a 45-second timeout so it NEVER gets stuck in a multi-hour sleep
+        let framework = build_framework(bot_data.clone());
+        let builder = serenity::ClientBuilder::new_with_http(http, intents).framework(framework);
+
+        // Cap builder with a 45-second timeout so it NEVER gets stuck in any unexpected hang
         match tokio::time::timeout(std::time::Duration::from_secs(45), builder).await {
             Ok(Ok(mut client)) => {
                 info!("✅ Discord client built successfully! Starting gateway connection…");
