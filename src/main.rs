@@ -92,7 +92,7 @@ async fn event_handler(
     match event {
         serenity::FullEvent::Ready { data_about_bot } => {
             info!(
-                "✅ Logged in as {} ({})",
+                "Discord client ready! Logged in as {} ({})",
                 data_about_bot.user.name,
                 data_about_bot.user.id
             );
@@ -208,7 +208,7 @@ async fn main() -> Result<()> {
     {
         let port = std::env::var("PORT").unwrap_or_else(|_| "10000".to_string());
         let addr = format!("0.0.0.0:{}", port);
-        info!("📡 Starting web server on {} (before Discord connect)…", addr);
+        info!("Starting web server on http://{}...", addr);
         let logs_clone = log_buffer.clone();
         let status_clone = bot_data.status.clone();
         tokio::spawn(async move {
@@ -259,122 +259,26 @@ async fn main() -> Result<()> {
         &token[..token.len().min(10)]
     );
 
-    let mut attempt = 1u64;
-    loop {
-        info!("🚀 Connecting to Discord Gateway (attempt {})...", attempt);
-        if let Ok(mut lock) = bot_data.status.write() {
-            *lock = format!("Connecting to Discord Gateway (attempt {})...", attempt);
-        }
-
-        // ── Pre-flight check: ensure Discord API is reachable & NOT 429 blocked ──
-        // Cloudflare sometimes issues temporary 429 blocks on shared datacenter egress IPs.
-        // If Serenity receives a 429 with a huge Retry-After, it will sleep for hours internally.
-        // We verify reachable status here first with exponential backoff.
-        let mut preflight_attempt = 1u32;
-        loop {
-            let diag_client = reqwest::Client::builder()
-                .timeout(std::time::Duration::from_secs(10))
-                .user_agent("DiscordBot (https://github.com/sahdevthakor474910-svg/DC-BOT, 1.0)")
-                .build()
-                .unwrap_or_default();
-
-            match diag_client
-                .get("https://discord.com/api/v10/users/@me")
-                .header("Authorization", format!("Bot {}", token))
-                .send()
-                .await
-            {
-                Ok(resp) => {
-                    let status = resp.status();
-                    if status == reqwest::StatusCode::TOO_MANY_REQUESTS {
-                        let retry_header = resp
-                            .headers()
-                            .get("retry-after")
-                            .and_then(|v| v.to_str().ok())
-                            .unwrap_or("none")
-                            .to_string();
-                        let cf_ray = resp
-                            .headers()
-                            .get("cf-ray")
-                            .and_then(|v| v.to_str().ok())
-                            .unwrap_or("none")
-                            .to_string();
-                        let pause = (preflight_attempt * 15).min(90) as u64;
-                        warn!(
-                            "⏳ Discord API 429 [retry-after: {}, cf-ray: {}]. Pausing for {}s to let block clear (attempt {})...",
-                            retry_header, cf_ray, pause, preflight_attempt
-                        );
-                        if let Ok(mut lock) = bot_data.status.write() {
-                            *lock = format!("Discord API rate-limited (429, retry-after: {}s). Pausing {}s...", retry_header, pause);
-                        }
-                        tokio::time::sleep(std::time::Duration::from_secs(pause)).await;
-                        preflight_attempt += 1;
-                        continue;
-                    } else if status.is_success() || status == reqwest::StatusCode::UNAUTHORIZED {
-                        info!("✅ Discord API is reachable (HTTP {})!", status);
-                        break;
-                    } else {
-                        warn!("⚠️ Discord pre-flight check returned HTTP {}. Proceeding to connect…", status);
-                        break;
-                    }
-                }
-                Err(e) => {
-                    warn!("⚠️ Discord pre-flight check network error: {}. Proceeding to connect…", e);
-                    break;
-                }
-            }
-        }
-
-        let http = serenity::http::HttpBuilder::new(&token)
-            .ratelimiter_disabled(true)
-            .build();
-
-        let framework = build_framework(bot_data.clone());
-        let builder = serenity::ClientBuilder::new_with_http(http, intents).framework(framework);
-
-        // Cap builder with a 45-second timeout so it NEVER gets stuck in any unexpected hang
-        match tokio::time::timeout(std::time::Duration::from_secs(45), builder).await {
-            Ok(Ok(mut client)) => {
-                info!("✅ Discord client built successfully! Starting gateway connection…");
-                attempt = 1; // reset on successful build
-
-                match client.start().await {
-                    Ok(()) => {
-                        info!("Discord client session exited cleanly. Reconnecting in 10s…");
-                        if let Ok(mut lock) = bot_data.status.write() {
-                            *lock = "Disconnected cleanly. Reconnecting in 10s…".to_string();
-                        }
-                        tokio::time::sleep(std::time::Duration::from_secs(10)).await;
-                    }
-                    Err(e) => {
-                        let err_str = format!("{:#}", e);
-                        error!("❌ Discord client error / disconnected: {}. Reconnecting in 30s…", err_str);
-                        if let Ok(mut lock) = bot_data.status.write() {
-                            *lock = format!("Disconnected: {}. Reconnecting in 30s…", err_str);
-                        }
-                        tokio::time::sleep(std::time::Duration::from_secs(30)).await;
-                    }
-                }
-            }
-            Ok(Err(e)) => {
-                let err_str = format!("{:#}", e);
-                error!("❌ Failed to build Discord client: {}. Waiting 30s before retry…", err_str);
-                if let Ok(mut lock) = bot_data.status.write() {
-                    *lock = format!("Failed to build client: {}. Retrying in 30s…", err_str);
-                }
-                tokio::time::sleep(std::time::Duration::from_secs(30)).await;
-                attempt += 1;
-            }
-            Err(_) => {
-                warn!("⚠️ Discord client builder timed out (45s) — likely hit an API rate-limit sleep. Retrying in 15s…");
-                if let Ok(mut lock) = bot_data.status.write() {
-                    *lock = "Client builder timed out (45s). Retrying in 15s…".to_string();
-                }
-                tokio::time::sleep(std::time::Duration::from_secs(15)).await;
-                attempt += 1;
-            }
-        }
+    info!("Connecting to Discord Gateway...");
+    if let Ok(mut lock) = bot_data.status.write() {
+        *lock = "Connecting to Discord Gateway...".to_string();
     }
+
+    let framework = build_framework(bot_data.clone());
+    let mut client = serenity::ClientBuilder::new(&token, intents)
+        .framework(framework)
+        .await
+        .context("Failed to build Discord client")?;
+
+    if let Err(e) = client.start().await {
+        error!("❌ Discord client error: {:#}", e);
+        if let Ok(mut lock) = bot_data.status.write() {
+            *lock = format!("Disconnected: {:#}", e);
+        }
+        return Err(e.into());
+    }
+
+    Ok(())
 }
 
 // ────────────────────────────────────────────────────────────────────────────
