@@ -43,7 +43,8 @@ use crate::porn;
         "unblock_user",
         "blocked_list",
         "export_setup",
-        "import_setup"
+        "import_setup",
+        "deploy_commands"
     )
 )]
 pub async fn admin(_ctx: Context<'_>) -> Result<(), Error> {
@@ -554,3 +555,15 @@ pub async fn import_setup(
     ctx.say("✅ **Setup restored successfully!** All channel mappings, auto-react targets, emojis and settings are back in place.").await?;
     Ok(())
 }
+
+/// Re-sync and deploy slash commands in this server on demand.
+#[poise::command(slash_command, guild_only, rename = "deploy-commands")]
+pub async fn deploy_commands(ctx: Context<'_>) -> Result<(), Error> {
+    let guild_id = ctx.guild_id().ok_or_else(|| anyhow::anyhow!("Must be run in a server"))?;
+    tracing::info!("[DEPLOY] /admin deploy-commands invoked in guild {}", guild_id);
+    poise::builtins::register_in_guild(ctx.serenity_context(), &ctx.framework().options().commands, guild_id).await?;
+    tracing::info!("[DEPLOY] Commands registered in guild {}", guild_id);
+    ctx.say("✅ **Slash commands deployed!** All commands are now synchronized with Discord in this server.").await?;
+    Ok(())
+}
+

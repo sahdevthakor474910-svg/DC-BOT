@@ -28,7 +28,7 @@ use std::sync::{Arc, Mutex};
 use anyhow::{Context as _, Result};
 use poise::serenity_prelude as serenity;
 use sqlx::sqlite::{SqliteConnectOptions, SqlitePoolOptions};
-use tracing::{error, info, warn};
+use tracing::{debug, error, info, warn};
 use tracing_subscriber::{fmt, layer::SubscriberExt, util::SubscriberInitExt, EnvFilter};
 
 use crate::data::{Data, Error};
@@ -92,7 +92,7 @@ async fn event_handler(
     match event {
         serenity::FullEvent::Ready { data_about_bot } => {
             info!(
-                "Discord client ready! Logged in as {} ({})",
+                "[DISCORD] Client ready: {} ({})",
                 data_about_bot.user.name,
                 data_about_bot.user.id
             );
@@ -108,18 +108,11 @@ async fn event_handler(
         }
 
         serenity::FullEvent::InteractionCreate { interaction } => {
-            info!("⚡ InteractionCreate event: kind={:?}, id={}", interaction.kind(), interaction.id());
+            debug!("InteractionCreate event: kind={:?}, id={}", interaction.kind(), interaction.id());
         }
 
-        serenity::FullEvent::GuildCreate { guild, is_new } => {
-            if is_new.unwrap_or(false) {
-                info!("🎉 Joined new guild: {} ({}) - registering commands instantly", guild.name, guild.id);
-                if let Err(e) = poise::builtins::register_in_guild(ctx, &_framework.options().commands, guild.id).await {
-                    tracing::warn!("Failed to register commands in new guild {}: {:?}", guild.id, e);
-                } else {
-                    info!("⚡ Registered commands instantly in new guild {}", guild.id);
-                }
-            }
+        serenity::FullEvent::GuildCreate { guild, .. } => {
+            info!("Connected to guild: {} ({})", guild.name, guild.id);
         }
 
         serenity::FullEvent::Ratelimit { data } => {
@@ -208,7 +201,7 @@ async fn main() -> Result<()> {
     {
         let port = std::env::var("PORT").unwrap_or_else(|_| "10000".to_string());
         let addr = format!("0.0.0.0:{}", port);
-        info!("Starting web server on http://{}...", addr);
+        info!("[STARTUP] Web server started on http://{}", addr);
         let logs_clone = log_buffer.clone();
         let status_clone = bot_data.status.clone();
         tokio::spawn(async move {
@@ -234,7 +227,7 @@ async fn main() -> Result<()> {
                 }));
             match tokio::net::TcpListener::bind(&addr).await {
                 Ok(listener) => {
-                    info!("📡 Web server listening on http://{}", addr);
+                    info!("Web server listening on http://{}", addr);
                     if let Err(e) = axum::serve(listener, app).await {
                         error!("❌ Web server failed: {}", e);
                     }
@@ -263,7 +256,7 @@ async fn main() -> Result<()> {
         .ratelimiter_disabled(true)
         .build();
 
-    info!("Connecting to Discord Gateway...");
+    info!("[STARTUP] Connecting to Discord Gateway");
     if let Ok(mut lock) = bot_data.status.write() {
         *lock = "Connecting to Discord Gateway...".to_string();
     }
@@ -326,13 +319,22 @@ fn build_framework(bot_data: Data) -> poise::Framework<Data, Error> {
                     }
                 })
             },
+            initialize_owners: false,
             // ── Pre-command hook: auto-defer all slash commands immediately ──
             pre_command: |ctx| {
                 Box::pin(async move {
-                    info!("▶️ Slash command /{} invoked by {} ({})", ctx.command().name, ctx.author().name, ctx.author().id);
+                    info!("[COMMAND] Interaction received: /{}", ctx.command().name);
                     if let poise::Context::Application(_) = ctx {
-                        let _ = ctx.defer().await;
+                        match ctx.defer().await {
+                            Ok(()) => info!("[COMMAND] Interaction acknowledged: /{}", ctx.command().name),
+                            Err(e) => tracing::warn!("[COMMAND] Failed to acknowledge /{}: {}", ctx.command().name, e),
+                        }
                     }
+                })
+            },
+            post_command: |ctx| {
+                Box::pin(async move {
+                    info!("[COMMAND] Response sent: /{}", ctx.command().name);
                 })
             },
             // ── Global check: silently block banned users on every command ──
@@ -365,19 +367,27 @@ fn build_framework(bot_data: Data) -> poise::Framework<Data, Error> {
                     }
                 }
 
-                // Register slash commands in each guild (instant 0s availability)
-                // Small delay between guilds to avoid Discord 429 rate limits
-                info!("⚡ Registering slash commands across {} guild(s)...", guild_ids.len());
-                for guild_id in &guild_ids {
-                    if let Err(e) = poise::builtins::register_in_guild(ctx, &framework.options().commands, *guild_id).await {
-                        tracing::warn!("Could not register commands in guild {}: {:?}", guild_id, e);
-                    } else {
-                        info!("⚡ Slash commands registered in guild {}", guild_id);
+                // ── Slash Command Deployment ──────────────────────────────
+                // Commands do NOT need to be re-registered on every normal bot startup.
+                // Only register if explicitly triggered via DEPLOY_COMMANDS=true or --deploy-commands.
+                let should_deploy = std::env::var("DEPLOY_COMMANDS")
+                    .map(|v| v.eq_ignore_ascii_case("true") || v == "1")
+                    .unwrap_or(false)
+                    || std::env::args().any(|a| a == "--deploy-commands");
+
+                if should_deploy {
+                    info!("[DEPLOY] DEPLOY_COMMANDS enabled: deploying slash commands across {} guild(s)...", guild_ids.len());
+                    for guild_id in &guild_ids {
+                        match poise::builtins::register_in_guild(ctx, &framework.options().commands, *guild_id).await {
+                            Ok(()) => info!("[DEPLOY] Commands registered in guild {}", guild_id),
+                            Err(e) => tracing::warn!("[DEPLOY] Failed to register commands in guild {}: {:?}", guild_id, e),
+                        }
+                        tokio::time::sleep(std::time::Duration::from_millis(1000)).await;
                     }
-                    // Small delay to avoid hitting Discord rate limits
-                    tokio::time::sleep(std::time::Duration::from_millis(500)).await;
+                    info!("[DEPLOY] Command deployment complete");
+                } else {
+                    info!("[STARTUP] Normal startup: skipping slash command registration (commands already deployed). Set DEPLOY_COMMANDS=true to re-sync.");
                 }
-                info!("✅ Slash commands registered in all {} guild(s)", guild_ids.len());
 
                 // ── Spawn background tasks ──────────────────────────────
                 {
