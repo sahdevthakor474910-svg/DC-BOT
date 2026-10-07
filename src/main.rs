@@ -243,7 +243,10 @@ async fn main() -> Result<()> {
         | serenity::GatewayIntents::GUILD_MESSAGES
         | serenity::GatewayIntents::MESSAGE_CONTENT;
 
-    // Start Serenity client with automatic reconnect loop
+    // Run safe diagnostic probe once before Serenity starts to expose HTTP status and response
+    probe_discord_gateway().await;
+
+    // Start Serenity client with normal rate limiting
     let token = app_config.discord_token.clone();
     info!(
         "🔧 Discord config: client_id: {}, token_len: {}, token_prefix: {}…",
@@ -252,17 +255,13 @@ async fn main() -> Result<()> {
         &token[..token.len().min(10)]
     );
 
-    let http = serenity::http::HttpBuilder::new(&token)
-        .ratelimiter_disabled(true)
-        .build();
-
     info!("[STARTUP] Connecting to Discord Gateway");
     if let Ok(mut lock) = bot_data.status.write() {
         *lock = "Connecting to Discord Gateway...".to_string();
     }
 
     let framework = build_framework(bot_data.clone());
-    let mut client = serenity::ClientBuilder::new_with_http(http, intents)
+    let mut client = serenity::Client::builder(&token, intents)
         .framework(framework)
         .await
         .context("Failed to build Discord client")?;
@@ -278,12 +277,77 @@ async fn main() -> Result<()> {
     Ok(())
 }
 
+/// Safe diagnostic probe for GET https://discord.com/api/v10/gateway.
+/// Safely logs HTTP status, Content-Type, Server, CF-RAY, Retry-After, and the first 500 characters of the body.
+/// Never logs secrets, bot tokens, or credentials.
+async fn probe_discord_gateway() {
+    let client = match reqwest::Client::builder()
+        .timeout(std::time::Duration::from_secs(10))
+        .build()
+    {
+        Ok(c) => c,
+        Err(e) => {
+            tracing::warn!("[PROBE] Failed to build HTTP client for gateway probe: {}", e);
+            return;
+        }
+    };
+
+    let url = "https://discord.com/api/v10/gateway";
+    match client.get(url).send().await {
+        Ok(resp) => {
+            let status = resp.status();
+            let content_type = resp
+                .headers()
+                .get(reqwest::header::CONTENT_TYPE)
+                .and_then(|v| v.to_str().ok())
+                .unwrap_or("<none>")
+                .to_string();
+            let server = resp
+                .headers()
+                .get(reqwest::header::SERVER)
+                .and_then(|v| v.to_str().ok())
+                .unwrap_or("<none>")
+                .to_string();
+            let cf_ray = resp
+                .headers()
+                .get("cf-ray")
+                .and_then(|v| v.to_str().ok())
+                .unwrap_or("<none>")
+                .to_string();
+            let retry_after = resp
+                .headers()
+                .get(reqwest::header::RETRY_AFTER)
+                .and_then(|v| v.to_str().ok())
+                .unwrap_or("<none>")
+                .to_string();
+
+            let body_bytes = resp.bytes().await.unwrap_or_default();
+            let body_str = String::from_utf8_lossy(&body_bytes);
+            let safe_body_preview: String = body_str.chars().take(500).collect();
+
+            tracing::info!(
+                "[PROBE] Discord Gateway probe:\n  HTTP status: {}\n  Content-Type: {}\n  Server: {}\n  CF-RAY: {}\n  Retry-After: {}\n  Response body (first 500 chars): {}",
+                status,
+                content_type,
+                server,
+                cf_ray,
+                retry_after,
+                safe_body_preview
+            );
+        }
+        Err(e) => {
+            tracing::warn!("[PROBE] Gateway probe request error: {}", e);
+        }
+    }
+}
+
 // ────────────────────────────────────────────────────────────────────────────
 // Framework builder
 // ────────────────────────────────────────────────────────────────────────────
 
 fn build_framework(bot_data: Data) -> poise::Framework<Data, Error> {
     poise::Framework::builder()
+        .initialize_owners(false)
         .options(poise::FrameworkOptions {
             commands: commands::all(),
             event_handler: |ctx, event, framework, data| {
@@ -293,7 +357,21 @@ fn build_framework(bot_data: Data) -> poise::Framework<Data, Error> {
                 Box::pin(async move {
                     match error {
                         poise::FrameworkError::Command { error, ctx, .. } => {
-                            error!("Command '{}' failed: {:#}", ctx.command().name, error);
+                            match error.downcast_ref::<serenity::Error>() {
+                                Some(serenity::Error::Http(serenity::http::HttpError::UnsuccessfulRequest(resp))) => {
+                                    error!(
+                                        "[COMMAND HTTP ERROR] Command '{}' failed: status={} url={} method={} error=\"{}\"",
+                                        ctx.command().name,
+                                        resp.status_code,
+                                        resp.url,
+                                        resp.method,
+                                        resp.error.message
+                                    );
+                                }
+                                _ => {
+                                    error!("Command '{}' failed: {:#}", ctx.command().name, error);
+                                }
+                            }
                             let _ = ctx
                                 .say(format!("❌ Error: {}", error))
                                 .await;
@@ -327,7 +405,23 @@ fn build_framework(bot_data: Data) -> poise::Framework<Data, Error> {
                     if let poise::Context::Application(_) = ctx {
                         match ctx.defer().await {
                             Ok(()) => info!("[COMMAND] Interaction acknowledged: /{}", ctx.command().name),
-                            Err(e) => tracing::warn!("[COMMAND] Failed to acknowledge /{}: {}", ctx.command().name, e),
+                            Err(e) => {
+                                match &e {
+                                    serenity::Error::Http(serenity::http::HttpError::UnsuccessfulRequest(resp)) => {
+                                        tracing::warn!(
+                                            "[COMMAND HTTP] Failed to acknowledge /{}: status={} url={} method={} error=\"{}\"",
+                                            ctx.command().name,
+                                            resp.status_code,
+                                            resp.url,
+                                            resp.method,
+                                            resp.error.message
+                                        );
+                                    }
+                                    _ => {
+                                        tracing::warn!("[COMMAND] Failed to acknowledge /{}: {}", ctx.command().name, e);
+                                    }
+                                }
+                            }
                         }
                     }
                 })
