@@ -255,13 +255,17 @@ async fn main() -> Result<()> {
         &token[..token.len().min(10)]
     );
 
+    let http = serenity::http::HttpBuilder::new(&token)
+        .ratelimiter_disabled(true)
+        .build();
+
     info!("[STARTUP] Connecting to Discord Gateway");
     if let Ok(mut lock) = bot_data.status.write() {
         *lock = "Connecting to Discord Gateway...".to_string();
     }
 
     let framework = build_framework(bot_data.clone());
-    let mut client = serenity::Client::builder(&token, intents)
+    let mut client = serenity::ClientBuilder::new_with_http(http, intents)
         .framework(framework)
         .await
         .context("Failed to build Discord client")?;
