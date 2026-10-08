@@ -1,0 +1,11 @@
+services:
+  - type: web
+    name: dc-bot
+    runtime: docker
+    region: frankfurt
+    plan: free
+    envVars:
+      - key: DATABASE_URL
+        value: sqlite:///data/bot.db
+      - key: LOG_LEVEL
+        value: info
