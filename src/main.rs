@@ -91,8 +91,9 @@ async fn event_handler(
 ) -> Result<(), Error> {
     match event {
         serenity::FullEvent::Ready { data_about_bot } => {
+            info!("[DISCORD] Gateway connected");
             info!(
-                "[DISCORD] Client ready: {} ({})",
+                "[DISCORD] Bot ready: Logged in as {} ({})",
                 data_about_bot.user.name,
                 data_about_bot.user.id
             );
@@ -243,10 +244,7 @@ async fn main() -> Result<()> {
         | serenity::GatewayIntents::GUILD_MESSAGES
         | serenity::GatewayIntents::MESSAGE_CONTENT;
 
-    // Run safe diagnostic probe once before Serenity starts to expose HTTP status and response
-    probe_discord_gateway().await;
-
-    // Start Serenity client with normal rate limiting
+    // Start Serenity client
     let token = app_config.discord_token.clone();
     info!(
         "🔧 Discord config: client_id: {}, token_len: {}, token_prefix: {}…",
@@ -255,20 +253,21 @@ async fn main() -> Result<()> {
         &token[..token.len().min(10)]
     );
 
+    info!("[STARTUP] Creating Discord client");
     let http = serenity::http::HttpBuilder::new(&token)
         .ratelimiter_disabled(true)
         .build();
-
-    info!("[STARTUP] Connecting to Discord Gateway");
-    if let Ok(mut lock) = bot_data.status.write() {
-        *lock = "Connecting to Discord Gateway...".to_string();
-    }
 
     let framework = build_framework(bot_data.clone());
     let mut client = serenity::ClientBuilder::new_with_http(http, intents)
         .framework(framework)
         .await
         .context("Failed to build Discord client")?;
+
+    info!("[STARTUP] Connecting to Discord Gateway");
+    if let Ok(mut lock) = bot_data.status.write() {
+        *lock = "Connecting to Discord Gateway...".to_string();
+    }
 
     if let Err(e) = client.start().await {
         error!("❌ Discord client error: {:#}", e);
@@ -279,70 +278,6 @@ async fn main() -> Result<()> {
     }
 
     Ok(())
-}
-
-/// Safe diagnostic probe for GET https://discord.com/api/v10/gateway.
-/// Safely logs HTTP status, Content-Type, Server, CF-RAY, Retry-After, and the first 500 characters of the body.
-/// Never logs secrets, bot tokens, or credentials.
-async fn probe_discord_gateway() {
-    let client = match reqwest::Client::builder()
-        .timeout(std::time::Duration::from_secs(10))
-        .build()
-    {
-        Ok(c) => c,
-        Err(e) => {
-            tracing::warn!("[PROBE] Failed to build HTTP client for gateway probe: {}", e);
-            return;
-        }
-    };
-
-    let url = "https://discord.com/api/v10/gateway";
-    match client.get(url).send().await {
-        Ok(resp) => {
-            let status = resp.status();
-            let content_type = resp
-                .headers()
-                .get(reqwest::header::CONTENT_TYPE)
-                .and_then(|v| v.to_str().ok())
-                .unwrap_or("<none>")
-                .to_string();
-            let server = resp
-                .headers()
-                .get(reqwest::header::SERVER)
-                .and_then(|v| v.to_str().ok())
-                .unwrap_or("<none>")
-                .to_string();
-            let cf_ray = resp
-                .headers()
-                .get("cf-ray")
-                .and_then(|v| v.to_str().ok())
-                .unwrap_or("<none>")
-                .to_string();
-            let retry_after = resp
-                .headers()
-                .get(reqwest::header::RETRY_AFTER)
-                .and_then(|v| v.to_str().ok())
-                .unwrap_or("<none>")
-                .to_string();
-
-            let body_bytes = resp.bytes().await.unwrap_or_default();
-            let body_str = String::from_utf8_lossy(&body_bytes);
-            let safe_body_preview: String = body_str.chars().take(500).collect();
-
-            tracing::info!(
-                "[PROBE] Discord Gateway probe:\n  HTTP status: {}\n  Content-Type: {}\n  Server: {}\n  CF-RAY: {}\n  Retry-After: {}\n  Response body (first 500 chars): {}",
-                status,
-                content_type,
-                server,
-                cf_ray,
-                retry_after,
-                safe_body_preview
-            );
-        }
-        Err(e) => {
-            tracing::warn!("[PROBE] Gateway probe request error: {}", e);
-        }
-    }
 }
 
 // ────────────────────────────────────────────────────────────────────────────
