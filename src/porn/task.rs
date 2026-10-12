@@ -96,6 +96,8 @@ async fn post_redtube_videos(
     if relevant.is_empty() { return Ok(0); }
 
     let mut total = 0usize;
+    let redtube = PornClient::new().ok();
+
     for cfg in relevant {
         let channel_id_str = cfg.porn_video_channel_id.as_ref().unwrap();
         let channel_id_u64: u64 = match channel_id_str.parse() {
@@ -126,10 +128,26 @@ async fn post_redtube_videos(
                 format!("{:.0}K", video.views as f64 / 1_000.0)
             } else { video.views.to_string() };
 
+            // Attempt to resolve direct MP4 so Discord inline video player works!
+            let maybe_mp4 = if let Some(client) = &redtube {
+                client.get_mp4_url(&video.video_id).await.ok()
+            } else {
+                None
+            };
+
+            let play_target = maybe_mp4.as_deref().unwrap_or(&video.url);
+            let play_url = format!(
+                "{}/play?url={}&source=porn&title={}",
+                data.config.public_url,
+                crate::web::encode_hex(play_target),
+                url::form_urlencoded::byte_serialize(video.title.as_bytes()).collect::<String>()
+            );
+
             let embed = serenity::CreateEmbed::new()
                 .title(&video.title)
                 .url(&video.url)
                 .image(&video.default_thumb)
+                .description(format!("🌐 **[Web Stream Player]({})**", play_url))
                 .color(0xFF1744)
                 .footer(serenity::CreateEmbedFooter::new(format!(
                     "🔞 RedTube • ⏱️ {} • 👁️ {} views • ⭐ {}%{}",
@@ -138,7 +156,14 @@ async fn post_redtube_videos(
                     tag_str
                 )));
 
-            let msg = serenity::CreateMessage::new().content(&video.url).embed(embed);
+            // If direct MP4 resolved, post in content so Discord renders the in-app player!
+            let content = if let Some(mp4) = &maybe_mp4 {
+                format!("🎥 **{}**\n{}", video.title, mp4)
+            } else {
+                format!("🎥 **{}**\n{}", video.title, video.url)
+            };
+
+            let msg = serenity::CreateMessage::new().content(&content).embed(embed);
             match channel.send_message(http, msg).await {
                 Ok(_) => { total += 1; posted += 1; }
                 Err(e) => error!("Failed to post RedTube video: {}", e),
@@ -184,10 +209,18 @@ async fn post_beegtv_videos(
             }
             if posted >= 5 { continue; }
 
+            let play_url = format!(
+                "{}/play?url={}&source=porn&title={}",
+                data.config.public_url,
+                crate::web::encode_hex(&video.url),
+                url::form_urlencoded::byte_serialize(video.title.as_bytes()).collect::<String>()
+            );
+
             let embed = serenity::CreateEmbed::new()
                 .title(&video.title)
                 .url(&video.url)
                 .image(&video.thumbnail)
+                .description(format!("🌐 **[Web Stream Player]({})**", play_url))
                 .color(0xFF6D00) // Orange — distinct from RedTube's red
                 .footer(serenity::CreateEmbedFooter::new(format!(
                     "🔞 Beeg.tv • ⏱️ {} • 🔗 Watch full video",

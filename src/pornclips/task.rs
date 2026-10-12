@@ -149,9 +149,17 @@ async fn post_clips(
 
             let page_url = format!("https://www.redgifs.com/watch/{}", clip.id);
 
+            let play_url = format!(
+                "{}/play?url={}&source=direct&title={}",
+                data.config.public_url,
+                crate::web::encode_hex(sd_url),
+                url::form_urlencoded::byte_serialize(title.as_bytes()).collect::<String>()
+            );
+
             let embed = serenity::CreateEmbed::new()
                 .title(&title)
                 .url(&page_url)
+                .description(format!("🌐 **[Web Stream Player]({})**", play_url))
                 .color(0xE91E63)
                 .footer(serenity::CreateEmbedFooter::new(footer));
 
@@ -164,18 +172,18 @@ async fn post_clips(
                 channel.send_message(http, msg).await
             } else {
                 let msg = serenity::CreateMessage::new()
-                    .content(&page_url)
+                    .content(sd_url)
                     .embed(embed.clone());
                 channel.send_message(http, msg).await
             };
 
-            // If attachment upload failed (e.g. Discord 413 Payload Too Large), retry immediately with native URL!
+            // If attachment upload failed (e.g. Discord 413 Payload Too Large), retry immediately with direct MP4 URL!
             let final_result = match send_result {
                 Ok(m) => Ok(m),
                 Err(e) => {
-                    warn!("Attachment upload failed for clip {}, falling back to native URL embed: {:#}", item_id, e);
+                    warn!("Attachment upload failed for clip {}, falling back to direct MP4 URL: {:#}", item_id, e);
                     let fallback_msg = serenity::CreateMessage::new()
-                        .content(&page_url)
+                        .content(sd_url)
                         .embed(embed);
                     channel.send_message(http, fallback_msg).await
                 }

@@ -44,6 +44,48 @@ impl XnxxClient {
         let page = (tick % MAX_PAGE as u64) as u32;
         self.fetch_videos(page).await
     }
+
+    /// Fetch video page HTML and extract direct MP4 or video source URL.
+    pub async fn get_mp4_url(&self, video_page_url: &str) -> Result<String> {
+        let html = self
+            .http
+            .get(video_page_url)
+            .header("Referer", "https://www.xnxx.com/")
+            .send()
+            .await?
+            .error_for_status()?
+            .text()
+            .await?;
+
+        // 1. html5player.setVideoUrlHigh('https://...mp4')
+        let re_high = regex::Regex::new(r#"html5player\.setVideoUrlHigh\(['"]([^'"]+)['"]\)"#)?;
+        if let Some(cap) = re_high.captures(&html) {
+            let u = &cap[1];
+            if !u.is_empty() {
+                return Ok(u.to_string());
+            }
+        }
+
+        // 2. html5player.setVideoUrlLow('https://...mp4')
+        let re_low = regex::Regex::new(r#"html5player\.setVideoUrlLow\(['"]([^'"]+)['"]\)"#)?;
+        if let Some(cap) = re_low.captures(&html) {
+            let u = &cap[1];
+            if !u.is_empty() {
+                return Ok(u.to_string());
+            }
+        }
+
+        // 3. html5player.setVideoHLS('https://...m3u8')
+        let re_hls = regex::Regex::new(r#"html5player\.setVideoHLS\(['"]([^'"]+)['"]\)"#)?;
+        if let Some(cap) = re_hls.captures(&html) {
+            let u = &cap[1];
+            if !u.is_empty() {
+                return Ok(u.to_string());
+            }
+        }
+
+        anyhow::bail!("No direct MP4/stream URL found on XNXX page: {}", video_page_url)
+    }
 }
 
 // ─────────────────────────────────────────────────────────────────────────────

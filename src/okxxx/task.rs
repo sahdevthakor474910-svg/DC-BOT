@@ -69,6 +69,7 @@ async fn post_videos(
     }
 
     let mut total = 0usize;
+    let client = OkXxxClient::new().ok();
 
     for cfg in relevant {
         let channel_id_str = cfg.okxxx_channel_id.as_ref().unwrap();
@@ -113,10 +114,18 @@ async fn post_videos(
                 format!(" • ⏱️ {}", video.duration)
             };
 
+            // Attempt to resolve direct MP4 so Discord inline video player works!
+            let maybe_mp4 = if let Some(c) = &client {
+                c.get_mp4_url(&video.url).await.ok()
+            } else {
+                None
+            };
+
+            let play_target = maybe_mp4.as_deref().unwrap_or(&video.url);
             let play_url = format!(
                 "{}/play?url={}&source=okxxx&title={}",
                 data.config.public_url,
-                crate::web::encode_hex(&video.url),
+                crate::web::encode_hex(play_target),
                 url::form_urlencoded::byte_serialize(video.title.as_bytes()).collect::<String>()
             );
 
@@ -131,8 +140,15 @@ async fn post_videos(
                     duration_str, views_str
                 )));
 
+            // If direct MP4 resolved, post in content so Discord renders native player!
+            let content = if let Some(mp4) = &maybe_mp4 {
+                format!("🎥 **{}**\n{}", video.title, mp4)
+            } else {
+                format!("🎥 **{}**\n{}", video.title, video.url)
+            };
+
             let msg = serenity::CreateMessage::new()
-                .content(&video.url)
+                .content(&content)
                 .embed(embed);
 
             match channel.send_message(http, msg).await {

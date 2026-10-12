@@ -128,10 +128,11 @@ async fn post_videos(
                 video.duration, views_str
             );
 
+            let play_target = if !video.mp4_url.is_empty() { &video.mp4_url } else { &video.page_url };
             let play_url = format!(
                 "{}/play?url={}&source=jav&title={}",
                 data.config.public_url,
-                crate::web::encode_hex(&video.page_url),
+                crate::web::encode_hex(play_target),
                 url::form_urlencoded::byte_serialize(video.title.as_bytes()).collect::<String>()
             );
 

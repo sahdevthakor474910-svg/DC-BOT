@@ -1,96 +1,119 @@
 use axum::{
     extract::{Query, State},
     http::{HeaderMap, HeaderValue, StatusCode},
-    response::{IntoResponse, Response, Html},
+    response::{Html, IntoResponse, Response},
 };
-use tracing::{info, warn, error};
+use tracing::{error, info, warn};
 
 use crate::data::Data;
 
 #[derive(serde::Deserialize)]
 pub struct PlayQuery {
-    pub url: String,    // Hex encoded original page URL
-    pub source: String, // "jav", "porn", "okxxx"
-    pub title: String,  // URL encoded page title
+    pub url: String,            // Hex-encoded page URL or direct video URL
+    #[serde(default)]
+    pub source: String,         // "jav", "porn", "okxxx", "hentai", "javhd", "xnxx", "direct"
+    #[serde(default)]
+    pub title: String,          // URL-encoded or raw title
 }
 
 #[derive(serde::Deserialize)]
 pub struct StreamQuery {
-    pub url: String,    // Hex encoded direct MP4/CDN URL
+    pub url: String,            // Hex-encoded direct MP4/CDN URL
 }
 
-/// Create the Axum Router populated with health checks and player/proxy endpoints.
+/// Create the Axum Router with player and streaming proxy endpoints.
 pub fn create_router(data: Data) -> axum::Router {
     axum::Router::new()
-        .route("/", axum::routing::get(health_handler))
         .route("/play", axum::routing::get(play_handler))
         .route("/stream", axum::routing::get(stream_handler))
         .with_state(data)
 }
 
-async fn health_handler() -> &'static str {
-    "Bot is active!"
-}
-
-/// Dynamic playback screen serving a custom video player.
-async fn play_handler(
+/// Dynamic playback screen serving the custom HTML5 video player.
+pub async fn play_handler(
     State(_data): State<Data>,
     Query(query): Query<PlayQuery>,
 ) -> Response {
-    // 1. Decode hex url to get page URL
-    let page_url = match decode_hex(&query.url) {
+    // 1. Decode hex url to get target URL (can be page URL or already direct MP4)
+    let raw_url = match decode_hex(&query.url) {
         Ok(u) => u,
         Err(e) => return (StatusCode::BAD_REQUEST, format!("Invalid URL hex: {}", e)).into_response(),
     };
 
-    info!("Resolving video stream for [source={}] url: {}", query.source, page_url);
+    info!("Resolving video stream for [source={}] url: {}", query.source, raw_url);
 
-    // 2. Resolve the direct MP4 URL based on the source
-    let direct_mp4_url = match query.source.as_str() {
-        "jav" => {
-            let video_id = extract_eporner_id(&page_url).unwrap_or_else(|| page_url.clone());
-            match crate::jav::client::EpornerClient::new() {
-                Ok(client) => match client.get_mp4_url(&video_id).await {
-                    Ok(u) => u,
-                    Err(e) => {
-                        error!("Failed to resolve JAV video URL pattern for {}: {}", video_id, e);
-                        return (StatusCode::INTERNAL_SERVER_ERROR, format!("Failed to resolve JAV video URL: {}", e)).into_response();
-                    }
-                },
-                Err(e) => return (StatusCode::INTERNAL_SERVER_ERROR, format!("Failed to create JAV client: {}", e)).into_response(),
+    // 2. Resolve direct MP4 URL based on source (or use directly if already a media file)
+    let direct_mp4_url = if raw_url.contains(".mp4") || raw_url.contains(".webm") {
+        raw_url.clone()
+    } else {
+        match query.source.as_str() {
+            "jav" => {
+                let video_id = extract_eporner_id(&raw_url).unwrap_or_else(|| raw_url.clone());
+                match crate::jav::client::EpornerClient::new() {
+                    Ok(client) => match client.get_mp4_url(&video_id).await {
+                        Ok(u) => u,
+                        Err(e) => {
+                            error!("Failed to resolve JAV video URL pattern for {}: {}", video_id, e);
+                            return (StatusCode::INTERNAL_SERVER_ERROR, format!("Failed to resolve JAV video URL: {}", e)).into_response();
+                        }
+                    },
+                    Err(e) => return (StatusCode::INTERNAL_SERVER_ERROR, format!("Failed to create JAV client: {}", e)).into_response(),
+                }
             }
-        }
-        "porn" => {
-            let video_id = extract_redtube_id(&page_url).unwrap_or_else(|| page_url.clone());
-            match crate::porn::client::PornClient::new() {
-                Ok(client) => match client.get_mp4_url(&video_id).await {
-                    Ok(u) => u,
-                    Err(e) => {
-                        error!("Failed to resolve Redtube video pattern for {}: {}", video_id, e);
-                        return (StatusCode::INTERNAL_SERVER_ERROR, format!("Failed to resolve Porn video URL: {}", e)).into_response();
-                    }
-                },
-                Err(e) => return (StatusCode::INTERNAL_SERVER_ERROR, format!("Failed to create Porn client: {}", e)).into_response(),
+            "porn" => {
+                let video_id = extract_redtube_id(&raw_url).unwrap_or_else(|| raw_url.clone());
+                match crate::porn::client::PornClient::new() {
+                    Ok(client) => match client.get_mp4_url(&video_id).await {
+                        Ok(u) => u,
+                        Err(e) => {
+                            error!("Failed to resolve Redtube video pattern for {}: {}", video_id, e);
+                            return (StatusCode::INTERNAL_SERVER_ERROR, format!("Failed to resolve Porn video URL: {}", e)).into_response();
+                        }
+                    },
+                    Err(e) => return (StatusCode::INTERNAL_SERVER_ERROR, format!("Failed to create Porn client: {}", e)).into_response(),
+                }
             }
-        }
-        "okxxx" => {
-            match crate::okxxx::client::OkXxxClient::new() {
-                Ok(client) => match client.get_mp4_url(&page_url).await {
-                    Ok(u) => u,
-                    Err(e) => {
-                        error!("Failed to resolve OK.XXX video pattern for {}: {}", page_url, e);
-                        return (StatusCode::INTERNAL_SERVER_ERROR, format!("Failed to resolve OK.XXX video URL: {}", e)).into_response();
-                    }
-                },
-                Err(e) => return (StatusCode::INTERNAL_SERVER_ERROR, format!("Failed to create OK.XXX client: {}", e)).into_response(),
+            "okxxx" => {
+                match crate::okxxx::client::OkXxxClient::new() {
+                    Ok(client) => match client.get_mp4_url(&raw_url).await {
+                        Ok(u) => u,
+                        Err(e) => {
+                            error!("Failed to resolve OK.XXX video pattern for {}: {}", raw_url, e);
+                            return (StatusCode::INTERNAL_SERVER_ERROR, format!("Failed to resolve OK.XXX video URL: {}", e)).into_response();
+                        }
+                    },
+                    Err(e) => return (StatusCode::INTERNAL_SERVER_ERROR, format!("Failed to create OK.XXX client: {}", e)).into_response(),
+                }
             }
-        }
-        _ => {
-            page_url.clone()
+            "hentai" | "hanime" => {
+                match crate::hanime::client::HentaiClient::new() {
+                    Ok(client) => match client.get_mp4_url(&raw_url).await {
+                        Ok(u) => u,
+                        Err(e) => {
+                            error!("Failed to resolve Hentai video URL for {}: {}", raw_url, e);
+                            return (StatusCode::INTERNAL_SERVER_ERROR, format!("Failed to resolve Hentai video URL: {}", e)).into_response();
+                        }
+                    },
+                    Err(e) => return (StatusCode::INTERNAL_SERVER_ERROR, format!("Failed to create Hentai client: {}", e)).into_response(),
+                }
+            }
+            "xnxx" => {
+                match crate::xnxx::client::XnxxClient::new() {
+                    Ok(client) => match client.get_mp4_url(&raw_url).await {
+                        Ok(u) => u,
+                        Err(e) => {
+                            error!("Failed to resolve XNXX video URL for {}: {}", raw_url, e);
+                            return (StatusCode::INTERNAL_SERVER_ERROR, format!("Failed to resolve XNXX video URL: {}", e)).into_response();
+                        }
+                    },
+                    Err(e) => return (StatusCode::INTERNAL_SERVER_ERROR, format!("Failed to create XNXX client: {}", e)).into_response(),
+                }
+            }
+            _ => raw_url.clone(),
         }
     };
 
-    // 3. Hex-encode the direct MP4 URL so it's safe to request through `/stream`
+    // 3. Hex-encode the direct MP4 URL for the streaming proxy
     let proxy_url_hex = encode_hex(&direct_mp4_url);
     let stream_url = format!("/stream?url={}", proxy_url_hex);
 
@@ -98,15 +121,16 @@ async fn play_handler(
     let template = include_str!("web/player.html");
     let html = template
         .replace("{title}", &query.title)
-        .replace("{stream_url}", &stream_url);
+        .replace("{stream_url}", &stream_url)
+        .replace("{direct_url}", &direct_mp4_url);
 
     // 5. Render HTML response
     Html(html).into_response()
 }
 
 /// Media streaming proxy supporting Range requests (enabling video scrubbing).
-async fn stream_handler(
-    State(data): State<Data>,
+pub async fn stream_handler(
+    State(_data): State<Data>,
     headers: HeaderMap,
     Query(query): Query<StreamQuery>,
 ) -> Response {
@@ -116,23 +140,42 @@ async fn stream_handler(
         Err(e) => return (StatusCode::BAD_REQUEST, format!("Invalid URL: {}", e)).into_response(),
     };
 
-    // 2. Prepare request to target URL
-    let mut req_builder = data.http_client.get(&target_url);
+    // 2. Build dedicated client with browser User-Agent so CDNs don't block requests
+    let client = match reqwest::Client::builder()
+        .user_agent("Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36")
+        .timeout(std::time::Duration::from_secs(45))
+        .build()
+    {
+        Ok(c) => c,
+        Err(e) => return (StatusCode::INTERNAL_SERVER_ERROR, format!("Failed to build client: {}", e)).into_response(),
+    };
 
-    // 3. Forward Range header if present
+    let mut req_builder = client.get(&target_url)
+        .header("Accept", "*/*")
+        .header("Accept-Language", "en-US,en;q=0.9");
+
+    // 3. Forward Range header if present (crucial for video seeking)
     if let Some(range) = headers.get("range") {
         if let Ok(range_str) = range.to_str() {
             req_builder = req_builder.header("range", range_str);
         }
     }
-    
-    // Add Referer/User-Agent headers to bypass CDN/referer protection blocks
+
+    // Add Referer headers matching the target CDN/platform
     if target_url.contains("eporner.com") {
         req_builder = req_builder.header("Referer", "https://www.eporner.com/");
     } else if target_url.contains("redtube.com") || target_url.contains("rdtcdn.com") {
         req_builder = req_builder.header("Referer", "https://www.redtube.com/");
     } else if target_url.contains("ok.xxx") {
         req_builder = req_builder.header("Referer", "https://ok.xxx/");
+    } else if target_url.contains("hentaigasm.com") || target_url.contains("hgasm") {
+        req_builder = req_builder.header("Referer", "https://hentaigasm.com/");
+    } else if target_url.contains("xnxx.com") || target_url.contains("xnxx-cdn") {
+        req_builder = req_builder.header("Referer", "https://www.xnxx.com/");
+    } else if target_url.contains("javhd.com") {
+        req_builder = req_builder.header("Referer", "https://javhd.com/");
+    } else if target_url.contains("redgifs.com") {
+        req_builder = req_builder.header("Referer", "https://www.redgifs.com/");
     }
 
     // 4. Send request to target media file
@@ -145,8 +188,7 @@ async fn stream_handler(
     };
 
     // 5. Build response copying status
-    let status_u16 = upstream_res.status().as_u16();
-    let status = StatusCode::from_u16(status_u16).unwrap_or(StatusCode::OK);
+    let status = StatusCode::from_u16(upstream_res.status().as_u16()).unwrap_or(StatusCode::OK);
     let mut response_builder = Response::builder().status(status);
 
     // 6. Copy headers (Content-Type, Content-Length, Content-Range, Accept-Ranges)
@@ -174,7 +216,7 @@ async fn stream_handler(
         headers_mut.insert("access-control-allow-origin", HeaderValue::from_static("*"));
     }
 
-    // 7. Stream the body to avoid loading file in memory
+    // 7. Stream the body
     let stream = upstream_res.bytes_stream();
     let body = axum::body::Body::from_stream(stream);
 

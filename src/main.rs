@@ -205,6 +205,7 @@ async fn main() -> Result<()> {
         info!("[STARTUP] Web server started on http://{}", addr);
         let logs_clone = log_buffer.clone();
         let status_clone = bot_data.status.clone();
+        let bot_data_clone = bot_data.clone();
         tokio::spawn(async move {
             use axum::{routing::get, Router};
             let app = Router::new()
@@ -225,7 +226,8 @@ async fn main() -> Result<()> {
                         let lock = logs.lock().unwrap();
                         lock.iter().cloned().collect::<Vec<_>>().join("")
                     }
-                }));
+                }))
+                .merge(crate::web::create_router(bot_data_clone));
             match tokio::net::TcpListener::bind(&addr).await {
                 Ok(listener) => {
                     info!("Web server listening on http://{}", addr);
