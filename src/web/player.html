@@ -287,6 +287,15 @@
         }
 
         let fallbackCount = 0;
+        video.addEventListener('loadedmetadata', function() {
+            // Eporner anti-hotlink placeholder clip is exactly 61s (1:01).
+            // If the stream is 61s and an embed URL is available, auto-switch to official embed player!
+            if (Math.round(video.duration) === 61 && embedUrl && embedUrl.length > 5) {
+                console.warn("Anti-hotlink placeholder clip detected (1:01), auto-switching to official embed player...");
+                switchToEmbed();
+            }
+        });
+
         video.addEventListener('error', function(e) {
             console.warn("HTML5 video error:", e);
             if (fallbackCount === 0 && directUrl && directUrl.startsWith('http') && directUrl !== streamUrl) {

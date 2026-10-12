@@ -137,10 +137,7 @@ pub async fn stream_handler(
 
     let mut req_builder = client.get(&target_url)
         .header("Accept", "*/*")
-        .header("Accept-Language", "en-US,en;q=0.9")
-        .header("Sec-Fetch-Dest", "video")
-        .header("Sec-Fetch-Mode", "no-cors")
-        .header("Sec-Fetch-Site", "cross-site");
+        .header("Accept-Language", "en-US,en;q=0.9");
 
     // 3. Forward Range header if present (crucial for video seeking)
     if let Some(range) = headers.get("range") {
@@ -149,28 +146,49 @@ pub async fn stream_handler(
         }
     }
 
-    // Add Referer and Origin headers matching target CDN/platform
+    // Add Referer, Origin, and Sec-Fetch headers matching target CDN/platform (must be same-origin to prevent anti-hotlink placeholder)
     if target_url.contains("eporner") {
-        req_builder = req_builder.header("Referer", "https://www.eporner.com/");
-        req_builder = req_builder.header("Origin", "https://www.eporner.com");
+        req_builder = req_builder
+            .header("Referer", "https://www.eporner.com/")
+            .header("Origin", "https://www.eporner.com")
+            .header("Sec-Fetch-Site", "same-origin")
+            .header("Sec-Fetch-Dest", "video");
     } else if target_url.contains("redtube") || target_url.contains("rdtcdn") || target_url.contains("phncdn") || target_url.contains("pornhub") {
-        req_builder = req_builder.header("Referer", "https://www.redtube.com/");
-        req_builder = req_builder.header("Origin", "https://www.redtube.com");
+        req_builder = req_builder
+            .header("Referer", "https://www.redtube.com/")
+            .header("Origin", "https://www.redtube.com")
+            .header("Sec-Fetch-Site", "same-origin")
+            .header("Sec-Fetch-Dest", "video");
     } else if target_url.contains("ok.xxx") {
-        req_builder = req_builder.header("Referer", "https://ok.xxx/");
-        req_builder = req_builder.header("Origin", "https://ok.xxx");
+        req_builder = req_builder
+            .header("Referer", "https://ok.xxx/")
+            .header("Origin", "https://ok.xxx")
+            .header("Sec-Fetch-Site", "same-origin")
+            .header("Sec-Fetch-Dest", "video");
     } else if target_url.contains("hentaigasm") || target_url.contains("hgasm") {
-        req_builder = req_builder.header("Referer", "https://hentaigasm.com/");
-        req_builder = req_builder.header("Origin", "https://hentaigasm.com");
+        req_builder = req_builder
+            .header("Referer", "https://hentaigasm.com/")
+            .header("Origin", "https://hentaigasm.com")
+            .header("Sec-Fetch-Site", "same-origin")
+            .header("Sec-Fetch-Dest", "video");
     } else if target_url.contains("xnxx") {
-        req_builder = req_builder.header("Referer", "https://www.xnxx.com/");
-        req_builder = req_builder.header("Origin", "https://www.xnxx.com");
+        req_builder = req_builder
+            .header("Referer", "https://www.xnxx.com/")
+            .header("Origin", "https://www.xnxx.com")
+            .header("Sec-Fetch-Site", "same-origin")
+            .header("Sec-Fetch-Dest", "video");
     } else if target_url.contains("javhd") {
-        req_builder = req_builder.header("Referer", "https://javhd.com/");
-        req_builder = req_builder.header("Origin", "https://javhd.com");
+        req_builder = req_builder
+            .header("Referer", "https://javhd.com/")
+            .header("Origin", "https://javhd.com")
+            .header("Sec-Fetch-Site", "same-origin")
+            .header("Sec-Fetch-Dest", "video");
     } else if target_url.contains("redgifs") {
-        req_builder = req_builder.header("Referer", "https://www.redgifs.com/");
-        req_builder = req_builder.header("Origin", "https://www.redgifs.com");
+        req_builder = req_builder
+            .header("Referer", "https://www.redgifs.com/")
+            .header("Origin", "https://www.redgifs.com")
+            .header("Sec-Fetch-Site", "same-origin")
+            .header("Sec-Fetch-Dest", "video");
     }
 
     // 4. Send request to target media file
@@ -253,8 +271,17 @@ pub fn extract_eporner_id(url: &str) -> Option<String> {
     if !url.contains("http") && !url.contains('/') {
         return Some(url.to_string());
     }
-    let re = regex::Regex::new(r"video-([a-zA-Z0-9]+)").ok()?;
-    re.captures(url).map(|cap| cap[1].to_string())
+    if let Ok(re) = regex::Regex::new(r"video-([a-zA-Z0-9]+)") {
+        if let Some(cap) = re.captures(url) {
+            return Some(cap[1].to_string());
+        }
+    }
+    if let Ok(re) = regex::Regex::new(r"/([0-9]{6,10})(?:-[0-9]+p)?\.mp4") {
+        if let Some(cap) = re.captures(url) {
+            return Some(cap[1].to_string());
+        }
+    }
+    None
 }
 
 pub fn extract_redtube_id(url: &str) -> Option<String> {
