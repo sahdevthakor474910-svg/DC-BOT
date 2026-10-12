@@ -3,7 +3,7 @@ use axum::{
     http::{HeaderMap, HeaderValue, StatusCode},
     response::{Html, IntoResponse, Response},
 };
-use tracing::{error, info, warn};
+use tracing::{info, warn};
 
 use crate::data::Data;
 
@@ -11,7 +11,7 @@ use crate::data::Data;
 pub struct PlayQuery {
     pub url: String,            // Hex-encoded page URL or direct video URL
     #[serde(default)]
-    pub source: String,         // "jav", "porn", "okxxx", "hentai", "javhd", "xnxx", "direct"
+    pub source: String,         // "jav", "porn", "okxxx", "hentai", "javhd", "xnxx", "direct", "pornclips"
     #[serde(default)]
     pub title: String,          // URL-encoded or raw title
 }
@@ -29,7 +29,7 @@ pub fn create_router(data: Data) -> axum::Router {
         .with_state(data)
 }
 
-/// Dynamic playback screen serving the custom HTML5 video player.
+/// Dynamic playback screen serving the custom HTML5 video player with embed fallback.
 pub async fn play_handler(
     State(_data): State<Data>,
     Query(query): Query<PlayQuery>,
@@ -42,87 +42,71 @@ pub async fn play_handler(
 
     info!("Resolving video stream for [source={}] url: {}", query.source, raw_url);
 
-    // 2. Resolve direct MP4 URL based on source (or use directly if already a media file)
-    let direct_mp4_url = if raw_url.contains(".mp4") || raw_url.contains(".webm") {
+    // Compute official embed URL as guaranteed fallback
+    let embed_url = get_embed_url(&query.source, &raw_url);
+
+    // 2. Resolve direct MP4/stream URL based on source (or use directly if already a media file)
+    let direct_mp4_url = if raw_url.contains(".mp4") || raw_url.contains(".webm") || raw_url.contains(".m3u8") {
         raw_url.clone()
     } else {
         match query.source.as_str() {
             "jav" => {
                 let video_id = extract_eporner_id(&raw_url).unwrap_or_else(|| raw_url.clone());
                 match crate::jav::client::EpornerClient::new() {
-                    Ok(client) => match client.get_mp4_url(&video_id).await {
-                        Ok(u) => u,
-                        Err(e) => {
-                            error!("Failed to resolve JAV video URL pattern for {}: {}", video_id, e);
-                            return (StatusCode::INTERNAL_SERVER_ERROR, format!("Failed to resolve JAV video URL: {}", e)).into_response();
-                        }
-                    },
-                    Err(e) => return (StatusCode::INTERNAL_SERVER_ERROR, format!("Failed to create JAV client: {}", e)).into_response(),
+                    Ok(client) => client.get_mp4_url(&video_id).await.unwrap_or_default(),
+                    Err(_) => String::new(),
                 }
             }
             "porn" => {
                 let video_id = extract_redtube_id(&raw_url).unwrap_or_else(|| raw_url.clone());
                 match crate::porn::client::PornClient::new() {
-                    Ok(client) => match client.get_mp4_url(&video_id).await {
-                        Ok(u) => u,
-                        Err(e) => {
-                            error!("Failed to resolve Redtube video pattern for {}: {}", video_id, e);
-                            return (StatusCode::INTERNAL_SERVER_ERROR, format!("Failed to resolve Porn video URL: {}", e)).into_response();
-                        }
-                    },
-                    Err(e) => return (StatusCode::INTERNAL_SERVER_ERROR, format!("Failed to create Porn client: {}", e)).into_response(),
+                    Ok(client) => client.get_mp4_url(&video_id).await.unwrap_or_default(),
+                    Err(_) => String::new(),
                 }
             }
             "okxxx" => {
                 match crate::okxxx::client::OkXxxClient::new() {
-                    Ok(client) => match client.get_mp4_url(&raw_url).await {
-                        Ok(u) => u,
-                        Err(e) => {
-                            error!("Failed to resolve OK.XXX video pattern for {}: {}", raw_url, e);
-                            return (StatusCode::INTERNAL_SERVER_ERROR, format!("Failed to resolve OK.XXX video URL: {}", e)).into_response();
-                        }
-                    },
-                    Err(e) => return (StatusCode::INTERNAL_SERVER_ERROR, format!("Failed to create OK.XXX client: {}", e)).into_response(),
+                    Ok(client) => client.get_mp4_url(&raw_url).await.unwrap_or_default(),
+                    Err(_) => String::new(),
                 }
             }
             "hentai" | "hanime" => {
                 match crate::hanime::client::HentaiClient::new() {
-                    Ok(client) => match client.get_mp4_url(&raw_url).await {
-                        Ok(u) => u,
-                        Err(e) => {
-                            error!("Failed to resolve Hentai video URL for {}: {}", raw_url, e);
-                            return (StatusCode::INTERNAL_SERVER_ERROR, format!("Failed to resolve Hentai video URL: {}", e)).into_response();
-                        }
-                    },
-                    Err(e) => return (StatusCode::INTERNAL_SERVER_ERROR, format!("Failed to create Hentai client: {}", e)).into_response(),
+                    Ok(client) => client.get_mp4_url(&raw_url).await.unwrap_or_default(),
+                    Err(_) => String::new(),
                 }
             }
             "xnxx" => {
                 match crate::xnxx::client::XnxxClient::new() {
-                    Ok(client) => match client.get_mp4_url(&raw_url).await {
-                        Ok(u) => u,
-                        Err(e) => {
-                            error!("Failed to resolve XNXX video URL for {}: {}", raw_url, e);
-                            return (StatusCode::INTERNAL_SERVER_ERROR, format!("Failed to resolve XNXX video URL: {}", e)).into_response();
-                        }
-                    },
-                    Err(e) => return (StatusCode::INTERNAL_SERVER_ERROR, format!("Failed to create XNXX client: {}", e)).into_response(),
+                    Ok(client) => client.get_mp4_url(&raw_url).await.unwrap_or_default(),
+                    Err(_) => String::new(),
                 }
             }
-            _ => raw_url.clone(),
+            _ => {
+                if raw_url.starts_with("http") {
+                    raw_url.clone()
+                } else {
+                    String::new()
+                }
+            }
         }
     };
 
     // 3. Hex-encode the direct MP4 URL for the streaming proxy
-    let proxy_url_hex = encode_hex(&direct_mp4_url);
-    let stream_url = format!("/stream?url={}", proxy_url_hex);
+    let stream_url = if !direct_mp4_url.is_empty() && direct_mp4_url.starts_with("http") {
+        let proxy_url_hex = encode_hex(&direct_mp4_url);
+        format!("/stream?url={}", proxy_url_hex)
+    } else {
+        String::new()
+    };
 
-    // 4. Load the player.html template and inject values
+    // 4. Load player.html template and inject values
     let template = include_str!("web/player.html");
     let html = template
         .replace("{title}", &query.title)
         .replace("{stream_url}", &stream_url)
-        .replace("{direct_url}", &direct_mp4_url);
+        .replace("{direct_url}", &direct_mp4_url)
+        .replace("{embed_url}", &embed_url);
 
     // 5. Render HTML response
     Html(html).into_response()
@@ -143,7 +127,7 @@ pub async fn stream_handler(
     // 2. Build dedicated client with browser User-Agent so CDNs don't block requests
     let client = match reqwest::Client::builder()
         .user_agent("Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36")
-        .timeout(std::time::Duration::from_secs(45))
+        .timeout(std::time::Duration::from_secs(60))
         .build()
     {
         Ok(c) => c,
@@ -152,7 +136,10 @@ pub async fn stream_handler(
 
     let mut req_builder = client.get(&target_url)
         .header("Accept", "*/*")
-        .header("Accept-Language", "en-US,en;q=0.9");
+        .header("Accept-Language", "en-US,en;q=0.9")
+        .header("Sec-Fetch-Dest", "video")
+        .header("Sec-Fetch-Mode", "no-cors")
+        .header("Sec-Fetch-Site", "cross-site");
 
     // 3. Forward Range header if present (crucial for video seeking)
     if let Some(range) = headers.get("range") {
@@ -161,21 +148,28 @@ pub async fn stream_handler(
         }
     }
 
-    // Add Referer headers matching the target CDN/platform
-    if target_url.contains("eporner.com") {
+    // Add Referer and Origin headers matching target CDN/platform
+    if target_url.contains("eporner") {
         req_builder = req_builder.header("Referer", "https://www.eporner.com/");
-    } else if target_url.contains("redtube.com") || target_url.contains("rdtcdn.com") {
+        req_builder = req_builder.header("Origin", "https://www.eporner.com");
+    } else if target_url.contains("redtube") || target_url.contains("rdtcdn") || target_url.contains("phncdn") || target_url.contains("pornhub") {
         req_builder = req_builder.header("Referer", "https://www.redtube.com/");
+        req_builder = req_builder.header("Origin", "https://www.redtube.com");
     } else if target_url.contains("ok.xxx") {
         req_builder = req_builder.header("Referer", "https://ok.xxx/");
-    } else if target_url.contains("hentaigasm.com") || target_url.contains("hgasm") {
+        req_builder = req_builder.header("Origin", "https://ok.xxx");
+    } else if target_url.contains("hentaigasm") || target_url.contains("hgasm") {
         req_builder = req_builder.header("Referer", "https://hentaigasm.com/");
-    } else if target_url.contains("xnxx.com") || target_url.contains("xnxx-cdn") {
+        req_builder = req_builder.header("Origin", "https://hentaigasm.com");
+    } else if target_url.contains("xnxx") {
         req_builder = req_builder.header("Referer", "https://www.xnxx.com/");
-    } else if target_url.contains("javhd.com") {
+        req_builder = req_builder.header("Origin", "https://www.xnxx.com");
+    } else if target_url.contains("javhd") {
         req_builder = req_builder.header("Referer", "https://javhd.com/");
-    } else if target_url.contains("redgifs.com") {
+        req_builder = req_builder.header("Origin", "https://javhd.com");
+    } else if target_url.contains("redgifs") {
         req_builder = req_builder.header("Referer", "https://www.redgifs.com/");
+        req_builder = req_builder.header("Origin", "https://www.redgifs.com");
     }
 
     // 4. Send request to target media file
@@ -211,9 +205,14 @@ pub async fn stream_handler(
             }
         }
         if headers_mut.get("content-type").is_none() {
-            headers_mut.insert("content-type", HeaderValue::from_static("video/mp4"));
+            if target_url.contains(".m3u8") {
+                headers_mut.insert("content-type", HeaderValue::from_static("application/vnd.apple.mpegurl"));
+            } else {
+                headers_mut.insert("content-type", HeaderValue::from_static("video/mp4"));
+            }
         }
         headers_mut.insert("access-control-allow-origin", HeaderValue::from_static("*"));
+        headers_mut.insert("access-control-allow-headers", HeaderValue::from_static("*"));
     }
 
     // 7. Stream the body
@@ -226,7 +225,7 @@ pub async fn stream_handler(
     }
 }
 
-// ─── Encoding Helpers ────────────────────────────────────────────────────────
+// ─── Encoding & Embed Helpers ────────────────────────────────────────────────
 
 pub fn encode_hex(s: &str) -> String {
     s.bytes().map(|b| format!("{:02x}", b)).collect()
@@ -246,12 +245,83 @@ pub fn decode_hex(s: &str) -> Result<String, String> {
     String::from_utf8(res).map_err(|e| e.to_string())
 }
 
-fn extract_eporner_id(url: &str) -> Option<String> {
+pub fn extract_eporner_id(url: &str) -> Option<String> {
+    if !url.contains("http") && !url.contains('/') {
+        return Some(url.to_string());
+    }
     let re = regex::Regex::new(r"video-([a-zA-Z0-9]+)").ok()?;
     re.captures(url).map(|cap| cap[1].to_string())
 }
 
-fn extract_redtube_id(url: &str) -> Option<String> {
+pub fn extract_redtube_id(url: &str) -> Option<String> {
+    if !url.contains("http") && !url.contains('/') {
+        return Some(url.to_string());
+    }
     let re = regex::Regex::new(r"redtube\.com/([0-9]+)").ok()?;
     re.captures(url).map(|cap| cap[1].to_string())
+}
+
+pub fn extract_okxxx_id(url: &str) -> Option<String> {
+    if !url.contains("http") && !url.contains('/') {
+        return Some(url.to_string());
+    }
+    let re = regex::Regex::new(r"ok\.xxx/(?:video/|embed/)?([0-9]+)").ok()?;
+    re.captures(url).map(|cap| cap[1].to_string())
+}
+
+pub fn extract_xnxx_id(url: &str) -> Option<String> {
+    if !url.contains("http") && !url.contains('/') {
+        return Some(url.to_string());
+    }
+    let re = regex::Regex::new(r"video-([a-zA-Z0-9]+)").ok()?;
+    re.captures(url).map(|cap| cap[1].to_string())
+}
+
+pub fn extract_redgifs_id(url: &str) -> Option<String> {
+    if !url.contains("http") && !url.contains('/') {
+        return Some(url.to_string());
+    }
+    let re = regex::Regex::new(r"redgifs\.com/(?:watch/|ifr/)?([a-zA-Z0-9]+)").ok()?;
+    re.captures(url).map(|cap| cap[1].to_string())
+}
+
+pub fn get_embed_url(source: &str, raw_url: &str) -> String {
+    match source {
+        "okxxx" => {
+            if let Some(id) = extract_okxxx_id(raw_url) {
+                format!("https://ok.xxx/embed/{}", id)
+            } else {
+                raw_url.to_string()
+            }
+        }
+        "porn" => {
+            if let Some(id) = extract_redtube_id(raw_url) {
+                format!("https://embed.redtube.com/?id={}", id)
+            } else {
+                raw_url.to_string()
+            }
+        }
+        "jav" => {
+            if let Some(id) = extract_eporner_id(raw_url) {
+                format!("https://www.eporner.com/embed/{}/", id)
+            } else {
+                raw_url.to_string()
+            }
+        }
+        "xnxx" => {
+            if let Some(id) = extract_xnxx_id(raw_url) {
+                format!("https://www.xnxx.com/embedframe/{}", id)
+            } else {
+                raw_url.to_string()
+            }
+        }
+        "pornclips" | "redgifs" => {
+            if let Some(id) = extract_redgifs_id(raw_url) {
+                format!("https://www.redgifs.com/ifr/{}", id)
+            } else {
+                raw_url.to_string()
+            }
+        }
+        _ => raw_url.to_string(),
+    }
 }

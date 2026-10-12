@@ -90,7 +90,6 @@ async fn post_videos(
     }
 
     let mut total = 0usize;
-    let public_url = std::env::var("PUBLIC_URL").unwrap_or_else(|_| String::new());
 
     for cfg in relevant {
         let channel_id_str = cfg.javhd_channel_id.as_ref().unwrap();
@@ -135,8 +134,18 @@ async fn post_videos(
                 format!(" • ⏱️ {}", video.duration)
             };
 
+            let play_target = if !video.preview_mp4.is_empty() { &video.preview_mp4 } else { &video.page_url };
+            let play_url = format!(
+                "{}/play?url={}&source=javhd&title={}",
+                data.config.public_url,
+                crate::web::encode_hex(play_target),
+                url_encode(&video.title)
+            );
+
             let mut embed = serenity::CreateEmbed::new()
                 .title(&video.title)
+                .url(&video.page_url)
+                .description(format!("🌐 **[▶️ Watch in Web Stream Player]({})**", play_url))
                 .color(0xE91E63) // Pink
                 .footer(serenity::CreateEmbedFooter::new(format!(
                     "🎌 JAVHD{}{}",
@@ -147,17 +156,15 @@ async fn post_videos(
                 embed = embed.image(&video.thumb_url);
             }
 
-            if !public_url.is_empty() {
-                let hex_encoded_url = crate::web::encode_hex(&video.page_url);
-                let encoded_title = url_encode(&video.title);
-                embed = embed.url(format!("{}/play?url={}&source=javhd&title={}", public_url, hex_encoded_url, encoded_title));
+            // Post preview MP4 URL as content so Discord inline player works, or fallback to Web Stream Player
+            let content = if !video.preview_mp4.is_empty() {
+                format!("🎥 **{}**\n{}", video.title, video.preview_mp4.trim_end_matches('/'))
             } else {
-                embed = embed.url(&video.page_url);
-            }
+                format!("🎥 **{}**\n[▶️ Click to Watch]({})", video.title, play_url)
+            };
 
-            // Post the preview MP4 URL as content so Discord inline player works
             let msg = serenity::CreateMessage::new()
-                .content(&video.preview_mp4)
+                .content(&content)
                 .embed(embed);
 
             match channel.send_message(http, msg).await {

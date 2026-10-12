@@ -147,7 +147,7 @@ async fn post_redtube_videos(
                 .title(&video.title)
                 .url(&video.url)
                 .image(&video.default_thumb)
-                .description(format!("🌐 **[Web Stream Player]({})**", play_url))
+                .description(format!("🌐 **[▶️ Watch in Web Stream Player]({})**", play_url))
                 .color(0xFF1744)
                 .footer(serenity::CreateEmbedFooter::new(format!(
                     "🔞 RedTube • ⏱️ {} • 👁️ {} views • ⭐ {}%{}",
@@ -156,11 +156,12 @@ async fn post_redtube_videos(
                     tag_str
                 )));
 
-            // If direct MP4 resolved, post in content so Discord renders the in-app player!
+            // If direct MP4 resolved, post in content so Discord renders the in-app player,
+            // otherwise link directly to Web Stream Player!
             let content = if let Some(mp4) = &maybe_mp4 {
-                format!("🎥 **{}**\n{}", video.title, mp4)
+                format!("🎥 **{}**\n{}", video.title, mp4.trim_end_matches('/'))
             } else {
-                format!("🎥 **{}**\n{}", video.title, video.url)
+                format!("🎥 **{}**\n[▶️ Click to Watch]({})", video.title, play_url)
             };
 
             let msg = serenity::CreateMessage::new().content(&content).embed(embed);
@@ -220,14 +221,15 @@ async fn post_beegtv_videos(
                 .title(&video.title)
                 .url(&video.url)
                 .image(&video.thumbnail)
-                .description(format!("🌐 **[Web Stream Player]({})**", play_url))
+                .description(format!("🌐 **[▶️ Watch in Web Stream Player]({})**", play_url))
                 .color(0xFF6D00) // Orange — distinct from RedTube's red
                 .footer(serenity::CreateEmbedFooter::new(format!(
                     "🔞 Beeg.tv • ⏱️ {} • 🔗 Watch full video",
                     video.duration
                 )));
 
-            let msg = serenity::CreateMessage::new().content(&video.url).embed(embed);
+            let content = format!("🎥 **{}**\n[▶️ Click to Watch]({})", video.title, play_url);
+            let msg = serenity::CreateMessage::new().content(&content).embed(embed);
             match channel.send_message(http, msg).await {
                 Ok(_) => { total += 1; posted += 1; }
                 Err(e) => error!("Failed to post Beeg.tv video: {}", e),

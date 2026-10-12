@@ -133,18 +133,19 @@ async fn post_videos(
                 .title(&video.title)
                 .url(&video.url)
                 .image(&video.thumbnail)
-                .description(format!("🌐 **[Web Stream Player]({})**", play_url))
+                .description(format!("🌐 **[▶️ Watch in Web Stream Player]({})**", play_url))
                 .color(0xFF4500) // Deep orange-red
                 .footer(serenity::CreateEmbedFooter::new(format!(
                     "🔥 OK.XXX{}{}",
                     duration_str, views_str
                 )));
 
-            // If direct MP4 resolved, post in content so Discord renders native player!
+            // If direct MP4 resolved, post clean MP4 URL so Discord can render native player,
+            // otherwise link directly to Web Stream Player!
             let content = if let Some(mp4) = &maybe_mp4 {
-                format!("🎥 **{}**\n{}", video.title, mp4)
+                format!("🎥 **{}**\n{}", video.title, mp4.trim_end_matches('/'))
             } else {
-                format!("🎥 **{}**\n{}", video.title, video.url)
+                format!("🎥 **{}**\n[▶️ Click to Watch]({})", video.title, play_url)
             };
 
             let msg = serenity::CreateMessage::new()

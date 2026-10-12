@@ -130,7 +130,7 @@ async fn post_videos(
             let mut embed = serenity::CreateEmbed::new()
                 .title(&video.title)
                 .url(&video.url)
-                .description(format!("🌐 **[Web Stream Player]({})**", play_url))
+                .description(format!("🌐 **[▶️ Watch in Web Stream Player]({})**", play_url))
                 .color(0x9B59B6)
                 .footer(serenity::CreateEmbedFooter::new(footer_text));
 
@@ -139,11 +139,12 @@ async fn post_videos(
                 embed = embed.image(&video.thumbnail);
             }
 
-            // Post direct MP4 URL as content so Discord automatically creates the native video player
+            // Post direct MP4 URL as content so Discord automatically creates the native video player,
+            // or link directly to the Web Stream Player!
             let content = if !video.mp4_url.is_empty() {
-                format!("🎥 **{}**\n{}", video.title, video.mp4_url)
+                format!("🎥 **{}**\n{}", video.title, video.mp4_url.trim_end_matches('/'))
             } else {
-                format!("🎥 **{}**\n{}", video.title, video.url)
+                format!("🎥 **{}**\n[▶️ Click to Watch]({})", video.title, play_url)
             };
 
             let msg = serenity::CreateMessage::new()

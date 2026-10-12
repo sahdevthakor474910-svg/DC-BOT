@@ -84,7 +84,7 @@ impl OkXxxClient {
                     }
                     if q <= 720 {
                         if best.as_ref().map_or(true, |(bq, _)| q > *bq) {
-                            best = Some((q, src.to_string()));
+                            best = Some((q, src.trim_end_matches('/').to_string()));
                         }
                     }
                 }
@@ -95,10 +95,16 @@ impl OkXxxClient {
             return Ok(u);
         }
 
-        // 2. Regex fallback
+        // 2. Regex fallback for <source> tag
         let re = regex::Regex::new(r#"<source[^>]+src=["']([^"']+\.mp4[^"']*)["']"#)?;
         if let Some(cap) = re.captures(&html) {
-            return Ok(cap[1].to_string());
+            return Ok(cap[1].trim_end_matches('/').to_string());
+        }
+
+        // 3. Fallback matching get_file URLs directly
+        let gf_re = regex::Regex::new(r#"https://ok\.xxx/get_file/[^"'\s<>]+\.mp4/?"#)?;
+        if let Some(mat) = gf_re.find(&html) {
+            return Ok(mat.as_str().trim_end_matches('/').to_string());
         }
 
         Err(anyhow::anyhow!("No direct MP4 URL found on OK.XXX video page: {}", video_page_url))

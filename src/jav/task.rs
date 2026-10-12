@@ -139,13 +139,17 @@ async fn post_videos(
             let embed = serenity::CreateEmbed::new()
                 .title(&video.title)
                 .url(&video.page_url)
-                .description(format!("🌐 **[Web Stream Player]({})**", play_url))
+                .description(format!("🌐 **[▶️ Watch in Web Stream Player]({})**", play_url))
                 .color(0xFF3366) // Hot pink for JAV
                 .footer(serenity::CreateEmbedFooter::new(footer));
 
             // Post the direct MP4 URL as message content so Discord renders
-            // an inline video player with audio. The embed provides title + link.
-            let content = format!("🎥 **{}**\n{}", video.title, video.mp4_url);
+            // an inline video player with audio, or fallback to the Web Stream Player!
+            let content = if !video.mp4_url.is_empty() {
+                format!("🎥 **{}**\n{}", video.title, video.mp4_url.trim_end_matches('/'))
+            } else {
+                format!("🎥 **{}**\n[▶️ Click to Watch]({})", video.title, play_url)
+            };
             let mut msg_builder = serenity::CreateMessage::new().content(&content);
 
             // Only attach the embed if we have a thumbnail

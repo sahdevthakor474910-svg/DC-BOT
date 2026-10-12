@@ -42,7 +42,12 @@ impl AppConfig {
                 .unwrap_or_else(|_| "discord-meme-bot/1.0".to_string()),
             log_level: env::var("LOG_LEVEL").unwrap_or_else(|_| "info".to_string()),
             public_url: env::var("PUBLIC_URL")
-                .unwrap_or_else(|_| "http://localhost:10000".to_string()),
+                .or_else(|_| env::var("RENDER_EXTERNAL_URL"))
+                .or_else(|_| env::var("RENDER_EXTERNAL_HOSTNAME").map(|h| format!("https://{}", h)))
+                .or_else(|_| env::var("RAILWAY_STATIC_URL").map(|u| format!("https://{}", u)))
+                .unwrap_or_else(|_| "http://localhost:10000".to_string())
+                .trim_end_matches('/')
+                .to_string(),
             gemini_api_key: env::var("GEMINI_API_KEY").unwrap_or_default(),
         })
     }

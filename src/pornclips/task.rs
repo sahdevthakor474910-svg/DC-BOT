@@ -159,9 +159,11 @@ async fn post_clips(
             let embed = serenity::CreateEmbed::new()
                 .title(&title)
                 .url(&page_url)
-                .description(format!("🌐 **[Web Stream Player]({})**", play_url))
+                .description(format!("🌐 **[▶️ Watch in Web Stream Player]({})**", play_url))
                 .color(0xE91E63)
                 .footer(serenity::CreateEmbedFooter::new(footer));
+
+            let clean_sd = sd_url.trim_end_matches('/');
 
             let send_result = if let Some(bytes) = maybe_bytes {
                 let filename = format!("{}.mp4", clip.id);
@@ -172,7 +174,7 @@ async fn post_clips(
                 channel.send_message(http, msg).await
             } else {
                 let msg = serenity::CreateMessage::new()
-                    .content(sd_url)
+                    .content(clean_sd)
                     .embed(embed.clone());
                 channel.send_message(http, msg).await
             };
@@ -183,7 +185,7 @@ async fn post_clips(
                 Err(e) => {
                     warn!("Attachment upload failed for clip {}, falling back to direct MP4 URL: {:#}", item_id, e);
                     let fallback_msg = serenity::CreateMessage::new()
-                        .content(sd_url)
+                        .content(clean_sd)
                         .embed(embed);
                     channel.send_message(http, fallback_msg).await
                 }

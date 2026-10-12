@@ -62,7 +62,7 @@ impl XnxxClient {
         if let Some(cap) = re_high.captures(&html) {
             let u = &cap[1];
             if !u.is_empty() {
-                return Ok(u.to_string());
+                return Ok(u.trim_end_matches('/').to_string());
             }
         }
 
@@ -71,7 +71,7 @@ impl XnxxClient {
         if let Some(cap) = re_low.captures(&html) {
             let u = &cap[1];
             if !u.is_empty() {
-                return Ok(u.to_string());
+                return Ok(u.trim_end_matches('/').to_string());
             }
         }
 
@@ -80,7 +80,7 @@ impl XnxxClient {
         if let Some(cap) = re_hls.captures(&html) {
             let u = &cap[1];
             if !u.is_empty() {
-                return Ok(u.to_string());
+                return Ok(u.trim_end_matches('/').to_string());
             }
         }
 
