@@ -135,13 +135,24 @@ async fn post_redtube_videos(
                 None
             };
 
-            let play_target = maybe_mp4.as_deref().unwrap_or(&video.url);
             let play_url = format!(
                 "{}/play?url={}&source=porn&title={}",
                 data.config.public_url,
-                crate::web::encode_hex(play_target),
+                crate::web::encode_hex(&video.url),
                 url::form_urlencoded::byte_serialize(video.title.as_bytes()).collect::<String>()
             );
+
+            // Discord stream URL routed through our proxy with /stream/video.mp4 so
+            // Discord gets the required RedTube Referer header and streams it cleanly!
+            let discord_stream_url = if let Some(mp4) = &maybe_mp4 {
+                format!(
+                    "{}/stream/video.mp4?url={}",
+                    data.config.public_url,
+                    crate::web::encode_hex(mp4)
+                )
+            } else {
+                play_url.clone()
+            };
 
             let embed = serenity::CreateEmbed::new()
                 .title(&video.title)
@@ -156,10 +167,10 @@ async fn post_redtube_videos(
                     tag_str
                 )));
 
-            // If direct MP4 resolved, post in content so Discord renders the in-app player,
-            // otherwise link directly to Web Stream Player!
-            let content = if let Some(mp4) = &maybe_mp4 {
-                format!("🎥 **{}**\n{}", video.title, mp4.trim_end_matches('/'))
+            // If direct MP4 resolved, post the proxied stream URL so Discord renders
+            // the in-app player with working audio/video, otherwise link to Web Stream Player!
+            let content = if maybe_mp4.is_some() {
+                format!("🎥 **{}**\n{}", video.title, discord_stream_url)
             } else {
                 format!("🎥 **{}**\n[▶️ Click to Watch]({})", video.title, play_url)
             };

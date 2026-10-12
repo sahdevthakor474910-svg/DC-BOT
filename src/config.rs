@@ -41,13 +41,25 @@ impl AppConfig {
             reddit_user_agent: env::var("REDDIT_USER_AGENT")
                 .unwrap_or_else(|_| "discord-meme-bot/1.0".to_string()),
             log_level: env::var("LOG_LEVEL").unwrap_or_else(|_| "info".to_string()),
-            public_url: env::var("PUBLIC_URL")
-                .or_else(|_| env::var("RENDER_EXTERNAL_URL"))
-                .or_else(|_| env::var("RENDER_EXTERNAL_HOSTNAME").map(|h| format!("https://{}", h)))
-                .or_else(|_| env::var("RAILWAY_STATIC_URL").map(|u| format!("https://{}", u)))
-                .unwrap_or_else(|_| "http://localhost:10000".to_string())
-                .trim_end_matches('/')
-                .to_string(),
+            public_url: {
+                let render_url = env::var("RENDER_EXTERNAL_URL")
+                    .or_else(|_| env::var("RENDER_EXTERNAL_HOSTNAME").map(|h| format!("https://{}", h)));
+                let pub_url = env::var("PUBLIC_URL").ok();
+
+                match (render_url, pub_url) {
+                    // On Render, RENDER_EXTERNAL_URL is always accurate to the currently running service.
+                    // Only use PUBLIC_URL if it's a custom domain (i.e. does not end in onrender.com)
+                    (Ok(_r_url), Some(p_url)) if !p_url.contains("onrender.com") && p_url.starts_with("http") => p_url,
+                    (Ok(r_url), _) => r_url,
+                    // If not on Render, use PUBLIC_URL as long as it's not the old suspended domain
+                    (Err(_), Some(p_url)) if !p_url.contains("oz1r") && p_url.starts_with("http") => p_url,
+                    _ => env::var("RAILWAY_STATIC_URL")
+                        .map(|u| format!("https://{}", u))
+                        .unwrap_or_else(|_| "https://dc-bot-3-l631.onrender.com".to_string()),
+                }
+            }
+            .trim_end_matches('/')
+            .to_string(),
             gemini_api_key: env::var("GEMINI_API_KEY").unwrap_or_default(),
         })
     }

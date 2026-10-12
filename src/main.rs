@@ -165,6 +165,7 @@ async fn main() -> Result<()> {
         .init();
 
     info!("🤖 Starting Discord bot v2…");
+    info!("🌐 Public web stream URL base: {}", app_config.public_url);
 
     // Ensure the data directory exists for SQLite
     if let Some(path) = app_config.database_url.strip_prefix("sqlite://") {
@@ -205,6 +206,7 @@ async fn main() -> Result<()> {
         info!("[STARTUP] Web server started on http://{}", addr);
         let logs_clone = log_buffer.clone();
         let status_clone = bot_data.status.clone();
+        let pub_url_clone = bot_data.config.public_url.clone();
         let bot_data_clone = bot_data.clone();
         tokio::spawn(async move {
             use axum::{routing::get, Router};
@@ -213,11 +215,13 @@ async fn main() -> Result<()> {
                 .route("/health", get(|| async { "OK" }))
                 .route("/status", get(move || {
                     let status = status_clone.clone();
+                    let pub_url = pub_url_clone.clone();
                     async move {
-                        status
+                        let st = status
                             .read()
                             .map(|s| s.clone())
-                            .unwrap_or_else(|_| "Unknown".to_string())
+                            .unwrap_or_else(|_| "Unknown".to_string());
+                        format!("{} | URL: {}", st, pub_url)
                     }
                 }))
                 .route("/logs", get(move || {

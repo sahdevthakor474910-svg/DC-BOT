@@ -26,6 +26,7 @@ pub fn create_router(data: Data) -> axum::Router {
     axum::Router::new()
         .route("/play", axum::routing::get(play_handler))
         .route("/stream", axum::routing::get(stream_handler))
+        .route("/stream/video.mp4", axum::routing::get(stream_handler))
         .with_state(data)
 }
 
@@ -211,6 +212,9 @@ pub async fn stream_handler(
                 headers_mut.insert("content-type", HeaderValue::from_static("video/mp4"));
             }
         }
+        if headers_mut.get("accept-ranges").is_none() {
+            headers_mut.insert("accept-ranges", HeaderValue::from_static("bytes"));
+        }
         headers_mut.insert("access-control-allow-origin", HeaderValue::from_static("*"));
         headers_mut.insert("access-control-allow-headers", HeaderValue::from_static("*"));
     }
@@ -257,8 +261,17 @@ pub fn extract_redtube_id(url: &str) -> Option<String> {
     if !url.contains("http") && !url.contains('/') {
         return Some(url.to_string());
     }
-    let re = regex::Regex::new(r"redtube\.com/([0-9]+)").ok()?;
-    re.captures(url).map(|cap| cap[1].to_string())
+    if let Ok(re) = regex::Regex::new(r"redtube\.com/([0-9]+)") {
+        if let Some(cap) = re.captures(url) {
+            return Some(cap[1].to_string());
+        }
+    }
+    if let Ok(re) = regex::Regex::new(r"[/?=]([0-9]{7,10})[/?&_.]") {
+        if let Some(cap) = re.captures(url) {
+            return Some(cap[1].to_string());
+        }
+    }
+    None
 }
 
 pub fn extract_okxxx_id(url: &str) -> Option<String> {

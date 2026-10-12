@@ -128,13 +128,22 @@ async fn post_videos(
                 video.duration, views_str
             );
 
-            let play_target = if !video.mp4_url.is_empty() { &video.mp4_url } else { &video.page_url };
             let play_url = format!(
                 "{}/play?url={}&source=jav&title={}",
                 data.config.public_url,
-                crate::web::encode_hex(play_target),
+                crate::web::encode_hex(&video.page_url),
                 url::form_urlencoded::byte_serialize(video.title.as_bytes()).collect::<String>()
             );
+
+            let discord_stream_url = if !video.mp4_url.is_empty() {
+                format!(
+                    "{}/stream/video.mp4?url={}",
+                    data.config.public_url,
+                    crate::web::encode_hex(&video.mp4_url)
+                )
+            } else {
+                play_url.clone()
+            };
 
             let embed = serenity::CreateEmbed::new()
                 .title(&video.title)
@@ -143,10 +152,10 @@ async fn post_videos(
                 .color(0xFF3366) // Hot pink for JAV
                 .footer(serenity::CreateEmbedFooter::new(footer));
 
-            // Post the direct MP4 URL as message content so Discord renders
+            // Post proxied MP4 URL as message content so Discord renders
             // an inline video player with audio, or fallback to the Web Stream Player!
             let content = if !video.mp4_url.is_empty() {
-                format!("🎥 **{}**\n{}", video.title, video.mp4_url.trim_end_matches('/'))
+                format!("🎥 **{}**\n{}", video.title, discord_stream_url)
             } else {
                 format!("🎥 **{}**\n[▶️ Click to Watch]({})", video.title, play_url)
             };
