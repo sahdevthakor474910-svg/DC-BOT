@@ -9,3 +9,7 @@ services:
         value: sqlite:///data/bot.db
       - key: LOG_LEVEL
         value: info
+      - key: DISCORD_TOKEN
+        sync: false
+      - key: DISCORD_CLIENT_ID
+        sync: false
