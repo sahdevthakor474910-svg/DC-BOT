@@ -103,9 +103,14 @@ async fn event_handler(
         }
 
         serenity::FullEvent::Message { new_message } => {
-            if let Err(e) = events::message::handle(ctx, new_message, bot_data).await {
-                error!("Message event error: {:#}", e);
-            }
+            let ctx = ctx.clone();
+            let msg = new_message.clone();
+            let data = bot_data.clone();
+            tokio::spawn(async move {
+                if let Err(e) = events::message::handle(&ctx, &msg, &data).await {
+                    error!("Message event error: {:#}", e);
+                }
+            });
         }
 
         serenity::FullEvent::InteractionCreate { interaction } => {

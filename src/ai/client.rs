@@ -5,12 +5,10 @@ use tracing::{debug, warn};
 use super::models::*;
 
 const GEMINI_CHAT_MODELS: &[&str] = &[
-    "gemini-3.5-flash-lite",
-    "gemini-3.1-flash-lite",
-    "gemini-flash-lite-latest",
-    "gemini-3.8-flash",
-    "gemini-3.5-flash",
-    "gemini-flash-latest",
+    "gemini-2.0-flash",
+    "gemini-2.0-flash-lite",
+    "gemini-1.5-flash",
+    "gemini-1.5-flash-8b",
 ];
 
 const SYSTEM_PROMPT: &str = r#"You are "Honored one", a Discord bot with an authentic modern personality. You talk like a real person in a Discord server — short, punchy, casual.
@@ -115,7 +113,7 @@ pub struct AiClient {
 impl AiClient {
     pub fn new(api_key: String) -> Self {
         let http = Client::builder()
-            .timeout(std::time::Duration::from_secs(30))
+            .timeout(std::time::Duration::from_secs(12))
             .build()
             .unwrap_or_default();
         Self { http, api_key }
