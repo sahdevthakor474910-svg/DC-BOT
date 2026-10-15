@@ -112,12 +112,17 @@ pub async fn handle(
                     return Ok(());
                 }
                 Err(e) => {
-                    warn!("DMC screenshot analysis failed: {:#}", e);
+                    tracing::error!("DMC screenshot analysis failed: {:#}", e);
                     if is_dmc_channel || is_mentioned {
-                        let _ = message.reply(
-                            &ctx.http,
+                        let err_text = e.to_string();
+                        let clean_err = if err_text.contains("API_KEY") || err_text.contains("api_key") || err_text.contains("key is invalid") {
+                            "⚠️ **Gemini API Error:** Your Google Gemini API key appears invalid or expired. Please check your `GEMINI_API_KEY` on Render."
+                        } else if err_text.contains("429") || err_text.contains("Rate-limited") {
+                            "⚠️ **Gemini Rate Limit:** Google Gemini is temporarily rate-limited. Please try again in 10-15 seconds."
+                        } else {
                             "⚠️ Could not detect DMC battle scores in this screenshot. Please ensure the post-battle Results screen (showing **DMG PTS**, **Reward PTS**, **Boss PTS**) or Leaderboard is clearly visible."
-                        ).await;
+                        };
+                        let _ = message.reply(&ctx.http, clean_err).await;
                     }
                 }
             }

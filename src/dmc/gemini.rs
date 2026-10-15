@@ -62,29 +62,37 @@ pub enum ScreenshotData {
 #[derive(Debug, Deserialize)]
 #[serde(tag = "type", rename_all = "lowercase")]
 enum RawScreenshot {
+    #[serde(alias = "result", alias = "battle_result", alias = "battleresult")]
     Results {
+        #[serde(default = "default_unknown_boss")]
         boss_name: String,
-        #[serde(deserialize_with = "flex_i64")]
+        #[serde(default, deserialize_with = "flex_i64_default_zero")]
         dmg_pts: i64,
         /// Reward PTS read directly from the results screen (optional for
         /// backwards-compat — falls back to 0 so older prompts still parse).
         #[serde(default, deserialize_with = "flex_i64_default_zero")]
         reward_pts: i64,
-        #[serde(deserialize_with = "flex_i64")]
+        #[serde(default, deserialize_with = "flex_i64_default_zero")]
         boss_pts: i64,
         #[serde(default, deserialize_with = "flex_bool_default_false")]
         has_bonus: bool,
     },
+    #[serde(alias = "ranking", alias = "leaderboards")]
     Leaderboard {
+        #[serde(default = "default_unknown_boss")]
         boss_name: String,
         #[serde(default, deserialize_with = "flex_bool_default_false")]
         has_bonus: bool,
         players: Vec<LeaderboardPlayer>,
     },
-    #[serde(rename = "bossoverview")]
+    #[serde(rename = "bossoverview", alias = "boss_overview", alias = "overview")]
     BossOverview {
         bosses: Vec<BossOverviewEntry>,
     },
+}
+
+fn default_unknown_boss() -> String {
+    "Unknown Boss".to_string()
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -94,12 +102,13 @@ enum RawScreenshot {
 #[derive(Serialize)]
 struct GeminiRequest<'a> {
     contents: Vec<Content<'a>>,
-    #[serde(skip_serializing_if = "Option::is_none")]
+    #[serde(rename = "generationConfig", skip_serializing_if = "Option::is_none")]
     generation_config: Option<GenerationConfig>,
 }
 
 #[derive(Serialize)]
 struct GenerationConfig {
+    #[serde(rename = "responseMimeType")]
     response_mime_type: &'static str,
 }
 
@@ -111,12 +120,18 @@ struct Content<'a> {
 #[derive(Serialize)]
 #[serde(untagged)]
 enum Part<'a> {
-    Text { text: &'a str },
-    InlineData { inline_data: InlineData },
+    Text {
+        text: &'a str,
+    },
+    InlineData {
+        #[serde(rename = "inlineData")]
+        inline_data: InlineData,
+    },
 }
 
 #[derive(Serialize)]
 struct InlineData {
+    #[serde(rename = "mimeType")]
     mime_type: String,
     data: String, // base64
 }

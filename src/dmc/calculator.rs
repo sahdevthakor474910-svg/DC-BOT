@@ -26,7 +26,8 @@ fn boss_dmg_pts(name: &str) -> i64 {
         || norm.contains("nevan")
         || norm.contains("minotaur")
         || norm.contains("minotauros")
-        || norm.contains("mino")             { 5_783_842_000 } // game HP 5.078B × 1.139 score mul
+        || norm.contains("mino")
+        || norm.contains("phantom")             { 5_783_842_000 } // game HP 5.078B × 1.139 score mul
     else if norm.contains("devilmite")
         || norm.contains("calibur")
         || norm.contains("hellshade")
@@ -176,6 +177,18 @@ fn calc_stats_results(
     boss_name: &str,
 ) -> (f64, f64, f64, f64, bool) {
     let hp_cap = boss_dmg_pts(boss_name);
+
+    // Auto-fill boss_pts or dmg_pts if one is 0 but the other is present
+    let boss_pts_raw = if boss_pts_raw == 0 && dmg_pts_raw > 0 {
+        dmg_pts_raw + reward_pts_direct
+    } else {
+        boss_pts_raw
+    };
+    let dmg_pts_raw = if dmg_pts_raw == 0 && boss_pts_raw > 0 {
+        boss_pts_raw - reward_pts_direct
+    } else {
+        dmg_pts_raw
+    };
 
     // ── Sanity check 1: auto-swap if Gemini returned rows in wrong order ──
     let (dmg_pts, boss_pts) = if boss_pts_raw > 0 && dmg_pts_raw > 0 && boss_pts_raw < dmg_pts_raw {
