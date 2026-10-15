@@ -38,10 +38,11 @@ pub async fn help(ctx: Context<'_>) -> Result<(), Error> {
             false,
         )
 
-        // ── /post, /status, /ping, /roast, /safemode, /response, /sassymode ────
+        // ── /post, /status, /ping, /roast, /safemode, /response, /sassymode, /dmc ────
         .field(
             "⚡ Utility Commands",
-            "• `/post` — Instantly triggers all active content feeds right now (without double posting)\n\
+            "• `/dmc [image]` — 🎮 Calculates boss hunt kill time, DPS, and score from any DMC:PoC screenshot\n\
+             • `/post` — Instantly triggers all active content feeds right now (without double posting)\n\
              • `/status` — Displays configured channels, current reaction lists, and block settings\n\
              • `/ping` — Checks the bot server response latency\n\
              • `/roast [@user]` — 🔥 Unleashes a savage Desi / Hindi roast on someone or yourself!\n\

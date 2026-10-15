@@ -20,7 +20,15 @@ pub async fn handle(
         return Ok(());
     }
 
-    // Check if message is in the configured DMC screenshot analysis channel
+    // 1. Get current bot user ID & check mentions
+    let bot_user_id = ctx.cache.current_user().id;
+    let is_mentioned = message.mentions.iter().any(|u| u.id == bot_user_id);
+    let is_reply_to_bot = message
+        .referenced_message
+        .as_ref()
+        .map_or(false, |ref_msg| ref_msg.author.id == bot_user_id);
+
+    // 2. Check if message is in the configured DMC screenshot analysis channel
     let is_dmc_channel = if let Some(guild_id) = message.guild_id {
         if let Ok(cfg) = queries::get_or_create_guild(&data.db, &guild_id.to_string()).await {
             cfg.dmc_channel_id.as_ref().map(|s| s.as_str()) == Some(message.channel_id.to_string().as_str())
@@ -31,61 +39,85 @@ pub async fn handle(
         false
     };
 
+    // 3. Extract any image attachments
+    let image_attachments: Vec<&serenity::Attachment> = message
+        .attachments
+        .iter()
+        .filter(|a| {
+            matches!(
+                a.content_type.as_deref(),
+                Some("image/png")
+                    | Some("image/jpeg")
+                    | Some("image/jpg")
+                    | Some("image/gif")
+                    | Some("image/webp")
+            )
+            // Fallback: check file extension for attachments without content_type
+            || {
+                let name = a.filename.to_lowercase();
+                name.ends_with(".png")
+                    || name.ends_with(".jpg")
+                    || name.ends_with(".jpeg")
+                    || name.ends_with(".gif")
+                    || name.ends_with(".webp")
+            }
+        })
+        .collect();
+
+    let content_lower = message.content.to_lowercase();
+    let mentions_dmc = content_lower.contains("dmc")
+        || content_lower.contains("boss")
+        || content_lower.contains("hunt")
+        || content_lower.contains("score")
+        || content_lower.contains("kill time")
+        || content_lower.contains("time")
+        || content_lower.contains("calc");
+
+    let should_analyze_dmc = !image_attachments.is_empty()
+        && (is_dmc_channel || ((is_mentioned || is_reply_to_bot) && mentions_dmc));
+
     // ── DMC screenshot analysis ───────────────────────────────────────────────
-    // Check if the message has any image attachments and we have a Gemini key.
-    if is_dmc_channel && !data.config.gemini_api_key.is_empty() {
-        let image_attachments: Vec<&serenity::Attachment> = message
-            .attachments
-            .iter()
-            .filter(|a| {
-                matches!(
-                    a.content_type.as_deref(),
-                    Some("image/png")
-                        | Some("image/jpeg")
-                        | Some("image/jpg")
-                        | Some("image/gif")
-                        | Some("image/webp")
-                )
-                // Fallback: check file extension for attachments without content_type
-                || {
-                    let name = a.filename.to_lowercase();
-                    name.ends_with(".png")
-                        || name.ends_with(".jpg")
-                        || name.ends_with(".jpeg")
-                        || name.ends_with(".gif")
-                        || name.ends_with(".webp")
-                }
-            })
-            .collect();
+    if should_analyze_dmc {
+        if data.config.gemini_api_key.trim().is_empty() {
+            let _ = message.reply(
+                &ctx.http,
+                "⚠️ **DMC Screenshot Analyzer Error:** `GEMINI_API_KEY` is not set in the bot's environment variables. Please add your free Google Gemini API key to your Render dashboard to enable boss hunt calculations!"
+            ).await;
+            return Ok(());
+        }
 
-        if !image_attachments.is_empty() {
-            for attachment in image_attachments {
-                info!(
-                    "🎮 DMC screenshot detected: '{}' from {}",
-                    attachment.filename,
-                    message.author.name
-                );
+        for attachment in &image_attachments {
+            info!(
+                "🎮 DMC screenshot detected: '{}' from {}",
+                attachment.filename,
+                message.author.name
+            );
 
-                // Show typing indicator while Gemini processes
-                let _ = ctx.http.broadcast_typing(message.channel_id).await;
+            // Show typing indicator while Gemini processes
+            let _ = ctx.http.broadcast_typing(message.channel_id).await;
 
-                match gemini::analyze_screenshot(
-                    &data.http_client,
-                    &data.config.gemini_api_key,
-                    &attachment.url,
-                )
-                .await
-                {
-                    Ok(screenshot_data) => {
-                        let reply = calculator::build_discord_message(&screenshot_data);
+            match gemini::analyze_screenshot(
+                &data.http_client,
+                &data.config.gemini_api_key,
+                &attachment.url,
+            )
+            .await
+            {
+                Ok(screenshot_data) => {
+                    let reply = calculator::build_discord_message(&screenshot_data);
 
-                        if let Err(e) = message.reply(&ctx.http, &reply).await {
-                            error!("Failed to send DMC analysis reply: {}", e);
-                        }
+                    if let Err(e) = message.reply(&ctx.http, &reply).await {
+                        error!("Failed to send DMC analysis reply: {}", e);
                     }
-                    Err(e) => {
-                        // Log error to console but do not reply to the user on Discord
-                        warn!("DMC screenshot analysis failed (likely unrelated image): {:#}", e);
+                    return Ok(());
+                }
+                Err(e) => {
+                    warn!("DMC screenshot analysis failed: {:#}", e);
+                    if is_dmc_channel || is_mentioned {
+                        let _ = message.reply(
+                            &ctx.http,
+                            "⚠️ Could not detect DMC battle scores in this screenshot. Please ensure the post-battle Results screen (showing **DMG PTS**, **Reward PTS**, **Boss PTS**) or Leaderboard is clearly visible."
+                        ).await;
                     }
                 }
             }

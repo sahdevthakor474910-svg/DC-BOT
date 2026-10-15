@@ -9,8 +9,10 @@ use serde::{Deserialize, Serialize};
 /// A single player entry extracted from a leaderboard screenshot.
 #[derive(Debug, Deserialize)]
 pub struct LeaderboardPlayer {
+    #[serde(deserialize_with = "flex_u32")]
     pub rank: u32,
     pub name: String,
+    #[serde(deserialize_with = "flex_i64")]
     pub total_pts: i64,
 }
 
@@ -19,8 +21,10 @@ pub struct LeaderboardPlayer {
 pub struct BossOverviewEntry {
     pub boss_name: String,
     /// The PTS value displayed beneath the boss card.
+    #[serde(deserialize_with = "flex_i64")]
     pub pts: i64,
     /// Whether this boss card shows a Bonus indicator (e.g. "Bonus +20%").
+    #[serde(default, deserialize_with = "flex_bool_default_false")]
     pub has_bonus: bool,
 }
 
@@ -60,16 +64,20 @@ pub enum ScreenshotData {
 enum RawScreenshot {
     Results {
         boss_name: String,
+        #[serde(deserialize_with = "flex_i64")]
         dmg_pts: i64,
         /// Reward PTS read directly from the results screen (optional for
         /// backwards-compat — falls back to 0 so older prompts still parse).
-        #[serde(default)]
+        #[serde(default, deserialize_with = "flex_i64_default_zero")]
         reward_pts: i64,
+        #[serde(deserialize_with = "flex_i64")]
         boss_pts: i64,
+        #[serde(default, deserialize_with = "flex_bool_default_false")]
         has_bonus: bool,
     },
     Leaderboard {
         boss_name: String,
+        #[serde(default, deserialize_with = "flex_bool_default_false")]
         has_bonus: bool,
         players: Vec<LeaderboardPlayer>,
     },
@@ -86,6 +94,13 @@ enum RawScreenshot {
 #[derive(Serialize)]
 struct GeminiRequest<'a> {
     contents: Vec<Content<'a>>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    generation_config: Option<GenerationConfig>,
+}
+
+#[derive(Serialize)]
+struct GenerationConfig {
+    response_mime_type: &'static str,
 }
 
 #[derive(Serialize)]
@@ -310,6 +325,9 @@ pub async fn analyze_screenshot(
                 },
             ],
         }],
+        generation_config: Some(GenerationConfig {
+            response_mime_type: "application/json",
+        }),
     };
 
     // 5. Try each model in order; retry up to 2× on 429 with backoff
@@ -359,7 +377,7 @@ pub async fn analyze_screenshot(
                 .map(|p| p.text)
                 .ok_or_else(|| anyhow!("No content from Gemini model {}", model))?;
 
-            let json_str = strip_json_fences(&raw_text);
+            let json_str = extract_json_slice(&raw_text);
             let raw: RawScreenshot = serde_json::from_str(json_str)
                 .map_err(|e| anyhow!("JSON parse failed ({}): {}", e, raw_text))?;
 
@@ -396,16 +414,93 @@ fn detect_mime(bytes: &[u8]) -> &'static str {
     }
 }
 
-/// Remove ```json ... ``` or ``` ... ``` wrappers that Gemini sometimes adds.
-fn strip_json_fences(s: &str) -> &str {
+/// Extract clean JSON slice from Gemini output, stripping any markdown wrappers or preamble
+fn extract_json_slice(s: &str) -> &str {
     let s = s.trim();
-    if let Some(inner) = s
-        .strip_prefix("```json")
-        .or_else(|| s.strip_prefix("```"))
-    {
+    let unwrap = if let Some(inner) = s.strip_prefix("```json").or_else(|| s.strip_prefix("```")) {
         if let Some(cleaned) = inner.strip_suffix("```") {
-            return cleaned.trim();
+            cleaned.trim()
+        } else {
+            inner.trim()
+        }
+    } else {
+        s
+    };
+
+    if let (Some(start), Some(end)) = (unwrap.find('{'), unwrap.rfind('}')) {
+        if start <= end {
+            return &unwrap[start..=end];
         }
     }
-    s
+    unwrap
+}
+
+fn flex_i64<'de, D>(deserializer: D) -> Result<i64, D::Error>
+where
+    D: serde::Deserializer<'de>,
+{
+    #[derive(Deserialize)]
+    #[serde(untagged)]
+    enum NumOrStr {
+        Num(i64),
+        Float(f64),
+        Str(String),
+    }
+
+    match NumOrStr::deserialize(deserializer)? {
+        NumOrStr::Num(n) => Ok(n),
+        NumOrStr::Float(f) => Ok(f as i64),
+        NumOrStr::Str(s) => {
+            let cleaned = s.replace(',', "").replace(' ', "").trim().to_string();
+            cleaned.parse::<i64>().map_err(serde::de::Error::custom)
+        }
+    }
+}
+
+fn flex_i64_default_zero<'de, D>(deserializer: D) -> Result<i64, D::Error>
+where
+    D: serde::Deserializer<'de>,
+{
+    flex_i64(deserializer).or(Ok(0))
+}
+
+fn flex_u32<'de, D>(deserializer: D) -> Result<u32, D::Error>
+where
+    D: serde::Deserializer<'de>,
+{
+    #[derive(Deserialize)]
+    #[serde(untagged)]
+    enum NumOrStr {
+        Num(u32),
+        Str(String),
+    }
+
+    match NumOrStr::deserialize(deserializer)? {
+        NumOrStr::Num(n) => Ok(n),
+        NumOrStr::Str(s) => {
+            let cleaned = s.replace('#', "").replace(',', "").replace(' ', "").trim().to_string();
+            cleaned.parse::<u32>().map_err(serde::de::Error::custom)
+        }
+    }
+}
+
+fn flex_bool_default_false<'de, D>(deserializer: D) -> Result<bool, D::Error>
+where
+    D: serde::Deserializer<'de>,
+{
+    #[derive(Deserialize)]
+    #[serde(untagged)]
+    enum BoolOrStr {
+        Bool(bool),
+        Str(String),
+    }
+
+    match BoolOrStr::deserialize(deserializer) {
+        Ok(BoolOrStr::Bool(b)) => Ok(b),
+        Ok(BoolOrStr::Str(s)) => {
+            let s_lower = s.to_lowercase();
+            Ok(s_lower == "true" || s_lower == "yes" || s_lower == "1")
+        }
+        _ => Ok(false),
+    }
 }

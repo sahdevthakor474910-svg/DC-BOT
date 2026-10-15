@@ -10,6 +10,7 @@ pub mod roast;
 pub mod safemode;
 pub mod response;
 pub mod sassymode;
+pub mod dmc;
 
 // Legacy modules kept for reference — no longer registered as commands
 // pub mod admin;
@@ -34,5 +35,6 @@ pub fn all() -> Vec<poise::Command<Data, Error>> {
         safemode::safemode(),
         response::response(),
         sassymode::sassymode(),
+        dmc::dmc(),
     ]
 }
