@@ -5,10 +5,12 @@ use tracing::{debug, warn};
 use super::models::*;
 
 const GEMINI_CHAT_MODELS: &[&str] = &[
-    "gemini-2.0-flash",
-    "gemini-2.0-flash-lite",
-    "gemini-1.5-flash",
-    "gemini-1.5-flash-8b",
+    "gemini-3.5-flash",
+    "gemini-3.5-flash-lite",
+    "gemini-flash-latest",
+    "gemini-flash-lite-latest",
+    "gemini-3.8-flash",
+    "gemini-3.1-flash-lite",
 ];
 
 const SYSTEM_PROMPT: &str = r#"You are "Honored one", a Discord bot with an authentic modern personality. You talk like a real person in a Discord server — short, punchy, casual.
@@ -149,19 +151,19 @@ impl AiClient {
         let safety_settings = vec![
             GeminiSafetySetting {
                 category: "HARM_CATEGORY_HARASSMENT".to_string(),
-                threshold: "BLOCK_NONE".to_string(),
+                threshold: "BLOCK_ONLY_HIGH".to_string(),
             },
             GeminiSafetySetting {
                 category: "HARM_CATEGORY_HATE_SPEECH".to_string(),
-                threshold: "BLOCK_NONE".to_string(),
+                threshold: "BLOCK_ONLY_HIGH".to_string(),
             },
             GeminiSafetySetting {
                 category: "HARM_CATEGORY_SEXUALLY_EXPLICIT".to_string(),
-                threshold: "BLOCK_NONE".to_string(),
+                threshold: "BLOCK_ONLY_HIGH".to_string(),
             },
             GeminiSafetySetting {
                 category: "HARM_CATEGORY_DANGEROUS_CONTENT".to_string(),
-                threshold: "BLOCK_NONE".to_string(),
+                threshold: "BLOCK_ONLY_HIGH".to_string(),
             },
         ];
 
