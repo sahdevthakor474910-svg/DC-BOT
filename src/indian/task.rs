@@ -143,12 +143,37 @@ async fn post_videos(
                 video.duration, views_str
             );
 
-            let play_url = format!(
-                "{}/play?url={}&source=indian&title={}",
-                data.config.public_url,
-                crate::web::encode_hex(&video.url),
-                url::form_urlencoded::byte_serialize(video.title.as_bytes()).collect::<String>()
-            );
+            // Attempt to resolve direct stream so Discord and Web Player play with 0 ISP blocks!
+            let maybe_mp4 = match crate::porn::client::PornClient::new() {
+                Ok(c) => c.get_mp4_url(&video.id).await.ok(),
+                Err(_) => None,
+            };
+
+            let play_url = if let Some(mp4) = &maybe_mp4 {
+                format!(
+                    "{}/play?url={}&source=direct&title={}",
+                    data.config.public_url,
+                    crate::web::encode_hex(mp4),
+                    url::form_urlencoded::byte_serialize(video.title.as_bytes()).collect::<String>()
+                )
+            } else {
+                format!(
+                    "{}/play?url={}&source=indian&title={}",
+                    data.config.public_url,
+                    crate::web::encode_hex(&video.url),
+                    url::form_urlencoded::byte_serialize(video.title.as_bytes()).collect::<String>()
+                )
+            };
+
+            let discord_stream_url = if let Some(mp4) = &maybe_mp4 {
+                format!(
+                    "{}/stream/video.mp4?url={}",
+                    data.config.public_url,
+                    crate::web::encode_hex(mp4)
+                )
+            } else {
+                play_url.clone()
+            };
 
             let mut embed = serenity::CreateEmbed::new()
                 .title(&video.title)
@@ -161,7 +186,11 @@ async fn post_videos(
                 embed = embed.image(&video.default_thumb);
             }
 
-            let content = format!("🇮🇳 **[{}]({})**", video.title, video.url);
+            let content = if maybe_mp4.is_some() {
+                format!("🇮🇳 **[{}]({})**\n{}", video.title, video.url, discord_stream_url)
+            } else {
+                format!("🇮🇳 **[{}]({})**", video.title, video.url)
+            };
             let msg = serenity::CreateMessage::new()
                 .content(&content)
                 .embed(embed);

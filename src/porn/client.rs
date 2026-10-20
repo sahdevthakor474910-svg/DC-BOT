@@ -85,140 +85,153 @@ impl PornClient {
         Ok(resp.videos.into_iter().map(|w| w.video).collect())
     }
 
-    /// Scrape the Redtube video page to find the direct playable .mp4 URL.
+    /// Scrape the Redtube embed page or video page to find the direct playable .mp4 / .m3u8 URL.
     pub async fn get_mp4_url(&self, video_id: &str) -> Result<String> {
-        let page_url = format!("https://www.redtube.com/{}", video_id);
-        let resp = self.http.get(&page_url)
-            .header("Referer", "https://www.redtube.com/")
+        // Strategy A: Fetch official embed player page (embed.redtube.com/?id=...)
+        // This has no age-gate modal, is open to webmasters, and contains the media stream definition.
+        let embed_url = format!("https://embed.redtube.com/?id={}", video_id);
+        if let Ok(resp) = self.http.get(&embed_url)
+            .header("Referer", "https://embed.redtube.com/")
+            .header("User-Agent", "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36")
             .send()
-            .await?;
-        
-        let html = resp.error_for_status()?.text().await?;
+            .await
+        {
+            if resp.status().is_success() {
+                if let Ok(html) = resp.text().await {
+                    if let Some(stream) = Self::extract_stream_from_html(&html) {
+                        return Ok(stream);
+                    }
+                }
+            }
+        }
 
+        // Strategy B: Fetch main video page with age-verification bypass cookies
+        let page_url = format!("https://www.redtube.com/{}", video_id);
+        if let Ok(resp) = self.http.get(&page_url)
+            .header("Referer", "https://www.redtube.com/")
+            .header("Cookie", "age_verified=1; RDT_AGE=1; has_visited=1; accessAgeDisclaimerPH=1; platform=pc")
+            .header("User-Agent", "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36")
+            .send()
+            .await
+        {
+            if resp.status().is_success() {
+                if let Ok(html) = resp.text().await {
+                    if let Some(stream) = Self::extract_stream_from_html(&html) {
+                        return Ok(stream);
+                    }
+                }
+            }
+        }
+
+        anyhow::bail!("No direct stream URL found for Redtube video ID {}", video_id)
+    }
+
+    fn extract_stream_from_html(html: &str) -> Option<String> {
         // 1. Try mediaDefinition JSON array
-        let media_def_re = regex::Regex::new(r#"mediaDefinition\s*:\s*(\[[^\]]+\])"#)?;
-        if let Some(cap) = media_def_re.captures(&html) {
-            let json_str = &cap[1];
-            if let Ok(val) = serde_json::from_str::<serde_json::Value>(json_str) {
-                if let Some(arr) = val.as_array() {
-                    let mut best: Option<(u32, String)> = None;
-                    let mut best_hls: Option<String> = None;
-                    for item in arr {
-                        let video_url_val = item.get("videoUrl").and_then(|v| v.as_str()).unwrap_or_default();
-                        if video_url_val.is_empty() {
-                            continue;
-                        }
-                        let _format = item.get("format").and_then(|v| v.as_str()).unwrap_or("");
-                        let quality_str = item.get("quality").and_then(|v| v.as_str())
-                            .or_else(|| item.get("videoUrl").and_then(|v| v.as_str()).and_then(|u| {
-                                if u.contains("_720p") { Some("720") }
-                                else if u.contains("_480p") { Some("480") }
-                                else if u.contains("_360p") { Some("360") }
-                                else { None }
-                            }))
-                            .unwrap_or("");
-                        let quality: u32 = quality_str.parse().unwrap_or(0);
-
-                        // If videoUrl does not point to mp4 directly, it could be a JSON endpoint
-                        let direct_url = if video_url_val.contains("ht_json") || video_url_val.contains("/api/player") || quality == 0 {
-                            let fetch_url = if video_url_val.starts_with('/') {
-                                format!("https://www.redtube.com{}", video_url_val)
-                            } else {
-                                video_url_val.to_string()
-                            };
-                            if let Ok(xhr_resp) = self.http.get(&fetch_url).header("Referer", &page_url).send().await {
-                                if let Ok(xhr_json) = xhr_resp.json::<serde_json::Value>().await {
-                                    let mut resolved = None;
-                                    if let Some(xhr_arr) = xhr_json.as_array() {
-                                        for entry in xhr_arr {
-                                            if let Some(u) = entry.get("videoUrl").and_then(|v| v.as_str()) {
-                                                if !u.is_empty() {
-                                                    resolved = Some(u.to_string());
-                                                    break;
-                                                }
-                                            }
-                                        }
-                                    } else if let Some(u) = xhr_json.get("videoUrl").and_then(|v| v.as_str()) {
-                                        resolved = Some(u.to_string());
-                                    }
-                                    resolved
-                                } else {
-                                    None
-                                }
-                            } else {
-                                None
+        if let Ok(media_def_re) = regex::Regex::new(r#"mediaDefinition\s*:\s*(\[[^\]]+\])"#) {
+            if let Some(cap) = media_def_re.captures(html) {
+                if let Ok(val) = serde_json::from_str::<serde_json::Value>(&cap[1]) {
+                    if let Some(arr) = val.as_array() {
+                        let mut best_mp4: Option<(u32, String)> = None;
+                        let mut best_hls: Option<String> = None;
+                        for item in arr {
+                            let video_url_val = item.get("videoUrl").and_then(|v| v.as_str()).unwrap_or_default();
+                            if video_url_val.is_empty() {
+                                continue;
                             }
-                        } else {
-                            Some(video_url_val.to_string())
-                        };
+                            let quality_str = item.get("quality").and_then(|v| v.as_str())
+                                .or_else(|| {
+                                    if video_url_val.contains("_720p") { Some("720") }
+                                    else if video_url_val.contains("_480p") { Some("480") }
+                                    else if video_url_val.contains("_360p") { Some("360") }
+                                    else { None }
+                                })
+                                .unwrap_or("0");
+                            let quality: u32 = quality_str.parse().unwrap_or(0);
 
-                        if let Some(du) = direct_url {
-                            if !du.is_empty() {
-                                if du.contains("m3u8") {
-                                    if best_hls.is_none() {
-                                        best_hls = Some(du);
-                                    }
-                                } else if quality <= 720 {
-                                    if best.as_ref().map_or(true, |(q, _)| quality > *q || *q == 0) {
-                                        best = Some((quality, du));
-                                    }
+                            let du = video_url_val.to_string();
+                            if du.contains("m3u8") {
+                                if best_hls.is_none() {
+                                    best_hls = Some(du);
+                                }
+                            } else if quality <= 720 {
+                                if best_mp4.as_ref().map_or(true, |(q, _)| quality > *q || *q == 0) {
+                                    best_mp4 = Some((quality, du));
                                 }
                             }
                         }
-                    }
-                    if let Some((_, u)) = best {
-                        return Ok(u);
-                    }
-                    if let Some(u) = best_hls {
-                        return Ok(u);
+                        if let Some((_, u)) = best_mp4 {
+                            return Some(u);
+                        }
+                        if let Some(u) = best_hls {
+                            return Some(u);
+                        }
                     }
                 }
             }
         }
 
-        // 2. Try HTML source tag regex fallback
-        let source_re = regex::Regex::new(r#"<source[^>]+src=["']([^"']+\.(?:mp4|m3u8)(?:\?[^"']+)?)["']"#)?;
-        if let Some(cap) = source_re.captures(&html) {
-            return Ok(cap[1].to_string());
-        }
-
-        // 3. Try plain text .mp4 or .m3u8 inside javascript sources
-        let sources_re = regex::Regex::new(r#"sources\s*:\s*(\{[^}]+\})"#)?;
-        if let Some(cap) = sources_re.captures(&html) {
-            let inner = &cap[1];
-            let mp4_find = regex::Regex::new(r#""([^"]+\.mp4[^"]*)""#)?;
-            if let Some(m) = mp4_find.captures(inner) {
-                return Ok(m[1].to_string().replace("\\/", "/"));
-            }
-            let m3u8_find = regex::Regex::new(r#""([^"]+\.m3u8[^"]*)""#)?;
-            if let Some(m) = m3u8_find.captures(inner) {
-                return Ok(m[1].to_string().replace("\\/", "/"));
+        // 2. Try HTML <source> tag
+        if let Ok(source_re) = regex::Regex::new(r#"<source[^>]+src=["']([^"']+\.(?:mp4|m3u8)(?:\?[^"']*)?)["']"#) {
+            if let Some(cap) = source_re.captures(html) {
+                return Some(cap[1].to_string());
             }
         }
 
-        // 4. Try any "videoUrl":"https://..." in html
-        let any_url_re = regex::Regex::new(r#""videoUrl"\s*:\s*"([^"]+)""#)?;
-        for cap in any_url_re.captures_iter(&html) {
-            let u = cap[1].replace("\\/", "/");
-            if (u.contains(".mp4") || u.contains(".m3u8")) && u.starts_with("http") {
-                return Ok(u);
+        // 3. Try "videoUrl":"https://..."
+        if let Ok(any_url_re) = regex::Regex::new(r#""videoUrl"\s*:\s*"([^"]+)""#) {
+            let mut hls_fallback = None;
+            for cap in any_url_re.captures_iter(html) {
+                let u = cap[1].replace("\\/", "/");
+                if u.starts_with("http") {
+                    if u.contains(".mp4") {
+                        return Some(u);
+                    } else if u.contains(".m3u8") && hls_fallback.is_none() {
+                        hls_fallback = Some(u);
+                    }
+                }
+            }
+            if let Some(u) = hls_fallback {
+                return Some(u);
             }
         }
 
-        // 5. Try scraping the official embed page as fallback
-        let embed_page_url = format!("https://embed.redtube.com/?id={}", video_id);
-        if let Ok(embed_resp) = self.http.get(&embed_page_url).header("Referer", "https://embed.redtube.com/").send().await {
-            if let Ok(embed_html) = embed_resp.text().await {
-                for cap in any_url_re.captures_iter(&embed_html) {
-                    let u = cap[1].replace("\\/", "/");
-                    if (u.contains(".mp4") || u.contains(".m3u8")) && u.starts_with("http") {
-                        return Ok(u);
+        // 4. Try sources: {...}
+        if let Ok(sources_re) = regex::Regex::new(r#"sources\s*:\s*(\{[^}]+\})"#) {
+            if let Some(cap) = sources_re.captures(html) {
+                let inner = &cap[1];
+                if let Ok(mp4_re) = regex::Regex::new(r#""([^"]+\.mp4[^"]*)""#) {
+                    if let Some(m) = mp4_re.captures(inner) {
+                        return Some(m[1].to_string().replace("\\/", "/"));
+                    }
+                }
+                if let Ok(m3u8_re) = regex::Regex::new(r#""([^"]+\.m3u8[^"]*)""#) {
+                    if let Some(m) = m3u8_re.captures(inner) {
+                        return Some(m[1].to_string().replace("\\/", "/"));
                     }
                 }
             }
         }
 
-        Err(anyhow::anyhow!("No direct stream URL found for Redtube video ID {}", video_id))
+        // 5. Broad regex scan for any MP4 or M3U8 CDN URL
+        if let Ok(broad_re) = regex::Regex::new(r#"(https?:\\?/\\?/[^"'\s]+?\.(?:mp4|m3u8)(?:\?[^"'\s<>]*)?)"#) {
+            let mut hls_fallback = None;
+            for cap in broad_re.captures_iter(html) {
+                let clean = cap[1].replace(r"\u0026", "&").replace(r"\/", "/").replace(r"\", "");
+                if clean.starts_with("http") {
+                    if clean.contains(".mp4") {
+                        return Some(clean);
+                    } else if clean.contains(".m3u8") && hls_fallback.is_none() {
+                        hls_fallback = Some(clean);
+                    }
+                }
+            }
+            if let Some(u) = hls_fallback {
+                return Some(u);
+            }
+        }
+
+        None
     }
 }
 

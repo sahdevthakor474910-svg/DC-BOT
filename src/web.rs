@@ -288,12 +288,17 @@ pub fn extract_redtube_id(url: &str) -> Option<String> {
     if !url.contains("http") && !url.contains('/') {
         return Some(url.to_string());
     }
+    if let Ok(re) = regex::Regex::new(r"(?:redtube\.com/(?:video/)?|embed\.redtube\.com/\?id=|id=|\bid=)([0-9]{5,12})") {
+        if let Some(cap) = re.captures(url) {
+            return Some(cap[1].to_string());
+        }
+    }
     if let Ok(re) = regex::Regex::new(r"redtube\.com/([0-9]+)") {
         if let Some(cap) = re.captures(url) {
             return Some(cap[1].to_string());
         }
     }
-    if let Ok(re) = regex::Regex::new(r"[/?=]([0-9]{7,10})[/?&_.]") {
+    if let Ok(re) = regex::Regex::new(r"([0-9]{6,10})") {
         if let Some(cap) = re.captures(url) {
             return Some(cap[1].to_string());
         }

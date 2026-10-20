@@ -157,6 +157,53 @@
             color: #38ef7d;
             font-weight: 500;
         }
+        .isp-banner {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            gap: 14px;
+            background: linear-gradient(135deg, rgba(255, 42, 95, 0.15) 0%, rgba(255, 107, 107, 0.08) 100%);
+            border: 1px solid rgba(255, 42, 95, 0.35);
+            border-radius: 12px;
+            padding: 12px 16px;
+            margin-top: 6px;
+            flex-wrap: wrap;
+        }
+        .isp-icon {
+            font-size: 1.5rem;
+            flex-shrink: 0;
+        }
+        .isp-text {
+            flex: 1;
+            min-width: 240px;
+        }
+        .isp-title {
+            font-weight: 700;
+            font-size: 0.85rem;
+            color: #ff6b8b;
+            margin-bottom: 2px;
+        }
+        .isp-desc {
+            font-size: 0.78rem;
+            color: #d1d5db;
+            line-height: 1.4;
+        }
+        .btn-isp-solve {
+            background: #ff2a5f;
+            color: #ffffff;
+            border: none;
+            padding: 8px 14px;
+            border-radius: 8px;
+            font-weight: 700;
+            font-size: 0.8rem;
+            cursor: pointer;
+            transition: all 0.2s ease;
+            white-space: nowrap;
+        }
+        .btn-isp-solve:hover {
+            background: #ff4d79;
+            transform: scale(1.02);
+        }
     </style>
 </head>
 <body>
@@ -182,7 +229,17 @@
 
         <div class="status-badge">
             <span id="playerStatus" class="status-tag">⚡ Initializing Stream...</span>
-            <span>DC-BOT Ultra-Player Engine</span>
+            <span id="playerEngine">DC-BOT Ultra-Player Engine (Frankfurt Proxy)</span>
+        </div>
+
+        <!-- ISP Block Detection Banner -->
+        <div id="ispNotice" class="isp-banner" style="display: none;">
+            <div class="isp-icon">🛡️</div>
+            <div class="isp-text">
+                <div class="isp-title">Regional ISP Block Notice</div>
+                <div class="isp-desc">If the embed player displays <em>"refused to connect"</em> or a forbidden icon, your Internet provider (Jio, Airtel, Vi) is blocking adult domains. Click <strong>⚡ Switch to HTML5 Stream</strong> to route the video through our Frankfurt proxy server with zero restrictions!</div>
+            </div>
+            <button class="btn-isp-solve" onclick="switchToHtml5()">⚡ Switch to HTML5 Stream</button>
         </div>
     </div>
 
@@ -192,6 +249,7 @@
         const statusEl = document.getElementById('playerStatus');
         const btnHtml5 = document.getElementById('btnHtml5');
         const btnEmbed = document.getElementById('btnEmbed');
+        const ispNotice = document.getElementById('ispNotice');
 
         const streamUrl = "{stream_url}";
         const directUrl = "{direct_url}";
@@ -227,6 +285,7 @@
 
             btnHtml5.classList.remove('active');
             btnEmbed.classList.add('active');
+            if (ispNotice) ispNotice.style.display = 'flex';
             setStatus("🎬 Switched to Official Embed Player (Click HTML5 Stream if ISP blocked)");
         }
 
@@ -234,6 +293,7 @@
             isEmbedActive = false;
             embedFrame.style.display = 'none';
             embedFrame.src = '';
+            if (ispNotice) ispNotice.style.display = 'none';
 
             video.style.display = 'block';
             btnEmbed.classList.remove('active');
@@ -311,11 +371,12 @@
             console.warn("HTML5 video error:", e);
             if (fallbackCount === 0 && directUrl && directUrl.startsWith('http') && directUrl !== streamUrl) {
                 fallbackCount++;
-                setStatus("🔄 Proxy error — retrying directly from CDN source...");
+                setStatus("🔄 Retrying stream directly from CDN source...");
                 playStream(directUrl);
             } else {
-                console.log("Direct stream failed, falling back to official embed player...");
-                switchToEmbed();
+                console.log("Stream playback error encountered");
+                setStatus("⚠️ Stream playback interrupted. Click '⚡ HTML5 Stream' to retry or toggle 'Embed Player' above.", false);
+                if (ispNotice) ispNotice.style.display = 'flex';
             }
         });
 
