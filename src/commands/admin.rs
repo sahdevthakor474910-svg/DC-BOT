@@ -395,7 +395,7 @@ pub async fn status(ctx: Context<'_>) -> Result<(), Error> {
 /// Immediately trigger memes, gaming news, and free-game tasks. May take a moment.
 #[poise::command(slash_command, guild_only, rename = "force-refresh")]
 pub async fn force_refresh(ctx: Context<'_>) -> Result<(), Error> {
-    ctx.defer().await?;
+    let _ = ctx.defer().await;
 
     let data = ctx.data().clone();
     let http: Arc<serenity::Http> = Arc::clone(&ctx.serenity_context().http);
@@ -505,7 +505,7 @@ pub async fn export_setup(ctx: Context<'_>) -> Result<(), Error> {
     let guild_id = ctx.guild_id().unwrap().to_string();
     let db = &ctx.data().db;
 
-    ctx.defer().await?;
+    let _ = ctx.defer().await;
 
     let backup = queries::export_guild_setup(db, &guild_id).await?;
     let json_bytes = serde_json::to_vec_pretty(&backup)?;
@@ -529,7 +529,7 @@ pub async fn import_setup(
     let guild_id = ctx.guild_id().unwrap().to_string();
     let db = &ctx.data().db;
 
-    ctx.defer().await?;
+    let _ = ctx.defer().await;
 
     let file_bytes = match attachment.download().await {
         Ok(bytes) => bytes,

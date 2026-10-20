@@ -12,7 +12,7 @@ pub async fn dmc(
     ctx: Context<'_>,
     #[description = "DMC battle results or leaderboard screenshot"] image: serenity::Attachment,
 ) -> Result<(), Error> {
-    ctx.defer().await?;
+    let _ = ctx.defer().await;
 
     let api_key = &ctx.data().config.gemini_api_key;
     if api_key.trim().is_empty() {

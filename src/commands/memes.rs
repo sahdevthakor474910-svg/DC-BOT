@@ -74,7 +74,7 @@ pub async fn status(ctx: Context<'_>) -> Result<(), Error> {
     check = "crate::commands::checks::is_admin_check"
 )]
 pub async fn fetch_now(ctx: Context<'_>) -> Result<(), Error> {
-    ctx.defer().await?;
+    let _ = ctx.defer().await;
 
     let guild_id = ctx.guild_id().unwrap().to_string();
     let cfg = queries::get_or_create_guild(&ctx.data().db, &guild_id).await?;
