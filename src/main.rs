@@ -413,26 +413,21 @@ fn build_framework(bot_data: Data) -> poise::Framework<Data, Error> {
                 }
 
                 // ── Slash Command Deployment ──────────────────────────────
-                // Commands do NOT need to be re-registered on every normal bot startup.
-                // Only register if explicitly triggered via DEPLOY_COMMANDS=true or --deploy-commands.
-                let should_deploy = std::env::var("DEPLOY_COMMANDS")
-                    .map(|v| v.eq_ignore_ascii_case("true") || v == "1")
-                    .unwrap_or(false)
-                    || std::env::args().any(|a| a == "--deploy-commands");
-
-                if should_deploy {
-                    info!("[DEPLOY] DEPLOY_COMMANDS enabled: deploying slash commands across {} guild(s)...", guild_ids.len());
-                    for guild_id in &guild_ids {
-                        match poise::builtins::register_in_guild(ctx, &framework.options().commands, *guild_id).await {
-                            Ok(()) => info!("[DEPLOY] Commands registered in guild {}", guild_id),
-                            Err(e) => tracing::warn!("[DEPLOY] Failed to register commands in guild {}: {:?}", guild_id, e),
-                        }
-                        tokio::time::sleep(std::time::Duration::from_millis(1000)).await;
+                // Automatically register slash commands across all connected guilds so schema changes
+                // (new commands and new options) take effect immediately in Discord without delay.
+                info!("[DEPLOY] Deploying slash commands across {} guild(s)...", guild_ids.len());
+                for guild_id in &guild_ids {
+                    match poise::builtins::register_in_guild(ctx, &framework.options().commands, *guild_id).await {
+                        Ok(()) => info!("[DEPLOY] Commands registered in guild {}", guild_id),
+                        Err(e) => tracing::warn!("[DEPLOY] Failed to register commands in guild {}: {:?}", guild_id, e),
                     }
-                    info!("[DEPLOY] Command deployment complete");
-                } else {
-                    info!("[STARTUP] Normal startup: skipping slash command registration (commands already deployed). Set DEPLOY_COMMANDS=true to re-sync.");
+                    tokio::time::sleep(std::time::Duration::from_millis(500)).await;
                 }
+                // Also register globally as fallback
+                if let Err(e) = poise::builtins::register_globally(ctx, &framework.options().commands).await {
+                    tracing::warn!("[DEPLOY] Failed to register commands globally: {:?}", e);
+                }
+                info!("[DEPLOY] Command deployment complete");
 
                 // ── Spawn background tasks ──────────────────────────────
                 {

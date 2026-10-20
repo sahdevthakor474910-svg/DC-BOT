@@ -16,7 +16,7 @@ pub async fn help(ctx: Context<'_>) -> Result<(), Error> {
 
         // ── /setup & /unset ──────────────────────────────────────────────────
         .field(
-            "🛠️ Setup & Channel Config (`/setup` & `/unset`)",
+            "🛠️ Setup & Channel Config (`/setup`, `/setup-indian`, & `/unset`)",
             "Fill in whichever channels you want to activate (all optional):\n\
              • **memes** → 🖼️ r/memes, r/dankmemes, r/brainrot, r/shitposting\n\
              • **news** → 📰 Gaming news every 5 min\n\
@@ -97,7 +97,7 @@ pub async fn help(ctx: Context<'_>) -> Result<(), Error> {
         )
 
         .footer(serenity::CreateEmbedFooter::new(
-            "Quick Reference: /setup • /unset • /post • /status • /settings • /safemode • /sassymode • /response • /help"
+            "Quick Reference: /setup • /setup-indian • /unset • /post • /status • /settings • /safemode • /sassymode • /response • /help"
         ));
 
     ctx.send(poise::CreateReply::default().embed(embed)).await?;

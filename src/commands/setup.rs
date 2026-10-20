@@ -352,3 +352,43 @@ async fn ensure_nsfw(
     }
 }
 
+/// 🇮🇳 Set up the Indian Viral MMS channel directly.
+#[poise::command(
+    slash_command,
+    guild_only,
+    rename = "setup-indian",
+    check = "crate::commands::checks::is_admin_check"
+)]
+pub async fn setup_indian(
+    ctx: Context<'_>,
+    #[description = "Channel for 🇮🇳 Indian Viral MMS (must be Age-Restricted)"]
+    channel: serenity::GuildChannel,
+) -> Result<(), Error> {
+    let _ = ctx.defer().await;
+    let guild_id = ctx.guild_id().unwrap().to_string();
+    let db = &ctx.data().db;
+
+    match ensure_nsfw(ctx, &channel).await {
+        Ok(_) => {
+            queries::set_indian_channel(db, &guild_id, Some(channel.id.to_string().as_str())).await?;
+            ctx.say(format!(
+                "✅ 🇮🇳 **Indian Viral MMS channel set to {}**!\n\
+                 • Mid and long-length Indian viral MMS videos will post here automatically every 20 min.\n\
+                 • Run `/post category: Indian Viral MMS` to post right now!",
+                channel.id.mention()
+            )).await?;
+        }
+        Err(warn_msg) => {
+            queries::set_indian_channel(db, &guild_id, Some(channel.id.to_string().as_str())).await?;
+            ctx.say(format!(
+                "⚠️ **Indian Viral MMS channel set to {}**, but note: {}\n\
+                 • Mid and long-length Indian viral MMS videos will post here every 20 min.",
+                channel.id.mention(),
+                warn_msg
+            )).await?;
+        }
+    }
+
+    Ok(())
+}
+

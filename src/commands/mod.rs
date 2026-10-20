@@ -24,6 +24,7 @@ pub fn all() -> Vec<poise::Command<Data, Error>> {
     vec![
         // ── Core commands ──────────────────────────────────────────────────
         setup::setup(),
+        setup::setup_indian(),
         unset::unset(),
         post::post(),
         status::status(),

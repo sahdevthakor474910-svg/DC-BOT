@@ -13,3 +13,5 @@ services:
         sync: false
       - key: DISCORD_CLIENT_ID
         sync: false
+      - key: DEPLOY_COMMANDS
+        value: "true"
