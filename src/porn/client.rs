@@ -102,6 +102,7 @@ impl PornClient {
             if let Ok(val) = serde_json::from_str::<serde_json::Value>(json_str) {
                 if let Some(arr) = val.as_array() {
                     let mut best: Option<(u32, String)> = None;
+                    let mut best_hls: Option<String> = None;
                     for item in arr {
                         let video_url_val = item.get("videoUrl").and_then(|v| v.as_str()).unwrap_or_default();
                         if video_url_val.is_empty() {
@@ -152,8 +153,12 @@ impl PornClient {
                         };
 
                         if let Some(du) = direct_url {
-                            if !du.is_empty() && !du.contains("m3u8") {
-                                if quality <= 720 {
+                            if !du.is_empty() {
+                                if du.contains("m3u8") {
+                                    if best_hls.is_none() {
+                                        best_hls = Some(du);
+                                    }
+                                } else if quality <= 720 {
                                     if best.as_ref().map_or(true, |(q, _)| quality > *q || *q == 0) {
                                         best = Some((quality, du));
                                     }
@@ -164,17 +169,20 @@ impl PornClient {
                     if let Some((_, u)) = best {
                         return Ok(u);
                     }
+                    if let Some(u) = best_hls {
+                        return Ok(u);
+                    }
                 }
             }
         }
 
         // 2. Try HTML source tag regex fallback
-        let source_re = regex::Regex::new(r#"<source[^>]+src=["']([^"']+\.mp4(?:\?[^"']+)?)["']"#)?;
+        let source_re = regex::Regex::new(r#"<source[^>]+src=["']([^"']+\.(?:mp4|m3u8)(?:\?[^"']+)?)["']"#)?;
         if let Some(cap) = source_re.captures(&html) {
             return Ok(cap[1].to_string());
         }
 
-        // 3. Try plain text .mp4 inside javascript sources
+        // 3. Try plain text .mp4 or .m3u8 inside javascript sources
         let sources_re = regex::Regex::new(r#"sources\s*:\s*(\{[^}]+\})"#)?;
         if let Some(cap) = sources_re.captures(&html) {
             let inner = &cap[1];
@@ -182,9 +190,35 @@ impl PornClient {
             if let Some(m) = mp4_find.captures(inner) {
                 return Ok(m[1].to_string().replace("\\/", "/"));
             }
+            let m3u8_find = regex::Regex::new(r#""([^"]+\.m3u8[^"]*)""#)?;
+            if let Some(m) = m3u8_find.captures(inner) {
+                return Ok(m[1].to_string().replace("\\/", "/"));
+            }
         }
 
-        Err(anyhow::anyhow!("No direct MP4 URL found for Redtube video ID {}", video_id))
+        // 4. Try any "videoUrl":"https://..." in html
+        let any_url_re = regex::Regex::new(r#""videoUrl"\s*:\s*"([^"]+)""#)?;
+        for cap in any_url_re.captures_iter(&html) {
+            let u = cap[1].replace("\\/", "/");
+            if (u.contains(".mp4") || u.contains(".m3u8")) && u.starts_with("http") {
+                return Ok(u);
+            }
+        }
+
+        // 5. Try scraping the official embed page as fallback
+        let embed_page_url = format!("https://embed.redtube.com/?id={}", video_id);
+        if let Ok(embed_resp) = self.http.get(&embed_page_url).header("Referer", "https://embed.redtube.com/").send().await {
+            if let Ok(embed_html) = embed_resp.text().await {
+                for cap in any_url_re.captures_iter(&embed_html) {
+                    let u = cap[1].replace("\\/", "/");
+                    if (u.contains(".mp4") || u.contains(".m3u8")) && u.starts_with("http") {
+                        return Ok(u);
+                    }
+                }
+            }
+        }
+
+        Err(anyhow::anyhow!("No direct stream URL found for Redtube video ID {}", video_id))
     }
 }
 
