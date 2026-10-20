@@ -96,7 +96,6 @@ async fn post_redtube_videos(
     if relevant.is_empty() { return Ok(0); }
 
     let mut total = 0usize;
-    let redtube = PornClient::new().ok();
 
     for cfg in relevant {
         let channel_id_str = cfg.porn_video_channel_id.as_ref().unwrap();
@@ -128,12 +127,6 @@ async fn post_redtube_videos(
                 format!("{:.0}K", video.views as f64 / 1_000.0)
             } else { video.views.to_string() };
 
-            // Attempt to resolve direct MP4 so Discord inline video player works!
-            let maybe_mp4 = if let Some(client) = &redtube {
-                client.get_mp4_url(&video.video_id).await.ok()
-            } else {
-                None
-            };
 
             let play_url = format!(
                 "{}/play?url={}&source=porn&title={}",
@@ -141,18 +134,6 @@ async fn post_redtube_videos(
                 crate::web::encode_hex(&video.url),
                 url::form_urlencoded::byte_serialize(video.title.as_bytes()).collect::<String>()
             );
-
-            // Discord stream URL routed through our proxy with /stream/video.mp4 so
-            // Discord gets the required RedTube Referer header and streams it cleanly!
-            let discord_stream_url = if let Some(mp4) = &maybe_mp4 {
-                format!(
-                    "{}/stream/video.mp4?url={}",
-                    data.config.public_url,
-                    crate::web::encode_hex(mp4)
-                )
-            } else {
-                play_url.clone()
-            };
 
             let embed = serenity::CreateEmbed::new()
                 .title(&video.title)
@@ -167,13 +148,7 @@ async fn post_redtube_videos(
                     tag_str
                 )));
 
-            // If direct MP4 resolved, post the proxied stream URL so Discord renders
-            // the in-app player with working audio/video, otherwise link to Web Stream Player!
-            let content = if maybe_mp4.is_some() {
-                format!("🎥 **{}**\n{}", video.title, discord_stream_url)
-            } else {
-                format!("🎥 **{}**\n[▶️ Click to Watch]({})", video.title, play_url)
-            };
+            let content = format!("🎥 **[{}]({})**", video.title, video.url);
 
             let msg = serenity::CreateMessage::new().content(&content).embed(embed);
             match channel.send_message(http, msg).await {

@@ -8,6 +8,12 @@ const REDTUBE_API: &str = "https://api.redtube.com/";
 /// Search categories we rotate through every tick.
 /// Each search maps to a different vibe — studio, category, or keyword.
 pub const PORN_SEARCHES: &[&str] = &[
+    "indian viral",
+    "desi viral",
+    "indian bhabhi",
+    "desi bhabhi",
+    "indian amateur",
+    "desi mms",
     "naughty america",
     "brazzers",
     "milf",
