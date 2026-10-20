@@ -52,8 +52,8 @@ pub async fn play_handler(
     } else {
         match query.source.as_str() {
             "jav" => {
-                let video_id = extract_eporner_id(&raw_url).unwrap_or_else(|| raw_url.clone());
-                match crate::jav::client::EpornerClient::new() {
+                let video_id = extract_redtube_id(&raw_url).unwrap_or_else(|| raw_url.clone());
+                match crate::porn::client::PornClient::new() {
                     Ok(client) => client.get_mp4_url(&video_id).await.unwrap_or_default(),
                     Err(_) => String::new(),
                 }
@@ -342,7 +342,9 @@ pub fn get_embed_url(source: &str, raw_url: &str) -> String {
             }
         }
         "jav" => {
-            if let Some(id) = extract_eporner_id(raw_url) {
+            if let Some(id) = extract_redtube_id(raw_url) {
+                format!("https://embed.redtube.com/?id={}", id)
+            } else if let Some(id) = extract_eporner_id(raw_url) {
                 format!("https://www.eporner.com/embed/{}/", id)
             } else {
                 raw_url.to_string()

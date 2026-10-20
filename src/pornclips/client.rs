@@ -8,6 +8,14 @@ use super::models::*;
 
 /// Curated high-traffic straight/female search queries on RedGIFs
 const SEARCH_QUERIES: &[&str] = &[
+    "indian",
+    "desi",
+    "indian viral",
+    "desi viral",
+    "indian bhabhi",
+    "desi bhabhi",
+    "indian amateur",
+    "desi couple",
     "creampie",
     "blowjob",
     "doggystyle",
@@ -125,6 +133,7 @@ fn is_straight_female_content(gif: &RedGifsGif) -> bool {
         "latina", "asian", "pornstar", "petite", "curvy", "oral", "orgasm",
         "swallow", "squirt", "masturbating", "fingering", "strip", "nude",
         "naked", "cute", "hot", "couple", "wife", "step", "fuck", "cum",
+        "indian", "desi", "bhabhi", "bhabi", "mallu", "aunty", "viral",
     ];
 
     POSITIVE_FEMALE.iter().any(|&word| text.contains(word))

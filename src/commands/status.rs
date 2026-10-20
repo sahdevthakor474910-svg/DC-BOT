@@ -75,7 +75,7 @@ pub async fn status(ctx: Context<'_>) -> Result<(), Error> {
         .field("🔞 NSFW (Reddit)",    ch(cfg.nsfw_channel_id.as_ref()),          true)
         .field("📸 Hot Photos",       ch(cfg.porn_channel_id.as_ref()),          true)
         .field("🎬 Porn Clips",        ch(cfg.pornclips_channel_id.as_ref()),     true)
-        .field("🎌 JAV (Eporner)",    ch(cfg.jav_channel_id.as_ref()),           true)
+        .field("🎌 JAV",              ch(cfg.jav_channel_id.as_ref()),           true)
         .field("🎌 JAVHD",             ch(cfg.javhd_channel_id.as_ref()),         true)
         .field("🔮 Hentai Videos",     ch(cfg.hanime_channel_id.as_ref()),        true)
         .field("🔥 Porn Videos",      ch(cfg.porn_video_channel_id.as_ref()),    true)

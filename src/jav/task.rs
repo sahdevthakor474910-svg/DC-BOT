@@ -7,50 +7,62 @@ use tracing::{error, info, warn};
 
 use crate::data::Data;
 use crate::db::queries;
-use super::client::{EpornerClient, JAV_SEARCHES};
+use super::client::{JavClient, JAV_SEARCHES};
+use super::models::JavVideo;
 
 /// Single tick exposed for `/admin force-refresh` and `/post`.
 pub async fn run_once(data: &Data, http: &Arc<serenity::Http>, force: bool) -> Result<usize> {
     tick(data, http, force).await
 }
 
+/// Single tick for a specific query and page.
+pub async fn run_with_query(
+    data: &Data,
+    http: &Arc<serenity::Http>,
+    query: &str,
+    page: u32,
+    force: bool,
+) -> Result<usize> {
+    let client = JavClient::new()?;
+    tick_with_query(data, http, &client, query, page, force).await
+}
+
 /// Background task — runs every 15 minutes.
 pub async fn run(data: Data, http: Arc<serenity::Http>) {
-    info!("🎌 JAV task started (eporner.com — direct MP4 playback)");
+    info!("🎌 JAV task started (Japanese & Asian JAV — every 15 min)");
 
-    let client = match EpornerClient::new() {
+    let client = match JavClient::new() {
         Ok(c) => c,
         Err(e) => {
-            error!("Failed to create EpornerClient: {:#}", e);
+            error!("Failed to create JavClient: {:#}", e);
             return;
         }
     };
 
-    // Rotate through JAV search queries each tick
-    let mut search_index = 0usize;
+    let mut tick_idx: usize = 0;
 
     loop {
-        let query = JAV_SEARCHES[search_index % JAV_SEARCHES.len()];
-        let page = (search_index / JAV_SEARCHES.len() % 50 + 1) as u32;
-        search_index += 1;
+        let query = JAV_SEARCHES[tick_idx % JAV_SEARCHES.len()];
+        let page = ((tick_idx / JAV_SEARCHES.len()) % 5 + 1) as u32;
 
         match tick_with_query(&data, &http, &client, query, page, false).await {
-            Ok(n) if n > 0 => info!("🎌 Posted {} JAV video(s) for query \"{}\" (page {})", n, query, page),
+            Ok(n) if n > 0 => info!("🎌 Posted {} JAV video(s) for query '{}'", n, query),
             Ok(_) => {}
             Err(e) => error!("JAV task error: {:#}", e),
         }
+
+        tick_idx = tick_idx.wrapping_add(1);
 
         if let Err(e) = queries::prune_old_seen_jav(&data.db, 90).await {
             warn!("Could not prune seen_jav: {}", e);
         }
 
-        // Run every 15 minutes
         tokio::time::sleep(Duration::from_secs(15 * 60)).await;
     }
 }
 
 async fn tick(data: &Data, http: &Arc<serenity::Http>, force: bool) -> Result<usize> {
-    let client = EpornerClient::new()?;
+    let client = JavClient::new()?;
     let videos = client.fetch_jav_videos("japanese uncensored", 8, 1).await?;
     post_videos(data, http, &videos, force).await
 }
@@ -58,7 +70,7 @@ async fn tick(data: &Data, http: &Arc<serenity::Http>, force: bool) -> Result<us
 async fn tick_with_query(
     data: &Data,
     http: &Arc<serenity::Http>,
-    client: &EpornerClient,
+    client: &JavClient,
     query: &str,
     page: u32,
     force: bool,
@@ -70,7 +82,7 @@ async fn tick_with_query(
 async fn post_videos(
     data: &Data,
     http: &Arc<serenity::Http>,
-    videos: &[super::models::EpornerVideo],
+    videos: &[JavVideo],
     force: bool,
 ) -> Result<usize> {
     let configs = queries::get_all_guild_configs(&data.db).await?;
@@ -114,61 +126,47 @@ async fn post_videos(
                 error!("DB error marking jav seen: {}", e);
             }
 
-            // Limit to 5 per tick per guild
-            if posted_this_tick >= 5 {
-                continue;
+            // Limit to 2 per tick per guild to conserve bandwidth
+            if posted_this_tick >= 2 {
+                break;
             }
 
-            // Format views nicely
-            let views_str = format_views(&video.views);
+            let views_val = match &video.views {
+                serde_json::Value::Number(n) => n.as_u64().unwrap_or(0),
+                serde_json::Value::String(s) => s.parse().unwrap_or(0),
+                _ => 0,
+            };
+            let views_str = format_views(views_val);
 
-            // Build the footer
             let footer = format!(
-                "🎌 eporner • ⏱️ {} • 👁️ {} views",
+                "🎌 JAV • ⏱️ {} • 👁️ {} views",
                 video.duration, views_str
             );
 
             let play_url = format!(
                 "{}/play?url={}&source=jav&title={}",
                 data.config.public_url,
-                crate::web::encode_hex(&video.page_url),
+                crate::web::encode_hex(&video.url),
                 url::form_urlencoded::byte_serialize(video.title.as_bytes()).collect::<String>()
             );
 
-            let discord_stream_url = if !video.mp4_url.is_empty() {
-                format!(
-                    "{}/stream/video.mp4?url={}",
-                    data.config.public_url,
-                    crate::web::encode_hex(&video.mp4_url)
-                )
-            } else {
-                play_url.clone()
-            };
-
-            let embed = serenity::CreateEmbed::new()
+            let mut embed = serenity::CreateEmbed::new()
                 .title(&video.title)
-                .url(&video.page_url)
+                .url(&video.url)
                 .description(format!("🌐 **[▶️ Watch in Web Stream Player]({})**", play_url))
                 .color(0xFF3366) // Hot pink for JAV
                 .footer(serenity::CreateEmbedFooter::new(footer));
 
-            // Post proxied MP4 URL as message content so Discord renders
-            // an inline video player with audio, or fallback to the Web Stream Player!
-            let content = if !video.mp4_url.is_empty() {
-                format!("🎥 **{}**\n{}", video.title, discord_stream_url)
-            } else {
-                format!("🎥 **{}**\n[▶️ Click to Watch]({})", video.title, play_url)
-            };
-            let mut msg_builder = serenity::CreateMessage::new().content(&content);
-
-            // Only attach the embed if we have a thumbnail
-            if !video.thumb_url.is_empty() {
-                msg_builder = msg_builder.embed(embed.image(&video.thumb_url));
-            } else {
-                msg_builder = msg_builder.embed(embed);
+            if !video.default_thumb.is_empty() {
+                embed = embed.image(&video.default_thumb);
             }
 
-            match channel.send_message(http, msg_builder).await {
+            let content = format!("🎌 **[{}]({})**", video.title, video.url);
+            let msg = serenity::CreateMessage::new()
+                .content(&content)
+                .embed(embed);
+
+            match channel.send_message(http, msg).await {
                 Ok(_) => {
                     info!("🎌 Posted JAV video {} to guild {}", video.id, cfg.guild_id);
                     total += 1;
@@ -178,21 +176,18 @@ async fn post_videos(
                     error!("Failed to post JAV video to channel {}: {}", channel_id_str, e);
                 }
             }
-
-            tokio::time::sleep(Duration::from_millis(750)).await;
         }
     }
 
     Ok(total)
 }
 
-fn format_views(views: &str) -> String {
-    let n: u64 = views.parse().unwrap_or(0);
-    if n >= 1_000_000 {
-        format!("{:.1}M", n as f64 / 1_000_000.0)
-    } else if n >= 1_000 {
-        format!("{:.0}K", n as f64 / 1_000.0)
+fn format_views(v: u64) -> String {
+    if v >= 1_000_000 {
+        format!("{:.1}M", v as f64 / 1_000_000.0)
+    } else if v >= 1_000 {
+        format!("{:.1}K", v as f64 / 1_000.0)
     } else {
-        views.to_string()
+        v.to_string()
     }
 }

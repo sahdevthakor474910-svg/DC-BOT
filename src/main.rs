@@ -529,15 +529,13 @@ mod tests {
     use super::*;
 
     #[tokio::test]
-    #[ignore = "eporner.com blocks sandbox/CI IPs via Cloudflare; works from real servers"]
-    async fn test_jav_eporner_search() {
-        // JAV now uses eporner.com — searches for "japanese uncensored" via free Webmasters API
-        let client = jav::client::EpornerClient::new().unwrap();
-        let results = client.search("japanese uncensored", 3, 1).await;
-        assert!(results.is_ok(), "Failed to search eporner: {:?}", results.err());
+    async fn test_jav_search() {
+        let client = jav::client::JavClient::new().unwrap();
+        let results = client.fetch_jav_videos("japanese uncensored", 3, 1).await;
+        assert!(results.is_ok(), "Failed to search JAV: {:?}", results.err());
         let results = results.unwrap();
-        println!("eporner search results: {:?}", results.iter().map(|v| &v.title).collect::<Vec<_>>());
-        assert!(!results.is_empty(), "eporner search should return results");
+        println!("JAV search results: {:?}", results.iter().map(|v| &v.title).collect::<Vec<_>>());
+        assert!(!results.is_empty(), "JAV search should return results");
     }
 
     #[tokio::test]

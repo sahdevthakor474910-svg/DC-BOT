@@ -28,7 +28,7 @@ pub async fn setup(
     #[description = "🔞 NSFW channel — must be Age-Restricted! (r/nsfw, r/gonewild, r/rule34, r/hentai, r/porn)"]
     nsfw: Option<serenity::GuildChannel>,
 
-    #[description = "🎌 JAV channel — must be Age-Restricted! (eporner: Japanese & Asian JAV — every 15 min)"]
+    #[description = "🎌 JAV channel — must be Age-Restricted! (Japanese & Asian JAV — every 15 min)"]
     jav: Option<serenity::GuildChannel>,
 
     #[description = "🔥 Porn Video channel — must be Age-Restricted! (RedTube: Brazzers, MILF etc — every 20 min)"]
@@ -125,7 +125,7 @@ pub async fn setup(
                 if auto_configured {
                     lines.push(format!("🎌  **JAV Videos** → {} [Automatically Set Age-Restricted]", ch.id.mention()));
                 } else {
-                    lines.push(format!("🎌  **JAV Videos** → {} *(eporner: Japanese & Asian JAV)*", ch.id.mention()));
+                    lines.push(format!("🎌  **JAV Videos** → {} *(Japanese & Asian JAV)*", ch.id.mention()));
                 }
             }
             Err(warn_msg) => {
