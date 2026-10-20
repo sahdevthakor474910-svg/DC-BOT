@@ -11,6 +11,7 @@ mod events;
 mod freegames;
 mod gali;
 mod hanime;
+mod indian;
 mod jav;
 mod javhd;
 mod news;
@@ -518,6 +519,13 @@ fn build_framework(bot_data: Data) -> poise::Framework<Data, Error> {
                 }
                 info!("⏱️  Porn Clips task spawned (every 10 min — RedGIFs short clips)");
 
+                {
+                    let d = bot_data.clone();
+                    let h = Arc::clone(&http);
+                    tokio::spawn(async move { indian::task::run(d, h).await });
+                }
+                info!("⏱️  Indian Viral MMS task spawned (every 20 min — RedTube API)");
+
                 Ok(bot_data)
             })
         })
@@ -536,6 +544,16 @@ mod tests {
         let results = results.unwrap();
         println!("JAV search results: {:?}", results.iter().map(|v| &v.title).collect::<Vec<_>>());
         assert!(!results.is_empty(), "JAV search should return results");
+    }
+
+    #[tokio::test]
+    async fn test_indian_search() {
+        let client = indian::client::IndianClient::new().unwrap();
+        let results = client.fetch_indian_videos("indian viral", 3, 1).await;
+        assert!(results.is_ok(), "Failed to search Indian MMS: {:?}", results.err());
+        let results = results.unwrap();
+        println!("Indian search results: {:?}", results.iter().map(|v| &v.title).collect::<Vec<_>>());
+        assert!(!results.is_empty(), "Indian search should return results");
     }
 
     #[tokio::test]

@@ -11,7 +11,7 @@ use crate::data::Data;
 pub struct PlayQuery {
     pub url: String,            // Hex-encoded page URL or direct video URL
     #[serde(default)]
-    pub source: String,         // "jav", "porn", "okxxx", "hentai", "javhd", "xnxx", "direct", "pornclips"
+    pub source: String,         // "jav", "indian", "porn", "okxxx", "hentai", "javhd", "xnxx", "direct", "pornclips"
     #[serde(default)]
     pub title: String,          // URL-encoded or raw title
 }
@@ -51,7 +51,7 @@ pub async fn play_handler(
         raw_url.clone()
     } else {
         match query.source.as_str() {
-            "jav" => {
+            "jav" | "indian" => {
                 let video_id = extract_redtube_id(&raw_url).unwrap_or_else(|| raw_url.clone());
                 match crate::porn::client::PornClient::new() {
                     Ok(client) => client.get_mp4_url(&video_id).await.unwrap_or_default(),
@@ -341,7 +341,7 @@ pub fn get_embed_url(source: &str, raw_url: &str) -> String {
                 raw_url.to_string()
             }
         }
-        "jav" => {
+        "jav" | "indian" => {
             if let Some(id) = extract_redtube_id(raw_url) {
                 format!("https://embed.redtube.com/?id={}", id)
             } else if let Some(id) = extract_eporner_id(raw_url) {

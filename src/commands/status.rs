@@ -79,6 +79,7 @@ pub async fn status(ctx: Context<'_>) -> Result<(), Error> {
         .field("🎌 JAVHD",             ch(cfg.javhd_channel_id.as_ref()),         true)
         .field("🔮 Hentai Videos",     ch(cfg.hanime_channel_id.as_ref()),        true)
         .field("🔥 Porn Videos",      ch(cfg.porn_video_channel_id.as_ref()),    true)
+        .field("🇮🇳 Indian Viral MMS", ch(cfg.indian_channel_id.as_ref()),        true)
         .field("🌶️ OK.XXX",           ch(cfg.okxxx_channel_id.as_ref()),         true)
         .field("🔥 XNXX",              ch(cfg.xnxx_channel_id.as_ref()),          true)
         // ── Settings & Features ──────────────────────────────────────────────
@@ -91,7 +92,7 @@ pub async fn status(ctx: Context<'_>) -> Result<(), Error> {
         .field("😄 Emojis",           emoji_list,                               true)
         .field("🎯 Reaction Targets", format!("• **Channels:** {}\n• **Users:** {}", ch_list, user_list), false)
         .footer(serenity::CreateEmbedFooter::new(
-            "Memes: configurable (default 60s) • News: 5min • Free Games: 15min • JAV: 15min • Porn: 20min • OK.XXX: 25min • CoC: 10min | /setup to change channels • /post to post now"
+            "Memes: 60s • News: 5min • Free Games: 15min • JAV: 15min • Indian: 20min • Porn: 20min • OK.XXX: 25min • CoC: 10min | /setup • /post"
         ));
 
     ctx.send(poise::CreateReply::default().embed(embed)).await?;

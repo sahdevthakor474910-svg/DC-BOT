@@ -93,6 +93,10 @@ pub async fn run_migrations(db: &SqlitePool) -> Result<()> {
     let m20 = include_str!("../../migrations/020_sassy_mode.sql");
     run_migration_alter(db, m20, "020").await?;
 
+    // 🇮🇳 Migration 021: Indian Viral MMS channel + seen_indian table
+    let m21 = include_str!("../../migrations/021_indian_channel.sql");
+    run_migration_alter(db, m21, "021").await?;
+
     info!("Database migrations complete");
     Ok(())
 }

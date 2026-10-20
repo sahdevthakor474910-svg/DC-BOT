@@ -12,6 +12,7 @@ use crate::okxxx;
 use crate::coc;
 use crate::xnxx;
 use crate::pornclips;
+use crate::indian;
 
 #[derive(poise::ChoiceParameter, Clone, Copy, Debug, PartialEq, Eq)]
 pub enum ContentType {
@@ -39,6 +40,8 @@ pub enum ContentType {
     Hanime,
     #[name = "Porn Clips"]
     Pornclips,
+    #[name = "Indian Viral MMS"]
+    Indian,
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -76,6 +79,7 @@ pub async fn post(
         let mut javhd_n = 0;
         let mut hanime_n = 0;
         let mut pornclips_n = 0;
+        let mut indian_n = 0;
 
         if let Some(cat) = category {
             match cat {
@@ -115,9 +119,12 @@ pub async fn post(
                 ContentType::Pornclips => {
                     pornclips_n = pornclips::task::run_once(&data, &http, force_val).await.unwrap_or_else(|e| { tracing::error!("Pornclips refresh: {:#}", e); 0 });
                 }
+                ContentType::Indian => {
+                    indian_n = indian::task::run_once(&data, &http, force_val).await.unwrap_or_else(|e| { tracing::error!("Indian refresh: {:#}", e); 0 });
+                }
             }
         } else {
-            let (meme_res, news_res, fg_res, jav_res, porn_res, okxxx_res, coc_res, twitter_res, xnxx_res, javhd_res, hanime_res, pornclips_res) = tokio::join!(
+            let (meme_res, news_res, fg_res, jav_res, porn_res, okxxx_res, coc_res, twitter_res, xnxx_res, javhd_res, hanime_res, pornclips_res, indian_res) = tokio::join!(
                 reddit::task::run_once(&data, &http, force_val),
                 news::task::run_once(&data, &http, force_val),
                 freegames::task::run_once(&data, &http, force_val),
@@ -130,6 +137,7 @@ pub async fn post(
                 crate::javhd::task::run_once(&data, &http, force_val),
                 crate::hanime::task::run_once(&data, &http, force_val),
                 pornclips::task::run_once(&data, &http, force_val),
+                indian::task::run_once(&data, &http, force_val),
             );
 
             meme_n = meme_res.unwrap_or_else(|e| { tracing::error!("Meme refresh: {:#}", e); 0 });
@@ -144,9 +152,10 @@ pub async fn post(
             javhd_n = javhd_res.unwrap_or_else(|e| { tracing::error!("JAVHD refresh: {:#}", e); 0 });
             hanime_n = hanime_res.unwrap_or_else(|e| { tracing::error!("Hanime refresh: {:#}", e); 0 });
             pornclips_n = pornclips_res.unwrap_or_else(|e| { tracing::error!("Pornclips refresh: {:#}", e); 0 });
+            indian_n = indian_res.unwrap_or_else(|e| { tracing::error!("Indian refresh: {:#}", e); 0 });
         }
 
-        let total = meme_n + news_n + fg_n + jav_n + porn_n + okxxx_n + coc_n + twitter_n + xnxx_n + javhd_n + hanime_n + pornclips_n;
+        let total = meme_n + news_n + fg_n + jav_n + porn_n + okxxx_n + coc_n + twitter_n + xnxx_n + javhd_n + hanime_n + pornclips_n + indian_n;
 
     if total == 0 {
         ctx.say(
@@ -196,6 +205,9 @@ pub async fn post(
     }
     if category.is_none() || category == Some(ContentType::Pornclips) {
         embed = embed.field("🎬 Porn Clips", pornclips_n.to_string(), true);
+    }
+    if category.is_none() || category == Some(ContentType::Indian) {
+        embed = embed.field("🇮🇳 Indian Viral MMS", indian_n.to_string(), true);
     }
 
     embed = embed.field("📬 Total", total.to_string(), true)

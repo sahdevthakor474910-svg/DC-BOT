@@ -32,6 +32,7 @@ pub struct GuildConfig {
     pub javhd_channel_id: Option<String>,         // added via migration 013 (JAVHD)
     pub hanime_channel_id: Option<String>,        // added via migration 014 (Hanime)
     pub pornclips_channel_id: Option<String>,     // added via migration 015 (Porn Clips)
+    pub indian_channel_id: Option<String>,        // added via migration 021 (Indian Viral MMS)
     pub auto_react_enabled: bool,
     pub gali_response_enabled: bool,              // added via migration 017 (Gali response)
     pub safe_mode_enabled: bool,                  // added via migration 018 (Safe mode)
@@ -66,6 +67,7 @@ impl Default for GuildConfig {
             javhd_channel_id: None,
             hanime_channel_id: None,
             pornclips_channel_id: None,
+            indian_channel_id: None,
             auto_react_enabled: true,
             gali_response_enabled: true,
             safe_mode_enabled: false,
@@ -94,7 +96,7 @@ pub async fn get_or_create_guild(db: &SqlitePool, guild_id: &str) -> Result<Guil
                 news_channel_id, free_games_channel_id, nsfw_channel_id, rule34_channel_id, \
                 porn_channel_id, hentai_channel_id, jav_channel_id, porn_video_channel_id, \
                 okxxx_channel_id, coc_channel_id, twitter_channel_id, twitter_global_channel_id, \
-                twitter_asia_channel_id, dmc_channel_id, xnxx_channel_id, javhd_channel_id, hanime_channel_id, pornclips_channel_id, auto_react_enabled, gali_response_enabled, safe_mode_enabled, bot_response_enabled, sassy_mode_enabled \
+                twitter_asia_channel_id, dmc_channel_id, xnxx_channel_id, javhd_channel_id, hanime_channel_id, pornclips_channel_id, indian_channel_id, auto_react_enabled, gali_response_enabled, safe_mode_enabled, bot_response_enabled, sassy_mode_enabled \
          FROM guild_config WHERE guild_id = ?",
     )
     .bind(guild_id)
@@ -126,6 +128,7 @@ pub async fn get_or_create_guild(db: &SqlitePool, guild_id: &str) -> Result<Guil
         javhd_channel_id: row.get("javhd_channel_id"),
         hanime_channel_id: row.get("hanime_channel_id"),
         pornclips_channel_id: row.get("pornclips_channel_id"),
+        indian_channel_id: row.get("indian_channel_id"),
         auto_react_enabled: row.get::<i64, _>("auto_react_enabled") != 0,
         gali_response_enabled: row.get::<i64, _>("gali_response_enabled") != 0,
         safe_mode_enabled: row.get::<i64, _>("safe_mode_enabled") != 0,
@@ -359,7 +362,7 @@ pub async fn get_all_guild_configs(db: &SqlitePool) -> Result<Vec<GuildConfig>> 
                 news_channel_id, free_games_channel_id, nsfw_channel_id, rule34_channel_id, \
                 porn_channel_id, hentai_channel_id, jav_channel_id, porn_video_channel_id, \
                 okxxx_channel_id, coc_channel_id, twitter_channel_id, twitter_global_channel_id, \
-                twitter_asia_channel_id, dmc_channel_id, xnxx_channel_id, javhd_channel_id, hanime_channel_id, pornclips_channel_id, auto_react_enabled, gali_response_enabled, safe_mode_enabled, bot_response_enabled, sassy_mode_enabled \
+                twitter_asia_channel_id, dmc_channel_id, xnxx_channel_id, javhd_channel_id, hanime_channel_id, pornclips_channel_id, indian_channel_id, auto_react_enabled, gali_response_enabled, safe_mode_enabled, bot_response_enabled, sassy_mode_enabled \
          FROM guild_config",
     )
     .fetch_all(db)
@@ -392,6 +395,7 @@ pub async fn get_all_guild_configs(db: &SqlitePool) -> Result<Vec<GuildConfig>> 
             javhd_channel_id: r.get("javhd_channel_id"),
             hanime_channel_id: r.get("hanime_channel_id"),
             pornclips_channel_id: r.get("pornclips_channel_id"),
+            indian_channel_id: r.get("indian_channel_id"),
             auto_react_enabled: r.get::<i64, _>("auto_react_enabled") != 0,
             gali_response_enabled: r.get::<i64, _>("gali_response_enabled") != 0,
             safe_mode_enabled: r.get::<i64, _>("safe_mode_enabled") != 0,
@@ -967,6 +971,50 @@ pub async fn prune_old_seen_pornclips(db: &SqlitePool, days: i64) -> Result<u64>
     Ok(result.rows_affected())
 }
 
+pub async fn set_indian_channel(db: &SqlitePool, guild_id: &str, channel_id: Option<&str>) -> Result<()> {
+    sqlx::query(
+        "INSERT INTO guild_config (guild_id, indian_channel_id) VALUES (?, ?) \
+         ON CONFLICT(guild_id) DO UPDATE SET indian_channel_id = excluded.indian_channel_id",
+    )
+    .bind(guild_id)
+    .bind(channel_id)
+    .execute(db)
+    .await?;
+    Ok(())
+}
+
+pub async fn is_indian_seen(db: &SqlitePool, guild_id: &str, video_id: &str) -> Result<bool> {
+    let row = sqlx::query(
+        "SELECT 1 FROM seen_indian WHERE guild_id = ? AND video_id = ? LIMIT 1",
+    )
+    .bind(guild_id)
+    .bind(video_id)
+    .fetch_optional(db)
+    .await?;
+    Ok(row.is_some())
+}
+
+pub async fn mark_indian_seen(db: &SqlitePool, guild_id: &str, video_id: &str) -> Result<()> {
+    sqlx::query(
+        "INSERT OR IGNORE INTO seen_indian (guild_id, video_id) VALUES (?, ?)",
+    )
+    .bind(guild_id)
+    .bind(video_id)
+    .execute(db)
+    .await?;
+    Ok(())
+}
+
+pub async fn prune_old_seen_indian(db: &SqlitePool, days: i64) -> Result<u64> {
+    let result = sqlx::query(
+        "DELETE FROM seen_indian WHERE seen_at < strftime('%s','now') - ? * 86400",
+    )
+    .bind(days)
+    .execute(db)
+    .await?;
+    Ok(result.rows_affected())
+}
+
 pub async fn set_hanime_channel(db: &SqlitePool, guild_id: &str, channel_id: Option<&str>) -> Result<()> {
     sqlx::query(
         "INSERT INTO guild_config (guild_id, hanime_channel_id) VALUES (?, ?) \
@@ -1056,6 +1104,8 @@ pub async fn clear_guild_seen_cache(db: &SqlitePool, guild_id: &str) -> Result<(
     sqlx::query("DELETE FROM seen_tweets WHERE guild_id = ?").bind(guild_id).execute(db).await?;
     sqlx::query("DELETE FROM seen_javhd WHERE guild_id = ?").bind(guild_id).execute(db).await?;
     sqlx::query("DELETE FROM seen_hanime WHERE guild_id = ?").bind(guild_id).execute(db).await?;
+    sqlx::query("DELETE FROM seen_pornclips WHERE guild_id = ?").bind(guild_id).execute(db).await?;
+    sqlx::query("DELETE FROM seen_indian WHERE guild_id = ?").bind(guild_id).execute(db).await?;
     Ok(())
 }
 
@@ -1312,8 +1362,8 @@ pub async fn import_guild_setup(db: &SqlitePool, guild_id: &str, mut backup: Gui
             porn_channel_id, hentai_channel_id, jav_channel_id,
             porn_video_channel_id, okxxx_channel_id, coc_channel_id,
             twitter_channel_id, twitter_global_channel_id, twitter_asia_channel_id,
-            dmc_channel_id, xnxx_channel_id, javhd_channel_id, hanime_channel_id, pornclips_channel_id, auto_react_enabled, gali_response_enabled, safe_mode_enabled, bot_response_enabled, sassy_mode_enabled
-        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)"
+            dmc_channel_id, xnxx_channel_id, javhd_channel_id, hanime_channel_id, pornclips_channel_id, indian_channel_id, auto_react_enabled, gali_response_enabled, safe_mode_enabled, bot_response_enabled, sassy_mode_enabled
+        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)"
     )
     .bind(&backup.config.guild_id)
     .bind(&backup.config.meme_channel_id)
@@ -1339,6 +1389,7 @@ pub async fn import_guild_setup(db: &SqlitePool, guild_id: &str, mut backup: Gui
     .bind(&backup.config.javhd_channel_id)
     .bind(&backup.config.hanime_channel_id)
     .bind(&backup.config.pornclips_channel_id)
+    .bind(&backup.config.indian_channel_id)
     .bind(backup.config.auto_react_enabled)
     .bind(backup.config.gali_response_enabled)
     .bind(backup.config.safe_mode_enabled)

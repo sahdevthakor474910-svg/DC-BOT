@@ -61,6 +61,9 @@ pub async fn unset(
 
     #[description = "Clear the 🎬 Porn Clips channel"]
     pornclips: Option<bool>,
+
+    #[description = "Clear the 🇮🇳 Indian Viral MMS channel"]
+    indian: Option<bool>,
 ) -> Result<(), Error> {
     let _ = ctx.defer().await; // prevent Discord 3-second timeout on slow DB queries
     let guild_id = ctx.guild_id().unwrap().to_string();
@@ -151,6 +154,11 @@ pub async fn unset(
     if pornclips.unwrap_or(false) {
         queries::set_pornclips_channel(db, &guild_id, None).await?;
         cleared.push("🎬 Porn Clips");
+    }
+
+    if indian.unwrap_or(false) {
+        queries::set_indian_channel(db, &guild_id, None).await?;
+        cleared.push("🇮🇳 Indian Viral MMS");
     }
 
     if cleared.is_empty() {
