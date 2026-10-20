@@ -167,17 +167,17 @@
             <div class="logo">🎥 DC<span>BOT</span> Player</div>
             <div class="title" id="videoTitle">{title}</div>
             <div class="header-actions">
-                <button id="btnHtml5" class="btn-mode active" onclick="switchToHtml5()">⚡ HTML5 Stream</button>
-                <button id="btnEmbed" class="btn-mode" onclick="switchToEmbed()">🎬 Embed Player</button>
+                <button id="btnEmbed" class="btn-mode active" onclick="switchToEmbed()">🎬 Embed Player</button>
+                <button id="btnHtml5" class="btn-mode" onclick="switchToHtml5()">⚡ HTML5 Stream</button>
                 <a id="btnDirect" href="{direct_url}" target="_blank" rel="noopener noreferrer" class="btn-direct">Direct Source ↗</a>
             </div>
         </div>
 
         <div class="player-wrapper">
-            <video id="webVideo" controls autoplay preload="auto" playsinline>
+            <video id="webVideo" controls autoplay preload="auto" playsinline style="display: none;">
                 Your browser does not support HTML5 video.
             </video>
-            <iframe id="embedFrame" src="" allowfullscreen allow="autoplay; encrypted-media; picture-in-picture"></iframe>
+            <iframe id="embedFrame" src="" allowfullscreen allow="autoplay; encrypted-media; picture-in-picture" style="display: block;"></iframe>
         </div>
 
         <div class="status-badge">
@@ -310,15 +310,15 @@
 
         function startPlayback() {
             fallbackCount = 0;
-            // Prefer proxy stream if available, otherwise directUrl, otherwise embed
-            if (streamUrl && streamUrl.length > 5) {
-                setStatus("⚡ Loading Fast Stream Proxy...");
-                playStream(streamUrl);
+            // Prioritize official embed player: 100% reliable playback with 0 MB server bandwidth consumed
+            if (embedUrl && embedUrl.length > 5) {
+                switchToEmbed();
             } else if (directUrl && directUrl.length > 5 && (directUrl.includes('.mp4') || directUrl.includes('.webm') || directUrl.includes('.m3u8'))) {
                 setStatus("⚡ Loading Direct Stream...");
                 playStream(directUrl);
-            } else if (embedUrl && embedUrl.length > 5) {
-                switchToEmbed();
+            } else if (streamUrl && streamUrl.length > 5) {
+                setStatus("⚡ Loading Stream Proxy...");
+                playStream(streamUrl);
             } else {
                 setStatus("⚠️ Video stream unavailable.", false);
             }

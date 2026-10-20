@@ -119,27 +119,9 @@ async fn post_videos(
             };
             let footer_text = format!("🔮 Hentai{}{}", views_str, likes_str);
 
-            let play_url = format!(
-                "{}/play?url={}&source=hentai&title={}",
-                data.config.public_url,
-                crate::web::encode_hex(&video.url),
-                url::form_urlencoded::byte_serialize(video.title.as_bytes()).collect::<String>()
-            );
-
-            let discord_stream_url = if !video.mp4_url.is_empty() {
-                format!(
-                    "{}/stream/video.mp4?url={}",
-                    data.config.public_url,
-                    crate::web::encode_hex(&video.mp4_url)
-                )
-            } else {
-                play_url.clone()
-            };
-
             let mut embed = serenity::CreateEmbed::new()
                 .title(&video.title)
                 .url(&video.url)
-                .description(format!("🌐 **[▶️ Watch in Web Stream Player]({})**", play_url))
                 .color(0x9B59B6)
                 .footer(serenity::CreateEmbedFooter::new(footer_text));
 
@@ -148,13 +130,8 @@ async fn post_videos(
                 embed = embed.image(&video.thumbnail);
             }
 
-            // Post proxied MP4 URL as content so Discord automatically creates the native video player,
-            // or link directly to the Web Stream Player!
-            let content = if !video.mp4_url.is_empty() {
-                format!("🎥 **{}**\n{}", video.title, discord_stream_url)
-            } else {
-                format!("🎥 **{}**\n[▶️ Click to Watch]({})", video.title, play_url)
-            };
+            // Direct link to video page
+            let content = format!("🔮 **[{}]({})**", video.title, video.url);
 
             let msg = serenity::CreateMessage::new()
                 .content(&content)

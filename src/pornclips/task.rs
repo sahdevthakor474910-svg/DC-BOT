@@ -89,8 +89,8 @@ async fn post_clips(
         let mut posted_this_tick = 0usize;
 
         for clip in clips {
-            // Cap at 3 clips per 10-minute tick per guild
-            if posted_this_tick >= 3 {
+            // Cap at 1 clip per 10-minute tick per guild to conserve free-tier bandwidth
+            if posted_this_tick >= 1 {
                 break;
             }
 
@@ -149,17 +149,9 @@ async fn post_clips(
 
             let page_url = format!("https://www.redgifs.com/watch/{}", clip.id);
 
-            let play_url = format!(
-                "{}/play?url={}&source=direct&title={}",
-                data.config.public_url,
-                crate::web::encode_hex(sd_url),
-                url::form_urlencoded::byte_serialize(title.as_bytes()).collect::<String>()
-            );
-
             let embed = serenity::CreateEmbed::new()
                 .title(&title)
                 .url(&page_url)
-                .description(format!("🌐 **[▶️ Watch in Web Stream Player]({})**", play_url))
                 .color(0xE91E63)
                 .footer(serenity::CreateEmbedFooter::new(footer));
 
