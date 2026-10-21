@@ -2,7 +2,7 @@ services:
   - type: web
     name: dc-bot
     runtime: docker
-    region: frankfurt
+    region: virginia
     plan: free
     envVars:
       - key: DATABASE_URL
