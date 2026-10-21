@@ -3,6 +3,8 @@ services:
     name: dc-bot
     runtime: docker
     region: virginia
+    branch: main
+    autoDeployTrigger: commit
     plan: free
     envVars:
       - key: DATABASE_URL
