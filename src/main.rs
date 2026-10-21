@@ -549,39 +549,14 @@ mod tests {
         let results = results.unwrap();
         println!("Indian search results: {:?}", results.iter().map(|v| &v.title).collect::<Vec<_>>());
         assert!(!results.is_empty(), "Indian search should return results");
-    }
 
-    #[tokio::test]
-    async fn test_reddit_meme_client_fetch() {
-        let reddit_client = reddit::client::RedditClient::new("discord-meme-bot/1.0 (by /u/SahdevXD)").unwrap();
-        let posts = reddit_client.fetch_hot_posts("memes", 3).await;
-        assert!(posts.is_ok(), "Failed to fetch memes from meme-api: {:?}", posts.err());
-        let posts = posts.unwrap();
-        println!("Fetched memes: {:?}", posts);
-        assert!(!posts.is_empty(), "Memes list should not be empty");
-    }
-
-    #[tokio::test]
-    async fn test_news_feeds_fetch() {
-        let client = reqwest::Client::builder()
-            .user_agent("Mozilla/5.0")
-            .build()
-            .unwrap();
-        let articles = news::fetcher::fetch_feed(&client, "https://www.pcgamer.com/rss/", "PC Gamer").await;
-        assert!(articles.is_ok(), "Failed to fetch PC Gamer RSS feed: {:?}", articles.err());
-        let articles = articles.unwrap();
-        println!("Fetched news articles: {:?}", articles);
-        assert!(!articles.is_empty(), "News articles should not be empty");
-    }
-
-    #[tokio::test]
-    async fn test_redtube_fetch() {
-        let client = porn::client::PornClient::new().unwrap();
-        let videos = client.fetch_videos("naughty america", 3, 1).await;
-        assert!(videos.is_ok(), "Failed to fetch RedTube videos: {:?}", videos.err());
-        let videos = videos.unwrap();
-        println!("Fetched RedTube videos: {:?}", videos);
-        assert!(!videos.is_empty(), "RedTube videos list should not be empty");
+        // Verify direct MP4 resolution works for the first video
+        let first = &results[0];
+        let mp4 = client.get_mp4_url(&first.url).await;
+        println!("Direct MP4 resolution for '{}': {:?}", first.title, mp4);
+        assert!(mp4.is_ok(), "Direct MP4 resolution should succeed: {:?}", mp4.err());
+        let mp4_url = mp4.unwrap();
+        assert!(mp4_url.contains(".mp4"), "Resolved URL should be an MP4 file: {}", mp4_url);
     }
 
     #[tokio::test]

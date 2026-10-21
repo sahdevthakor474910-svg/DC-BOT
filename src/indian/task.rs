@@ -64,7 +64,7 @@ pub async fn run(data: Data, http: Arc<serenity::Http>) {
 async fn tick(data: &Data, http: &Arc<serenity::Http>, force: bool) -> Result<usize> {
     let client = IndianClient::new()?;
     let videos = client.fetch_indian_videos("indian viral mms", 8, 1).await?;
-    post_videos(data, http, &videos, force).await
+    post_videos(data, http, &client, &videos, force).await
 }
 
 async fn tick_with_query(
@@ -76,12 +76,13 @@ async fn tick_with_query(
     force: bool,
 ) -> Result<usize> {
     let videos = client.fetch_indian_videos(query, 8, page).await?;
-    post_videos(data, http, &videos, force).await
+    post_videos(data, http, client, &videos, force).await
 }
 
 async fn post_videos(
     data: &Data,
     http: &Arc<serenity::Http>,
+    client: &IndianClient,
     videos: &[IndianVideo],
     force: bool,
 ) -> Result<usize> {
@@ -144,10 +145,7 @@ async fn post_videos(
             );
 
             // Attempt to resolve direct stream so Discord and Web Player play with 0 ISP blocks!
-            let maybe_mp4 = match crate::porn::client::PornClient::new() {
-                Ok(c) => c.get_mp4_url(&video.id).await.ok(),
-                Err(_) => None,
-            };
+            let maybe_mp4 = client.get_mp4_url(&video.url).await.ok();
 
             let play_url = if let Some(mp4) = &maybe_mp4 {
                 format!(

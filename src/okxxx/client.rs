@@ -47,6 +47,27 @@ impl OkXxxClient {
         parse_videos(&html)
     }
 
+    /// Search OK.XXX for a specific query (e.g. "indian", "desi", "mms").
+    pub async fn search_videos(&self, query: &str, page: u32) -> Result<Vec<OkXxxVideo>> {
+        let clean_query = query.replace(' ', "+");
+        let url = if page <= 1 {
+            format!("{}/search/{}/", BASE_URL, clean_query)
+        } else {
+            format!("{}/search/{}/{}/", BASE_URL, clean_query, page)
+        };
+
+        let html = self
+            .http
+            .get(&url)
+            .send()
+            .await?
+            .error_for_status()?
+            .text()
+            .await?;
+
+        parse_videos(&html)
+    }
+
     /// Convenience: fetch a rotating page (tick_index mod MAX_PAGE).
     pub async fn fetch_for_tick(&self, tick: u64) -> Result<Vec<OkXxxVideo>> {
         let page = (tick % MAX_PAGE as u64) as u32 + 1;
@@ -115,7 +136,7 @@ impl OkXxxClient {
 // HTML parser
 // ─────────────────────────────────────────────────────────────────────────────
 
-fn parse_videos(html: &str) -> Result<Vec<OkXxxVideo>> {
+pub fn parse_videos(html: &str) -> Result<Vec<OkXxxVideo>> {
     let document = Html::parse_document(html);
 
     // Each video card: <div class="... thumb-bl-video ...">

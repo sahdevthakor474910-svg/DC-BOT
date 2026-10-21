@@ -52,10 +52,17 @@ pub async fn play_handler(
     } else {
         match query.source.as_str() {
             "jav" | "indian" => {
-                let video_id = extract_redtube_id(&raw_url).unwrap_or_else(|| raw_url.clone());
-                match crate::porn::client::PornClient::new() {
-                    Ok(client) => client.get_mp4_url(&video_id).await.unwrap_or_default(),
-                    Err(_) => String::new(),
+                if raw_url.contains("ok.xxx") {
+                    match crate::okxxx::client::OkXxxClient::new() {
+                        Ok(client) => client.get_mp4_url(&raw_url).await.unwrap_or_default(),
+                        Err(_) => String::new(),
+                    }
+                } else {
+                    let video_id = extract_redtube_id(&raw_url).unwrap_or_else(|| raw_url.clone());
+                    match crate::porn::client::PornClient::new() {
+                        Ok(client) => client.get_mp4_url(&video_id).await.unwrap_or_default(),
+                        Err(_) => String::new(),
+                    }
                 }
             }
             "porn" => {
@@ -347,7 +354,13 @@ pub fn get_embed_url(source: &str, raw_url: &str) -> String {
             }
         }
         "jav" | "indian" => {
-            if let Some(id) = extract_redtube_id(raw_url) {
+            if raw_url.contains("ok.xxx") {
+                if let Some(id) = extract_okxxx_id(raw_url) {
+                    format!("https://ok.xxx/embed/{}", id)
+                } else {
+                    raw_url.to_string()
+                }
+            } else if let Some(id) = extract_redtube_id(raw_url) {
                 format!("https://embed.redtube.com/?id={}", id)
             } else if let Some(id) = extract_eporner_id(raw_url) {
                 format!("https://www.eporner.com/embed/{}/", id)
