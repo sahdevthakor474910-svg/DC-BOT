@@ -375,10 +375,12 @@
 
         let fallbackCount = 0;
         video.addEventListener('loadedmetadata', function() {
-            // Eporner anti-hotlink placeholder clip is exactly 61s (1:01).
-            // If the stream is 61s and an embed URL is available, auto-switch to official embed player!
-            if (Math.round(video.duration) === 61 && embedUrl && embedUrl.length > 5) {
-                console.warn("Anti-hotlink placeholder clip detected (1:01), auto-switching to official embed player...");
+            // Eporner anti-hotlink placeholder clip is 61s (1:01).
+            // Virginia age-verification PSA clip is 94s (1:34) or contains video ID 430658121.
+            // If placeholder clip is detected and an embed URL is available, auto-switch to embed player!
+            const dur = Math.round(video.duration);
+            if ((dur === 61 || dur === 94 || directUrl.includes("430658121")) && embedUrl && embedUrl.length > 5) {
+                console.warn("Anti-hotlink or age-verification clip detected (" + dur + "s), auto-switching to embed player...");
                 switchToEmbed();
             }
         });

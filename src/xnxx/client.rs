@@ -45,6 +45,26 @@ impl XnxxClient {
         self.fetch_videos(page).await
     }
 
+    /// Search videos by keyword (e.g. "indian mms").
+    /// URL pattern: https://www.xnxx.com/search/{query} or https://www.xnxx.com/search/{query}/{page}
+    pub async fn search_videos(&self, query: &str, page: u32) -> Result<Vec<XnxxVideo>> {
+        let clean_query = query.trim().replace(' ', "+");
+        let url = if page <= 1 {
+            format!("{}/search/{}", BASE_URL, clean_query)
+        } else {
+            format!("{}/search/{}/{}", BASE_URL, clean_query, page)
+        };
+        let html = self
+            .http
+            .get(&url)
+            .send()
+            .await?
+            .error_for_status()?
+            .text()
+            .await?;
+        parse_videos(&html)
+    }
+
     /// Fetch video page HTML and extract direct MP4 or video source URL.
     pub async fn get_mp4_url(&self, video_page_url: &str) -> Result<String> {
         let html = self

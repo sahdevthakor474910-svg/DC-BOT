@@ -561,11 +561,11 @@ mod tests {
             assert!(!lower.contains("bhabhi"), "Must not contain bhabhi: {}", v.title);
         }
 
-        // Test redtube ID extraction
+        // Test video ID extraction
         let first = &results[0];
-        let id_opt = web::extract_redtube_id(&first.url);
-        println!("Extracted Redtube ID for '{}': {:?}", first.url, id_opt);
-        assert!(id_opt.is_some(), "Should extract numeric Redtube ID");
+        let id_opt = web::extract_xnxx_id(&first.url).or_else(|| web::extract_redtube_id(&first.url));
+        println!("Extracted Video ID for '{}': {:?}", first.url, id_opt);
+        assert!(id_opt.is_some(), "Should extract video ID");
 
         // Attempt stream resolution (may be blocked locally by Indian ISP RST, but works in Virginia datacenter)
         let stream_res = client.get_mp4_url(&first.url).await;

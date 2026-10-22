@@ -1,5 +1,4 @@
 use anyhow::Result;
-use reqwest::Client;
 
 use super::models::IndianVideo;
 
@@ -26,43 +25,31 @@ pub const INDIAN_SEARCHES: &[&str] = &[
 ];
 
 pub struct IndianClient {
-    http: Client,
+    xnxx: crate::xnxx::client::XnxxClient,
 }
 
 impl IndianClient {
     pub fn new() -> Result<Self> {
-        let http = Client::builder()
-            .user_agent(
-                "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 \
-                 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36",
-            )
-            .timeout(std::time::Duration::from_secs(15))
-            .build()?;
-        Ok(Self { http })
+        let xnxx = crate::xnxx::client::XnxxClient::new()?;
+        Ok(Self { xnxx })
     }
 
-    /// Fetch Indian viral MMS videos from RedTube Webmasters API.
-    pub async fn fetch_indian_videos(&self, query: &str, count: u32, page: u32) -> Result<Vec<IndianVideo>> {
-        let fetch_count = count.max(20).to_string();
-        let resp = self
-            .http
-            .get("https://api.redtube.com/")
-            .query(&[
-                ("data", "redtube.Videos.searchVideos"),
-                ("output", "json"),
-                ("search", query),
-                ("thumbsize", "medium2"),
-                ("ordering", "most_recent"),
-                ("count", &fetch_count),
-                ("page", &page.to_string()),
-            ])
-            .send()
-            .await?
-            .error_for_status()?
-            .json::<super::models::IndianSearchResponse>()
-            .await?;
+    /// Fetch authentic Indian viral MMS videos from XNXX.
+    pub async fn fetch_indian_videos(&self, query: &str, _count: u32, page: u32) -> Result<Vec<IndianVideo>> {
+        let xnxx_videos = self.xnxx.search_videos(query, page).await?;
 
-        let all: Vec<IndianVideo> = resp.videos.into_iter().map(|w| w.video).collect();
+        let all: Vec<IndianVideo> = xnxx_videos
+            .into_iter()
+            .map(|x| IndianVideo {
+                id: x.video_id,
+                title: x.title,
+                duration: x.duration,
+                views: serde_json::Value::String(x.views),
+                default_thumb: x.thumbnail,
+                url: x.url,
+            })
+            .collect();
+
         let filtered: Vec<IndianVideo> = all
             .into_iter()
             .filter(|v| {
@@ -102,11 +89,20 @@ impl IndianClient {
         Ok(filtered)
     }
 
-    /// Resolve playable direct MP4 or HLS URL for an Indian video.
+    /// Resolve playable direct MP4 for an Indian video.
     pub async fn get_mp4_url(&self, video_url_or_id: &str) -> Result<String> {
-        let clean_id = video_url_or_id.trim_start_matches("ok_");
-        let porn_client = crate::porn::client::PornClient::new()?;
-        porn_client.get_mp4_url(clean_id).await
+        if video_url_or_id.contains("xnxx.com") || video_url_or_id.contains("video-") {
+            let full_url = if video_url_or_id.starts_with("http") {
+                video_url_or_id.to_string()
+            } else {
+                format!("https://www.xnxx.com/video-{}", video_url_or_id)
+            };
+            self.xnxx.get_mp4_url(&full_url).await
+        } else {
+            let clean_id = video_url_or_id.trim_start_matches("ok_");
+            let porn_client = crate::porn::client::PornClient::new()?;
+            porn_client.get_mp4_url(clean_id).await
+        }
     }
 }
 

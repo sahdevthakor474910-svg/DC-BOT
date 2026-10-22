@@ -132,12 +132,21 @@ async fn post_videos(
                 break;
             }
 
-            let views_val = match &video.views {
-                serde_json::Value::Number(n) => n.as_u64().unwrap_or(0),
-                serde_json::Value::String(s) => s.parse().unwrap_or(0),
-                _ => 0,
+            let views_str = match &video.views {
+                serde_json::Value::Number(n) => format_views(n.as_u64().unwrap_or(0)),
+                serde_json::Value::String(s) => {
+                    if s.ends_with('K') || s.ends_with('M') || s.ends_with('B') || s.ends_with('%') {
+                        s.clone()
+                    } else if let Ok(n) = s.parse::<u64>() {
+                        format_views(n)
+                    } else if !s.is_empty() {
+                        s.clone()
+                    } else {
+                        "N/A".to_string()
+                    }
+                }
+                _ => "N/A".to_string(),
             };
-            let views_str = format_views(views_val);
 
             let footer = format!(
                 "🇮🇳 Indian Viral MMS • ⏱️ {} • 👁️ {} views",

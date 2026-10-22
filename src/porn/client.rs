@@ -146,6 +146,10 @@ impl PornClient {
                 let mut best_mp4_any = None;
                 for cap in vu_re.captures_iter(snippet) {
                     let clean = clean_url(&cap[1]);
+                    // Reject Virginia age-verification PSA clip
+                    if clean.contains("430658121") {
+                        continue;
+                    }
                     if clean.starts_with("http") {
                         if clean.contains(".m3u8") {
                             if best_m3u8.is_none() {
@@ -182,6 +186,9 @@ impl PornClient {
             let mut mp4_any = None;
             for cap in any_url_re.captures_iter(html) {
                 let clean = clean_url(&cap[1]);
+                if clean.contains("430658121") {
+                    continue;
+                }
                 if clean.starts_with("http") {
                     if clean.contains(".m3u8") {
                         if hls_fallback.is_none() {
@@ -214,7 +221,9 @@ impl PornClient {
         if let Ok(source_re) = regex::Regex::new(r#"<source[^>]+src=["']([^"']+\.(?:mp4|m3u8)(?:\?[^"']*)?)["']"#) {
             if let Some(cap) = source_re.captures(html) {
                 let clean = clean_url(&cap[1]);
-                return Some(clean);
+                if !clean.contains("430658121") {
+                    return Some(clean);
+                }
             }
         }
 
@@ -224,12 +233,18 @@ impl PornClient {
                 let inner = &cap[1];
                 if let Ok(mp4_re) = regex::Regex::new(r#""([^"]+\.mp4[^"]*)""#) {
                     if let Some(m) = mp4_re.captures(inner) {
-                        return Some(clean_url(&m[1]));
+                        let clean = clean_url(&m[1]);
+                        if !clean.contains("430658121") {
+                            return Some(clean);
+                        }
                     }
                 }
                 if let Ok(m3u8_re) = regex::Regex::new(r#""([^"]+\.m3u8[^"]*)""#) {
                     if let Some(m) = m3u8_re.captures(inner) {
-                        return Some(clean_url(&m[1]));
+                        let clean = clean_url(&m[1]);
+                        if !clean.contains("430658121") {
+                            return Some(clean);
+                        }
                     }
                 }
             }
@@ -241,6 +256,9 @@ impl PornClient {
             let mut mp4_fallback = None;
             for cap in cdn_re.captures_iter(html) {
                 let clean = clean_url(&cap[1]);
+                if clean.contains("430658121") {
+                    continue;
+                }
                 if clean.starts_with("http") && !clean.contains("trailer") {
                     if clean.contains(".mp4") && mp4_fallback.is_none() {
                         mp4_fallback = Some(clean);
