@@ -122,6 +122,16 @@ pub async fn stream_handler(
     headers: HeaderMap,
     Query(query): Query<StreamQuery>,
 ) -> Response {
+    // 0. If a user opens /stream or /stream/video.mp4 directly in a browser tab,
+    // redirect them to the Web Player instead of dumping raw media bytes or 401 errors!
+    let is_browser_nav = headers.get("sec-fetch-dest").map_or(false, |v| v == "document")
+        || headers.get("accept").map_or(false, |a| a.to_str().unwrap_or("").contains("text/html"));
+
+    if is_browser_nav {
+        let redirect_url = format!("/play?url={}&source=indian", query.url);
+        return axum::response::Redirect::temporary(&redirect_url).into_response();
+    }
+
     // 1. Decode hex url
     let target_url = match decode_hex(&query.url) {
         Ok(u) => u,
@@ -149,7 +159,7 @@ pub async fn stream_handler(
         }
     }
 
-    // Add Referer, Origin, and Sec-Fetch headers matching target CDN/platform (must be same-origin to prevent anti-hotlink placeholder)
+    // Add Referer, Origin, Cookie, and Sec-Fetch headers matching target CDN/platform (must be same-origin to prevent anti-hotlink placeholder)
     if target_url.contains("eporner") {
         req_builder = req_builder
             .header("Referer", "https://www.eporner.com/")
@@ -160,6 +170,7 @@ pub async fn stream_handler(
         req_builder = req_builder
             .header("Referer", "https://www.redtube.com/")
             .header("Origin", "https://www.redtube.com")
+            .header("Cookie", "age_verified=1; RDT_AGE=1; has_visited=1; accessAgeDisclaimerPH=1; platform=pc")
             .header("Sec-Fetch-Site", "same-origin")
             .header("Sec-Fetch-Dest", "video");
     } else if target_url.contains("ok.xxx") {
@@ -202,6 +213,11 @@ pub async fn stream_handler(
             return (StatusCode::BAD_GATEWAY, format!("Upstream connection failed: {}", e)).into_response();
         }
     };
+
+    if upstream_res.status().as_u16() == 401 || upstream_res.status().as_u16() == 403 {
+        warn!("Upstream CDN rejected stream for URL {} with status {}", target_url, upstream_res.status());
+        return (StatusCode::NOT_FOUND, "Media stream expired or unauthorized by CDN").into_response();
+    }
 
     // 5. Intercept M3U8 playlists and rewrite all segment/child URLs so everything proxies through Virginia
     let is_m3u8 = target_url.contains(".m3u8") 
@@ -348,21 +364,17 @@ pub fn extract_eporner_id(url: &str) -> Option<String> {
 }
 
 pub fn extract_redtube_id(url: &str) -> Option<String> {
-    if !url.contains("http") && !url.contains('/') {
-        return Some(url.to_string());
+    let trimmed = url.trim();
+    if trimmed.chars().all(|c| c.is_ascii_digit()) && trimmed.len() >= 5 {
+        return Some(trimmed.to_string());
     }
     if let Ok(re) = regex::Regex::new(r"(?:redtube\.com/(?:video/)?|embed\.redtube\.com/\?id=|id=|\bid=)([0-9]{5,12})") {
-        if let Some(cap) = re.captures(url) {
+        if let Some(cap) = re.captures(trimmed) {
             return Some(cap[1].to_string());
         }
     }
     if let Ok(re) = regex::Regex::new(r"redtube\.com/([0-9]+)") {
-        if let Some(cap) = re.captures(url) {
-            return Some(cap[1].to_string());
-        }
-    }
-    if let Ok(re) = regex::Regex::new(r"([0-9]{6,10})") {
-        if let Some(cap) = re.captures(url) {
+        if let Some(cap) = re.captures(trimmed) {
             return Some(cap[1].to_string());
         }
     }
