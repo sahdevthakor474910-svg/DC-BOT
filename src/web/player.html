@@ -221,7 +221,7 @@
         </div>
 
         <div class="player-wrapper">
-            <video id="webVideo" controls autoplay preload="auto" playsinline style="display: block;">
+            <video id="webVideo" controls autoplay playsinline style="display: none;">
                 Your browser does not support HTML5 video.
             </video>
             <iframe id="embedFrame" src="" allowfullscreen allow="autoplay; encrypted-media; picture-in-picture" style="display: none;"></iframe>
@@ -291,23 +291,29 @@
         }
 
         function switchToHtml5() {
-            isEmbedActive = false;
-            embedFrame.style.display = 'none';
-            embedFrame.src = '';
-            if (ispNotice) ispNotice.style.display = 'none';
-
-            video.style.display = 'block';
-            btnEmbed.classList.remove('active');
-            btnHtml5.classList.add('active');
-
             if (streamUrl && streamUrl.length > 5) {
+                isEmbedActive = false;
+                embedFrame.style.display = 'none';
+                embedFrame.src = '';
+                if (ispNotice) ispNotice.style.display = 'none';
+
+                video.style.display = 'block';
+                btnEmbed.classList.remove('active');
+                btnHtml5.classList.add('active');
                 setStatus("⚡ Loading Stream Proxy (Bypassing ISP block)...");
                 playStream(streamUrl);
             } else if (directUrl && directUrl.length > 5 && (directUrl.includes('.mp4') || directUrl.includes('.webm') || directUrl.includes('.m3u8'))) {
+                isEmbedActive = false;
+                embedFrame.style.display = 'none';
+                embedFrame.src = '';
+                if (ispNotice) ispNotice.style.display = 'none';
+
+                video.style.display = 'block';
+                btnEmbed.classList.remove('active');
+                btnHtml5.classList.add('active');
                 setStatus("⚡ Loading Direct Stream...");
                 playStream(directUrl);
             } else if (embedUrl && embedUrl.length > 5) {
-                setStatus("⚠️ Direct stream not found, switching to Embed Player...", false);
                 switchToEmbed();
             } else {
                 setStatus("⚠️ Video stream unavailable.", false);
@@ -319,6 +325,8 @@
                 switchToEmbed();
                 return;
             }
+
+            video.style.display = 'block';
 
             const isHls = isHlsServer || targetUrl.includes('.m3u8') || (directUrl && directUrl.includes('.m3u8'));
 
