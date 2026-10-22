@@ -86,7 +86,10 @@ impl PornClient {
     }
 
     /// Scrape the Redtube embed page or video page to find the direct playable .mp4 / .m3u8 URL.
-    pub async fn get_mp4_url(&self, video_id: &str) -> Result<String> {
+    pub async fn get_mp4_url(&self, video_id_or_url: &str) -> Result<String> {
+        let video_id = crate::web::extract_redtube_id(video_id_or_url)
+            .unwrap_or_else(|| video_id_or_url.to_string());
+
         // Strategy A: Fetch official embed player page (embed.redtube.com/?id=...)
         // This has no age-gate modal, is open to webmasters, and contains the media stream definition.
         let embed_url = format!("https://embed.redtube.com/?id={}", video_id);
@@ -127,8 +130,8 @@ impl PornClient {
     }
 
     fn extract_stream_from_html(html: &str) -> Option<String> {
-        // 1. Try mediaDefinition JSON array
-        if let Ok(media_def_re) = regex::Regex::new(r#"mediaDefinition\s*:\s*(\[[^\]]+\])"#) {
+        // 1. Try mediaDefinitions JSON array (mediaDefinition: [...], mediaDefinitions = [...], "mediaDefinitions": [...])
+        if let Ok(media_def_re) = regex::Regex::new(r#"(?:mediaDefinitions?|"mediaDefinitions?")\s*[:=]\s*(\[[^\]]+\])"#) {
             if let Some(cap) = media_def_re.captures(html) {
                 if let Ok(val) = serde_json::from_str::<serde_json::Value>(&cap[1]) {
                     if let Some(arr) = val.as_array() {

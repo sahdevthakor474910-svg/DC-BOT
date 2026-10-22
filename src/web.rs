@@ -52,17 +52,10 @@ pub async fn play_handler(
     } else {
         match query.source.as_str() {
             "jav" | "indian" => {
-                if raw_url.contains("ok.xxx") {
-                    match crate::okxxx::client::OkXxxClient::new() {
-                        Ok(client) => client.get_mp4_url(&raw_url).await.unwrap_or_default(),
-                        Err(_) => String::new(),
-                    }
-                } else {
-                    let video_id = extract_redtube_id(&raw_url).unwrap_or_else(|| raw_url.clone());
-                    match crate::porn::client::PornClient::new() {
-                        Ok(client) => client.get_mp4_url(&video_id).await.unwrap_or_default(),
-                        Err(_) => String::new(),
-                    }
+                let video_id = extract_redtube_id(&raw_url).unwrap_or_else(|| raw_url.clone());
+                match crate::porn::client::PornClient::new() {
+                    Ok(client) => client.get_mp4_url(&video_id).await.unwrap_or_default(),
+                    Err(_) => String::new(),
                 }
             }
             "porn" => {
@@ -108,13 +101,16 @@ pub async fn play_handler(
         String::new()
     };
 
+    let is_hls = direct_mp4_url.contains(".m3u8");
+
     // 4. Load player.html template and inject values
     let template = include_str!("web/player.html");
     let html = template
         .replace("{title}", &query.title)
         .replace("{stream_url}", &stream_url)
         .replace("{direct_url}", &direct_mp4_url)
-        .replace("{embed_url}", &embed_url);
+        .replace("{embed_url}", &embed_url)
+        .replace("{is_hls}", if is_hls { "true" } else { "false" });
 
     // 5. Render HTML response
     Html(html).into_response()
@@ -207,11 +203,75 @@ pub async fn stream_handler(
         }
     };
 
-    // 5. Build response copying status
+    // 5. Intercept M3U8 playlists and rewrite all segment/child URLs so everything proxies through Virginia
+    let is_m3u8 = target_url.contains(".m3u8") 
+        || upstream_res.headers().get("content-type").map_or(false, |ct| {
+            ct.to_str().unwrap_or("").contains("mpegurl")
+        });
+
+    if is_m3u8 {
+        let base_url = url::Url::parse(&target_url).ok();
+        let body_bytes = match upstream_res.bytes().await {
+            Ok(b) => b,
+            Err(e) => return (StatusCode::BAD_GATEWAY, format!("Failed reading M3U8: {}", e)).into_response(),
+        };
+        let body_str = String::from_utf8_lossy(&body_bytes);
+
+        let mut rewritten = String::with_capacity(body_str.len() + 4096);
+        for line in body_str.lines() {
+            let trimmed = line.trim();
+            if trimmed.is_empty() {
+                rewritten.push('\n');
+                continue;
+            }
+            if trimmed.starts_with('#') {
+                if trimmed.starts_with("#EXT-X-KEY") && trimmed.contains("URI=\"") {
+                    if let Ok(key_re) = regex::Regex::new(r#"URI="([^"]+)""#) {
+                        let new_line = key_re.replace(trimmed, |caps: &regex::Captures| {
+                            let key_uri = &caps[1];
+                            let full_key_url = if key_uri.starts_with("http://") || key_uri.starts_with("https://") {
+                                key_uri.to_string()
+                            } else if let Some(base) = &base_url {
+                                base.join(key_uri).map(|u| u.to_string()).unwrap_or_else(|_| key_uri.to_string())
+                            } else {
+                                key_uri.to_string()
+                            };
+                            format!(r#"URI="/stream?url={}""#, encode_hex(&full_key_url))
+                        });
+                        rewritten.push_str(&new_line);
+                        rewritten.push('\n');
+                        continue;
+                    }
+                }
+                rewritten.push_str(line);
+                rewritten.push('\n');
+            } else {
+                let full_url = if trimmed.starts_with("http://") || trimmed.starts_with("https://") {
+                    trimmed.to_string()
+                } else if let Some(base) = &base_url {
+                    base.join(trimmed).map(|u| u.to_string()).unwrap_or_else(|_| trimmed.to_string())
+                } else {
+                    trimmed.to_string()
+                };
+                rewritten.push_str(&format!("/stream?url={}", encode_hex(&full_url)));
+                rewritten.push('\n');
+            }
+        }
+
+        return Response::builder()
+            .status(StatusCode::OK)
+            .header("content-type", "application/vnd.apple.mpegurl")
+            .header("access-control-allow-origin", "*")
+            .header("access-control-allow-headers", "*")
+            .body(axum::body::Body::from(rewritten))
+            .unwrap_or_else(|_| StatusCode::INTERNAL_SERVER_ERROR.into_response());
+    }
+
+    // 6. Build response copying status
     let status = StatusCode::from_u16(upstream_res.status().as_u16()).unwrap_or(StatusCode::OK);
     let mut response_builder = Response::builder().status(status);
 
-    // 6. Copy headers (Content-Type, Content-Length, Content-Range, Accept-Ranges)
+    // 7. Copy headers (Content-Type, Content-Length, Content-Range, Accept-Ranges)
     let upstream_headers = upstream_res.headers();
     let headers_to_forward = [
         "content-type",
@@ -231,11 +291,7 @@ pub async fn stream_handler(
             }
         }
         if headers_mut.get("content-type").is_none() {
-            if target_url.contains(".m3u8") {
-                headers_mut.insert("content-type", HeaderValue::from_static("application/vnd.apple.mpegurl"));
-            } else {
-                headers_mut.insert("content-type", HeaderValue::from_static("video/mp4"));
-            }
+            headers_mut.insert("content-type", HeaderValue::from_static("video/mp4"));
         }
         if headers_mut.get("accept-ranges").is_none() {
             headers_mut.insert("accept-ranges", HeaderValue::from_static("bytes"));
@@ -244,7 +300,7 @@ pub async fn stream_handler(
         headers_mut.insert("access-control-allow-headers", HeaderValue::from_static("*"));
     }
 
-    // 7. Stream the body
+    // 8. Stream the body
     let stream = upstream_res.bytes_stream();
     let body = axum::body::Body::from_stream(stream);
 

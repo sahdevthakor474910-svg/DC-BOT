@@ -254,6 +254,7 @@
         const streamUrl = "{stream_url}";
         const directUrl = "{direct_url}";
         const embedUrl  = "{embed_url}";
+        const isHlsServer = {is_hls};
 
         let hlsInstance = null;
         let isEmbedActive = false;
@@ -319,24 +320,39 @@
                 return;
             }
 
-            const isHls = targetUrl.includes('.m3u8');
+            const isHls = isHlsServer || targetUrl.includes('.m3u8') || (directUrl && directUrl.includes('.m3u8'));
 
             if (isHls && Hls.isSupported()) {
                 if (hlsInstance) hlsInstance.destroy();
                 hlsInstance = new Hls({
                     enableWorker: true,
-                    lowLatencyMode: true
+                    lowLatencyMode: true,
+                    maxBufferLength: 30,
+                    maxMaxBufferLength: 60
                 });
                 hlsInstance.loadSource(targetUrl);
                 hlsInstance.attachMedia(video);
                 hlsInstance.on(Hls.Events.MANIFEST_PARSED, function() {
                     video.play().catch(e => console.log("HLS autoplay prevented:", e));
-                    setStatus("🔄 Adaptive HLS Stream Playing");
+                    setStatus("⚡ Adaptive Stream Playing (Virginia US Proxy)");
                 });
                 hlsInstance.on(Hls.Events.ERROR, function(event, data) {
                     if (data.fatal) {
-                        console.warn("HLS fatal error, falling back to embed:", data);
-                        switchToEmbed();
+                        console.warn("HLS fatal error:", data);
+                        switch (data.type) {
+                            case Hls.ErrorTypes.NETWORK_ERROR:
+                                console.log("HLS network error, recovering...");
+                                hlsInstance.startLoad();
+                                break;
+                            case Hls.ErrorTypes.MEDIA_ERROR:
+                                console.log("HLS media error, recovering...");
+                                hlsInstance.recoverMediaError();
+                                break;
+                            default:
+                                console.warn("HLS unrecoverable, falling back to embed:", data);
+                                switchToEmbed();
+                                break;
+                        }
                     }
                 });
             } else if (video.canPlayType('application/vnd.apple.mpegurl') && isHls) {
@@ -349,7 +365,7 @@
                 video.src = targetUrl;
                 video.load();
                 video.play()
-                    .then(() => setStatus("⚡ Fast Video Stream Playing"))
+                    .then(() => setStatus("⚡ Fast Video Stream Playing (Virginia US Proxy)"))
                     .catch(err => {
                         console.log("Autoplay paused by browser policy. Click to play.", err);
                         setStatus("▶️ Click Play to start video");
