@@ -120,6 +120,25 @@ pub async fn play_handler(
                                     }
                                 }
                             }
+
+                            if stream.is_empty() {
+                                if let Ok(okxxx) = crate::okxxx::client::OkXxxClient::new() {
+                                    if let Ok(results) = okxxx.search_videos("indian viral mms", 1).await {
+                                        for v in results {
+                                            let lower = v.title.to_lowercase();
+                                            if !lower.contains("bhabhi") && !lower.contains("devar") && !lower.contains("saali") {
+                                                if let Ok(mp4) = okxxx.get_mp4_url(&v.url).await {
+                                                    if !mp4.is_empty() {
+                                                        stream = mp4;
+                                                        embed_url = format!("https://ok.xxx/embed/{}", v.video_id);
+                                                        break;
+                                                    }
+                                                }
+                                            }
+                                        }
+                                    }
+                                }
+                            }
                         }
                     }
                     stream
