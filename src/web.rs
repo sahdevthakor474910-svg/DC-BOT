@@ -108,7 +108,7 @@ pub async fn play_handler(
                                 if let Ok(results) = xnxx.search_videos("indian viral mms", 0).await {
                                     for v in results {
                                         let lower = v.title.to_lowercase();
-                                        if lower.contains("mms") && !lower.contains("bhabhi") && !lower.contains("devar") {
+                                        if !lower.contains("bhabhi") && !lower.contains("devar") && !lower.contains("saali") {
                                             if let Ok(mp4) = xnxx.get_mp4_url(&v.url).await {
                                                 if !mp4.is_empty() {
                                                     stream = mp4;

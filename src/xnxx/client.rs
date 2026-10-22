@@ -116,19 +116,21 @@ fn parse_videos(html: &str) -> Result<Vec<XnxxVideo>> {
     let document = Html::parse_document(html);
 
     // Each video card: <div class="thumb-block">
-    let card_sel  = Selector::parse("div.thumb-block").unwrap();
-    // Link + title inside card
-    let link_sel  = Selector::parse("p.metadata > a").unwrap();
+    let card_sel = Selector::parse("div.thumb-block").unwrap();
+    // Link + title inside card: <p class="title"><a href="..." title="..."> or <div class="thumb"><a href="...">
+    let link_sel = Selector::parse("p.title a, div.thumb-under a, div.thumb a, a[href*='/video-']").unwrap();
     // Thumbnail — xnxx uses data-src for lazy loading
-    let img_sel   = Selector::parse("img").unwrap();
+    let img_sel  = Selector::parse("img").unwrap();
     // Metadata spans (duration, views etc.)
-    let meta_sel  = Selector::parse("p.metadata").unwrap();
+    let meta_sel = Selector::parse("p.metadata").unwrap();
 
     let mut videos = Vec::new();
 
     for card in document.select(&card_sel) {
         // ── Link + title ───────────────────────────────────────────────────
-        let link_el = card.select(&link_sel).next();
+        let link_el = card.select(&link_sel).find(|a| {
+            a.value().attr("href").map_or(false, |h| h.contains("/video-") || h.contains("/video"))
+        });
         let href = match link_el.and_then(|a| a.value().attr("href")) {
             Some(h) if !h.is_empty() => h,
             _ => continue,
@@ -137,7 +139,7 @@ fn parse_videos(html: &str) -> Result<Vec<XnxxVideo>> {
         let title = if let Some(t) = link_el.and_then(|a| a.value().attr("title")) {
             t.trim().to_string()
         } else {
-            link_el.map(|a| a.inner_html().trim().to_string()).unwrap_or_default()
+            link_el.map(|a| a.text().collect::<Vec<_>>().join(" ").trim().to_string()).unwrap_or_default()
         };
 
         if title.is_empty() {
@@ -219,6 +221,40 @@ fn parse_videos(html: &str) -> Result<Vec<XnxxVideo>> {
             duration,
             views,
         });
+    }
+
+    if videos.is_empty() {
+        // Fallback regex matching standard XNXX search cards:
+        // <p class="title"><a href="([^"]+)" title="([^"]+)"
+        if let Ok(re) = regex::Regex::new(r#"<p[^>]*class="title"[^>]*>\s*<a\s+href="([^"]+)"(?:\s+title="([^"]+)")?[^>]*>(?:([^<]+)</a>)?"#) {
+            for cap in re.captures_iter(html) {
+                let href = cap.get(1).map(|m| m.as_str()).unwrap_or("");
+                let title = cap.get(2).or_else(|| cap.get(3)).map(|m| m.as_str()).unwrap_or("").trim();
+                if href.is_empty() || title.is_empty() {
+                    continue;
+                }
+                let video_id = href
+                    .split('/')
+                    .find_map(|seg| {
+                        if seg.starts_with("video-") {
+                            Some(seg.trim_start_matches("video-").to_string())
+                        } else {
+                            None
+                        }
+                    })
+                    .unwrap_or_else(|| href.trim_matches('/').split('/').last().unwrap_or_default().to_string());
+                if !video_id.is_empty() {
+                    videos.push(XnxxVideo {
+                        video_id,
+                        title: title.to_string(),
+                        url: format!("{}{}", BASE_URL, href),
+                        thumbnail: String::new(),
+                        duration: String::new(),
+                        views: String::new(),
+                    });
+                }
+            }
+        }
     }
 
     Ok(videos)
