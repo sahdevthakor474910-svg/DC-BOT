@@ -153,7 +153,7 @@ async fn post_videos(
 
             let mut embed = serenity::CreateEmbed::new()
                 .title(&video.title)
-                .url(&video.url)
+                .url(&play_url)
                 .description(format!("🌐 **[▶️ Watch in Web Stream Player]({})**", play_url))
                 .color(0xFF9933) // Saffron / Indian Orange
                 .footer(serenity::CreateEmbedFooter::new(footer));
@@ -162,7 +162,7 @@ async fn post_videos(
                 embed = embed.image(&video.default_thumb);
             }
 
-            let content = format!("🇮🇳 **[{}]({})**", video.title, video.url);
+            let content = format!("🇮🇳 **[{}]({})**", video.title, play_url);
             let msg = serenity::CreateMessage::new()
                 .content(&content)
                 .embed(embed);

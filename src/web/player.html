@@ -389,6 +389,11 @@
                 fallbackCount++;
                 setStatus("🔄 Retrying stream directly from CDN source...");
                 playStream(directUrl);
+            } else if (fallbackCount <= 1 && embedUrl && embedUrl.length > 5) {
+                fallbackCount++;
+                console.log("Stream playback failed, auto-switching to embed player...");
+                setStatus("🎬 Switching to official embed player...");
+                switchToEmbed();
             } else {
                 console.log("Stream playback error encountered");
                 setStatus("⚠️ Stream playback interrupted. Click '⚡ HTML5 Stream' to retry or toggle 'Embed Player' above.", false);

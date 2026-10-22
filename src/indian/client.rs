@@ -68,7 +68,7 @@ impl IndianClient {
 
         let all: Vec<IndianVideo> = resp.videos.into_iter().map(|w| w.video).collect();
         let filtered: Vec<IndianVideo> = all
-            .iter()
+            .into_iter()
             .filter(|v| {
                 let lower = v.title.to_lowercase();
                 let is_unwanted = lower.contains("native american")
@@ -83,14 +83,9 @@ impl IndianClient {
                 }
                 INDIAN_KEYWORDS.iter().any(|k| lower.contains(k))
             })
-            .cloned()
             .collect();
 
-        if !filtered.is_empty() {
-            Ok(filtered)
-        } else {
-            Ok(all)
-        }
+        Ok(filtered)
     }
 
     /// Resolve playable direct MP4 or HLS URL for an Indian video.

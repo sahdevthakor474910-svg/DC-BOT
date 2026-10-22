@@ -130,72 +130,91 @@ impl PornClient {
     }
 
     fn extract_stream_from_html(html: &str) -> Option<String> {
-        // 1. Try mediaDefinitions JSON array (mediaDefinition: [...], mediaDefinitions = [...], "mediaDefinitions": [...])
-        if let Ok(media_def_re) = regex::Regex::new(r#"(?:mediaDefinitions?|"mediaDefinitions?")\s*[:=]\s*(\[[^\]]+\])"#) {
-            if let Some(cap) = media_def_re.captures(html) {
-                if let Ok(val) = serde_json::from_str::<serde_json::Value>(&cap[1]) {
-                    if let Some(arr) = val.as_array() {
-                        let mut best_mp4: Option<(u32, String)> = None;
-                        let mut best_hls: Option<String> = None;
-                        for item in arr {
-                            let video_url_val = item.get("videoUrl").and_then(|v| v.as_str()).unwrap_or_default();
-                            if video_url_val.is_empty() {
-                                continue;
-                            }
-                            let quality_str = item.get("quality").and_then(|v| v.as_str())
-                                .or_else(|| {
-                                    if video_url_val.contains("_720p") { Some("720") }
-                                    else if video_url_val.contains("_480p") { Some("480") }
-                                    else if video_url_val.contains("_360p") { Some("360") }
-                                    else { None }
-                                })
-                                .unwrap_or("0");
-                            let quality: u32 = quality_str.parse().unwrap_or(0);
+        let clean_url = |s: &str| -> String {
+            s.replace("&amp;", "&")
+                .replace(r"\u0026", "&")
+                .replace(r"\/", "/")
+                .replace(r"\", "")
+        };
 
-                            let du = video_url_val.to_string();
-                            if du.contains("m3u8") {
-                                if best_hls.is_none() {
-                                    best_hls = Some(du);
-                                }
-                            } else if quality <= 720 {
-                                if best_mp4.as_ref().map_or(true, |(q, _)| quality > *q || *q == 0) {
-                                    best_mp4 = Some((quality, du));
+        // 1. Scan for mediaDefinitions block and extract direct videoUrl values
+        if let Some(pos) = html.find("mediaDefinition") {
+            let snippet = &html[pos..std::cmp::min(pos + 16384, html.len())];
+            if let Ok(vu_re) = regex::Regex::new(r#"(?:"videoUrl"|videoUrl)\s*[:=]\s*["']([^"']+)["']"#) {
+                let mut best_m3u8 = None;
+                let mut best_mp4_high = None;
+                let mut best_mp4_any = None;
+                for cap in vu_re.captures_iter(snippet) {
+                    let clean = clean_url(&cap[1]);
+                    if clean.starts_with("http") {
+                        if clean.contains(".m3u8") {
+                            if best_m3u8.is_none() {
+                                best_m3u8 = Some(clean);
+                            }
+                        } else if clean.contains(".mp4") && !clean.contains("trailer") {
+                            if clean.contains("720") || clean.contains("480") || clean.contains("1080") {
+                                if best_mp4_high.is_none() {
+                                    best_mp4_high = Some(clean.clone());
                                 }
                             }
-                        }
-                        if let Some((_, u)) = best_mp4 {
-                            return Some(u);
-                        }
-                        if let Some(u) = best_hls {
-                            return Some(u);
+                            if best_mp4_any.is_none() {
+                                best_mp4_any = Some(clean);
+                            }
                         }
                     }
+                }
+                if let Some(u) = best_mp4_high {
+                    return Some(u);
+                }
+                if let Some(u) = best_mp4_any {
+                    return Some(u);
+                }
+                if let Some(u) = best_m3u8 {
+                    return Some(u);
                 }
             }
         }
 
-        // 2. Try HTML <source> tag
-        if let Ok(source_re) = regex::Regex::new(r#"<source[^>]+src=["']([^"']+\.(?:mp4|m3u8)(?:\?[^"']*)?)["']"#) {
-            if let Some(cap) = source_re.captures(html) {
-                return Some(cap[1].to_string());
-            }
-        }
-
-        // 3. Try "videoUrl":"https://..."
-        if let Ok(any_url_re) = regex::Regex::new(r#""videoUrl"\s*:\s*"([^"]+)""#) {
+        // 2. Scan entire page for any videoUrl property (quoted or unquoted)
+        if let Ok(any_url_re) = regex::Regex::new(r#"(?:"videoUrl"|videoUrl|"video_url"|video_url)\s*[:=]\s*["']([^"']+)["']"#) {
             let mut hls_fallback = None;
+            let mut mp4_high = None;
+            let mut mp4_any = None;
             for cap in any_url_re.captures_iter(html) {
-                let u = cap[1].replace("\\/", "/");
-                if u.starts_with("http") {
-                    if u.contains(".mp4") {
-                        return Some(u);
-                    } else if u.contains(".m3u8") && hls_fallback.is_none() {
-                        hls_fallback = Some(u);
+                let clean = clean_url(&cap[1]);
+                if clean.starts_with("http") {
+                    if clean.contains(".m3u8") {
+                        if hls_fallback.is_none() {
+                            hls_fallback = Some(clean);
+                        }
+                    } else if clean.contains(".mp4") && !clean.contains("trailer") {
+                        if clean.contains("720") || clean.contains("480") || clean.contains("1080") {
+                            if mp4_high.is_none() {
+                                mp4_high = Some(clean.clone());
+                            }
+                        }
+                        if mp4_any.is_none() {
+                            mp4_any = Some(clean);
+                        }
                     }
                 }
+            }
+            if let Some(u) = mp4_high {
+                return Some(u);
+            }
+            if let Some(u) = mp4_any {
+                return Some(u);
             }
             if let Some(u) = hls_fallback {
                 return Some(u);
+            }
+        }
+
+        // 3. Try HTML <source> tag
+        if let Ok(source_re) = regex::Regex::new(r#"<source[^>]+src=["']([^"']+\.(?:mp4|m3u8)(?:\?[^"']*)?)["']"#) {
+            if let Some(cap) = source_re.captures(html) {
+                let clean = clean_url(&cap[1]);
+                return Some(clean);
             }
         }
 
@@ -205,29 +224,33 @@ impl PornClient {
                 let inner = &cap[1];
                 if let Ok(mp4_re) = regex::Regex::new(r#""([^"]+\.mp4[^"]*)""#) {
                     if let Some(m) = mp4_re.captures(inner) {
-                        return Some(m[1].to_string().replace("\\/", "/"));
+                        return Some(clean_url(&m[1]));
                     }
                 }
                 if let Ok(m3u8_re) = regex::Regex::new(r#""([^"]+\.m3u8[^"]*)""#) {
                     if let Some(m) = m3u8_re.captures(inner) {
-                        return Some(m[1].to_string().replace("\\/", "/"));
+                        return Some(clean_url(&m[1]));
                     }
                 }
             }
         }
 
-        // 5. Broad regex scan for any MP4 or M3U8 CDN URL
-        if let Ok(broad_re) = regex::Regex::new(r#"(https?:\\?/\\?/[^"'\s]+?\.(?:mp4|m3u8)(?:\?[^"'\s<>]*)?)"#) {
+        // 5. Scan for any MP4 or M3U8 CDN URL
+        if let Ok(cdn_re) = regex::Regex::new(r#"(https?:\\?/\\?/[^"'\s]+?\.(?:mp4|m3u8)(?:\?[^"'\s<>]*)?)"#) {
             let mut hls_fallback = None;
-            for cap in broad_re.captures_iter(html) {
-                let clean = cap[1].replace(r"\u0026", "&").replace(r"\/", "/").replace(r"\", "");
-                if clean.starts_with("http") {
-                    if clean.contains(".mp4") {
-                        return Some(clean);
+            let mut mp4_fallback = None;
+            for cap in cdn_re.captures_iter(html) {
+                let clean = clean_url(&cap[1]);
+                if clean.starts_with("http") && !clean.contains("trailer") {
+                    if clean.contains(".mp4") && mp4_fallback.is_none() {
+                        mp4_fallback = Some(clean);
                     } else if clean.contains(".m3u8") && hls_fallback.is_none() {
                         hls_fallback = Some(clean);
                     }
                 }
+            }
+            if let Some(u) = mp4_fallback {
+                return Some(u);
             }
             if let Some(u) = hls_fallback {
                 return Some(u);

@@ -37,7 +37,7 @@ pub async fn play_handler(
 ) -> Response {
     // 1. Decode hex url to get target URL (can be page URL or already direct MP4)
     let raw_url = match decode_hex(&query.url) {
-        Ok(u) => u,
+        Ok(u) => u.replace("&amp;", "&"),
         Err(e) => return (StatusCode::BAD_REQUEST, format!("Invalid URL hex: {}", e)).into_response(),
     };
 
@@ -93,6 +93,8 @@ pub async fn play_handler(
         }
     };
 
+    let direct_mp4_url = direct_mp4_url.replace("&amp;", "&");
+
     // 3. Hex-encode the direct MP4 URL for the streaming proxy
     let stream_url = if !direct_mp4_url.is_empty() && direct_mp4_url.starts_with("http") {
         let proxy_url_hex = encode_hex(&direct_mp4_url);
@@ -134,7 +136,7 @@ pub async fn stream_handler(
 
     // 1. Decode hex url
     let target_url = match decode_hex(&query.url) {
-        Ok(u) => u,
+        Ok(u) => u.replace("&amp;", "&"),
         Err(e) => return (StatusCode::BAD_REQUEST, format!("Invalid URL: {}", e)).into_response(),
     };
 
@@ -159,50 +161,36 @@ pub async fn stream_handler(
         }
     }
 
-    // Add Referer, Origin, Cookie, and Sec-Fetch headers matching target CDN/platform (must be same-origin to prevent anti-hotlink placeholder)
+    // Add Referer, Origin, and Cookie headers matching target CDN/platform
     if target_url.contains("eporner") {
         req_builder = req_builder
             .header("Referer", "https://www.eporner.com/")
-            .header("Origin", "https://www.eporner.com")
-            .header("Sec-Fetch-Site", "same-origin")
-            .header("Sec-Fetch-Dest", "video");
+            .header("Origin", "https://www.eporner.com");
     } else if target_url.contains("redtube") || target_url.contains("rdtcdn") || target_url.contains("phncdn") || target_url.contains("pornhub") {
         req_builder = req_builder
             .header("Referer", "https://www.redtube.com/")
             .header("Origin", "https://www.redtube.com")
-            .header("Cookie", "age_verified=1; RDT_AGE=1; has_visited=1; accessAgeDisclaimerPH=1; platform=pc")
-            .header("Sec-Fetch-Site", "same-origin")
-            .header("Sec-Fetch-Dest", "video");
+            .header("Cookie", "age_verified=1; RDT_AGE=1; has_visited=1; accessAgeDisclaimerPH=1; platform=pc");
     } else if target_url.contains("ok.xxx") {
         req_builder = req_builder
             .header("Referer", "https://ok.xxx/")
-            .header("Origin", "https://ok.xxx")
-            .header("Sec-Fetch-Site", "same-origin")
-            .header("Sec-Fetch-Dest", "video");
+            .header("Origin", "https://ok.xxx");
     } else if target_url.contains("hentaigasm") || target_url.contains("hgasm") {
         req_builder = req_builder
             .header("Referer", "https://hentaigasm.com/")
-            .header("Origin", "https://hentaigasm.com")
-            .header("Sec-Fetch-Site", "same-origin")
-            .header("Sec-Fetch-Dest", "video");
+            .header("Origin", "https://hentaigasm.com");
     } else if target_url.contains("xnxx") {
         req_builder = req_builder
             .header("Referer", "https://www.xnxx.com/")
-            .header("Origin", "https://www.xnxx.com")
-            .header("Sec-Fetch-Site", "same-origin")
-            .header("Sec-Fetch-Dest", "video");
+            .header("Origin", "https://www.xnxx.com");
     } else if target_url.contains("javhd") {
         req_builder = req_builder
             .header("Referer", "https://javhd.com/")
-            .header("Origin", "https://javhd.com")
-            .header("Sec-Fetch-Site", "same-origin")
-            .header("Sec-Fetch-Dest", "video");
+            .header("Origin", "https://javhd.com");
     } else if target_url.contains("redgifs") {
         req_builder = req_builder
             .header("Referer", "https://www.redgifs.com/")
-            .header("Origin", "https://www.redgifs.com")
-            .header("Sec-Fetch-Site", "same-origin")
-            .header("Sec-Fetch-Dest", "video");
+            .header("Origin", "https://www.redgifs.com");
     }
 
     // 4. Send request to target media file
@@ -269,7 +257,8 @@ pub async fn stream_handler(
                 } else {
                     trimmed.to_string()
                 };
-                rewritten.push_str(&format!("/stream?url={}", encode_hex(&full_url)));
+                let clean_url = full_url.replace("&amp;", "&");
+                rewritten.push_str(&format!("/stream?url={}", encode_hex(&clean_url)));
                 rewritten.push('\n');
             }
         }
