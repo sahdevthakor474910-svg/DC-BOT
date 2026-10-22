@@ -64,7 +64,7 @@ pub async fn setup(
     #[description = "🎬 Porn Clips channel — must be Age-Restricted! (short reels — every 10 min)"]
     pornclips: Option<serenity::GuildChannel>,
 
-    #[description = "🇮🇳 Indian Viral MMS channel — must be Age-Restricted! (desi mms, viral bhabhi, leaks — every 20 min)"]
+    #[description = "🇮🇳 Indian Viral MMS channel — must be Age-Restricted! (desi mms, real leaked mms — every 20 min)"]
     indian: Option<serenity::GuildChannel>,
 ) -> Result<(), Error> {
     let _ = ctx.defer().await; // prevent Discord 3-second timeout on slow DB queries

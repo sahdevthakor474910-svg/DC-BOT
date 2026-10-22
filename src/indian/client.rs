@@ -3,30 +3,26 @@ use reqwest::Client;
 
 use super::models::IndianVideo;
 
-/// Curated Indian viral / MMS search queries rotated across ticks.
+/// Curated authentic Indian viral MMS search queries rotated across ticks.
 pub const INDIAN_SEARCHES: &[&str] = &[
-    "indian viral",
-    "indian mms",
-    "desi mms",
+    "viral mms",
     "indian viral mms",
-    "desi bhabhi mms",
-    "indian leaked mms",
-    "desi viral mms",
-    "indian college viral",
+    "indian mms viral",
+    "desi mms viral",
+    "indian mms video",
+    "college mms",
+    "real mms",
+    "leaked mms",
+    "homemade mms",
+    "indian mms leaked",
+    "desi mms leak",
+    "mms video",
+    "indian college mms",
     "desi scandal mms",
     "hindi viral mms",
-    "indian bhabhi viral",
     "mallu viral mms",
     "tamil viral mms",
     "punjabi viral mms",
-    "desi leak viral",
-];
-
-pub const INDIAN_KEYWORDS: &[&str] = &[
-    "indian", "desi", "bhabhi", "tamil", "telugu", "mallu", "kannada",
-    "hindi", "punjabi", "pakistani", "bengali", "marathi", "gujarati",
-    "mms", "chut", "devar", "saali", "aunty", "aunties", "chachi",
-    "viral", "leaked", "scandal", "colleg", "leak",
 ];
 
 pub struct IndianClient {
@@ -77,11 +73,29 @@ impl IndianClient {
                     || lower.contains("apache")
                     || lower.contains("navajo")
                     || lower.contains("cherokee")
-                    || lower.contains("feather");
+                    || lower.contains("feather")
+                    || lower.contains("swiss resort");
                 if is_unwanted {
                     return false;
                 }
-                INDIAN_KEYWORDS.iter().any(|k| lower.contains(k))
+
+                // Strictly remove bhabhi and family roleplay scripted tags per user request
+                let is_bhabhi_or_scripted = lower.contains("bhabhi")
+                    || lower.contains("bhabi")
+                    || lower.contains("devar")
+                    || lower.contains("saali")
+                    || lower.contains("sali ")
+                    || lower.contains("chachi")
+                    || lower.contains("sasur")
+                    || lower.contains("bahu")
+                    || lower.contains("jija")
+                    || lower.contains("step");
+                if is_bhabhi_or_scripted {
+                    return false;
+                }
+
+                // Strictly require MMS in title
+                lower.contains("mms")
             })
             .collect();
 

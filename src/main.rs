@@ -544,7 +544,7 @@ mod tests {
     #[tokio::test]
     async fn test_indian_search() {
         let client = indian::client::IndianClient::new().unwrap();
-        let results = client.fetch_indian_videos("indian viral", 5, 1).await;
+        let results = client.fetch_indian_videos("indian viral mms", 5, 1).await;
         assert!(results.is_ok(), "Failed to search Indian MMS: {:?}", results.err());
         let results = results.unwrap();
         println!("Indian MMS search results (count: {}):", results.len());
@@ -553,10 +553,12 @@ mod tests {
         }
         assert!(!results.is_empty(), "Indian search should return results");
 
-        // Verify all returned videos match authentic Indian keywords
+        // Verify all returned videos are strictly authentic MMS without bhabhi
         for v in &results {
             let lower = v.title.to_lowercase();
             assert!(!lower.contains("native american"), "Should not contain Native American: {}", v.title);
+            assert!(lower.contains("mms"), "Must contain MMS: {}", v.title);
+            assert!(!lower.contains("bhabhi"), "Must not contain bhabhi: {}", v.title);
         }
 
         // Test redtube ID extraction
