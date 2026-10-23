@@ -331,6 +331,20 @@ pub async fn stream_handler(
         return axum::response::Redirect::temporary(&redirect_url).into_response();
     }
 
+    // Block automated crawlers (Discordbot, Twitterbot, etc.) from draining proxy bandwidth
+    if let Some(ua) = headers.get("user-agent").and_then(|u| u.to_str().ok()) {
+        let ua_lower = ua.to_lowercase();
+        if ua_lower.contains("discordbot")
+            || ua_lower.contains("twitterbot")
+            || ua_lower.contains("facebookexternalhit")
+            || ua_lower.contains("slackbot")
+            || ua_lower.contains("telegrambot")
+            || ua_lower.contains("whatsapp")
+        {
+            return (StatusCode::FORBIDDEN, "Bot crawler streaming disabled").into_response();
+        }
+    }
+
     // 1. Decode hex url
     let mut target_url = match decode_hex(&query.url) {
         Ok(u) => u.replace("&amp;", "&"),

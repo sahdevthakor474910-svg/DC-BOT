@@ -69,7 +69,6 @@ async fn post_videos(
     }
 
     let mut total = 0usize;
-    let client = XnxxClient::new().ok();
 
     for cfg in relevant {
         let channel_id_str = cfg.xnxx_channel_id.as_ref().unwrap();
@@ -114,29 +113,12 @@ async fn post_videos(
                 format!(" • ⏱️ {}", video.duration)
             };
 
-            // Attempt to resolve direct MP4 so Discord inline video player works!
-            let maybe_mp4 = if let Some(c) = &client {
-                c.get_mp4_url(&video.url).await.ok()
-            } else {
-                None
-            };
-
             let play_url = format!(
                 "{}/play?url={}&source=xnxx&title={}",
                 data.config.public_url,
                 crate::web::encode_hex(&video.url),
                 url::form_urlencoded::byte_serialize(video.title.as_bytes()).collect::<String>()
             );
-
-            let discord_stream_url = if let Some(mp4) = &maybe_mp4 {
-                format!(
-                    "{}/stream/video.mp4?url={}",
-                    data.config.public_url,
-                    crate::web::encode_hex(mp4)
-                )
-            } else {
-                play_url.clone()
-            };
 
             let embed = serenity::CreateEmbed::new()
                 .title(&video.title)
@@ -149,13 +131,7 @@ async fn post_videos(
                     duration_str, views_str
                 )));
 
-            // If direct MP4 resolved, post in content through our stream proxy so Discord renders native player,
-            // otherwise link directly to Web Stream Player!
-            let content = if maybe_mp4.is_some() {
-                format!("🎥 **{}**\n{}", video.title, discord_stream_url)
-            } else {
-                format!("🎥 **{}**\n[▶️ Click to Watch]({})", video.title, play_url)
-            };
+            let content = format!("🎥 **[{}]({})**", video.title, play_url);
 
             let msg = serenity::CreateMessage::new()
                 .content(&content)
