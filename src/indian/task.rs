@@ -12,7 +12,20 @@ use super::models::IndianVideo;
 
 /// Single tick exposed for `/admin force-refresh` and `/post`.
 pub async fn run_once(data: &Data, http: &Arc<serenity::Http>, force: bool) -> Result<usize> {
-    tick(data, http, force).await
+    let client = IndianClient::new()?;
+    for &query in INDIAN_SEARCHES.iter().take(8) {
+        for page in 1..=3 {
+            let videos = match client.fetch_indian_videos(query, 10, page).await {
+                Ok(v) if !v.is_empty() => v,
+                _ => continue,
+            };
+            let posted = post_videos(data, http, &client, &videos, force).await?;
+            if posted > 0 {
+                return Ok(posted);
+            }
+        }
+    }
+    Ok(0)
 }
 
 /// Single tick for a specific query and page.
@@ -29,7 +42,7 @@ pub async fn run_with_query(
 
 /// Background task — runs every 20 minutes.
 pub async fn run(data: Data, http: Arc<serenity::Http>) {
-    info!("🇮🇳 Indian Viral MMS task started (every 20 min — RedTube API)");
+    info!("🇮🇳 Indian Viral MMS task started (every 20 min)");
 
     let client = match IndianClient::new() {
         Ok(c) => c,
@@ -42,13 +55,19 @@ pub async fn run(data: Data, http: Arc<serenity::Http>) {
     let mut tick_idx: usize = 0;
 
     loop {
-        let query = INDIAN_SEARCHES[tick_idx % INDIAN_SEARCHES.len()];
-        let page = ((tick_idx / INDIAN_SEARCHES.len()) % 5 + 1) as u32;
+        // Try up to 3 queries each tick until videos are successfully posted
+        for offset in 0..3 {
+            let query = INDIAN_SEARCHES[(tick_idx + offset) % INDIAN_SEARCHES.len()];
+            let page = (((tick_idx + offset) / INDIAN_SEARCHES.len()) % 5 + 1) as u32;
 
-        match tick_with_query(&data, &http, &client, query, page, false).await {
-            Ok(n) if n > 0 => info!("🇮🇳 Posted {} Indian MMS video(s) for query '{}'", n, query),
-            Ok(_) => {}
-            Err(e) => error!("Indian MMS task error: {:#}", e),
+            match tick_with_query(&data, &http, &client, query, page, false).await {
+                Ok(n) if n > 0 => {
+                    info!("🇮🇳 Posted {} Indian MMS video(s) for query '{}'", n, query);
+                    break;
+                }
+                Ok(_) => {}
+                Err(e) => error!("Indian MMS task error for query '{}': {:#}", query, e),
+            }
         }
 
         tick_idx = tick_idx.wrapping_add(1);
@@ -63,8 +82,17 @@ pub async fn run(data: Data, http: Arc<serenity::Http>) {
 
 async fn tick(data: &Data, http: &Arc<serenity::Http>, force: bool) -> Result<usize> {
     let client = IndianClient::new()?;
-    let videos = client.fetch_indian_videos("indian viral mms", 8, 1).await?;
-    post_videos(data, http, &client, &videos, force).await
+    for &query in INDIAN_SEARCHES.iter().take(4) {
+        let videos = match client.fetch_indian_videos(query, 10, 1).await {
+            Ok(v) if !v.is_empty() => v,
+            _ => continue,
+        };
+        let posted = post_videos(data, http, &client, &videos, force).await?;
+        if posted > 0 {
+            return Ok(posted);
+        }
+    }
+    Ok(0)
 }
 
 async fn tick_with_query(
