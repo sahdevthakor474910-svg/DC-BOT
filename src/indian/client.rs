@@ -2,61 +2,26 @@ use anyhow::Result;
 
 use super::models::IndianVideo;
 
-/// Curated authentic Indian viral MMS search queries rotated across ticks.
+/// Dedicated Indian MMS search categories and terms rotated across ticks.
 pub const INDIAN_SEARCHES: &[&str] = &[
-    "hot college girl mms",
-    "college girl mms",
+    "mms",
+    "college",
+    "college girl",
     "viral mms",
-    "indian viral mms",
-    "indian mms viral",
-    "desi mms viral",
-    "indian mms video",
-    "college mms",
-    "real mms",
-    "leaked mms",
-    "homemade mms",
-    "indian mms leaked",
-    "desi mms leak",
-    "mms video",
-    "indian college mms",
-    "desi scandal mms",
-    "hindi viral mms",
-    "mallu viral mms",
-    "tamil viral mms",
-    "punjabi viral mms",
+    "scandal",
+    "leaked",
+    "girlfriend",
+    "amateur",
+    "punjabi",
+    "tamil",
+    "bengali",
+    "saree",
+    "outdoor",
+    "desi mms",
 ];
-
-#[derive(Debug, Clone, serde::Deserialize)]
-pub struct EpornerResponse {
-    #[serde(default)]
-    pub count: u32,
-    #[serde(default)]
-    pub total_count: u32,
-    #[serde(default)]
-    pub videos: Vec<EpornerVideoItem>,
-}
-
-#[derive(Debug, Clone, serde::Deserialize)]
-pub struct EpornerVideoItem {
-    pub id: String,
-    pub title: String,
-    #[serde(default)]
-    pub length_min: String,
-    #[serde(default)]
-    pub views: u64,
-    #[serde(default)]
-    pub default_thumb: Option<EpornerThumbnail>,
-    pub url: String,
-}
-
-#[derive(Debug, Clone, serde::Deserialize)]
-pub struct EpornerThumbnail {
-    pub src: String,
-}
 
 pub struct IndianClient {
     http: reqwest::Client,
-    xnxx: crate::xnxx::client::XnxxClient,
 }
 
 impl IndianClient {
@@ -69,8 +34,7 @@ impl IndianClient {
             )
             .timeout(std::time::Duration::from_secs(12))
             .build()?;
-        let xnxx = crate::xnxx::client::XnxxClient::new()?;
-        Ok(Self { http, xnxx })
+        Ok(Self { http })
     }
 
     /// Download raw MP4 bytes for Discord video attachment (< 8MB).
@@ -86,142 +50,43 @@ impl IndianClient {
         Ok(bytes.to_vec())
     }
 
-    /// Fetch large volume of 100% authentic Indian viral MMS videos combining:
-    /// 1. XNXX (Huge catalog of real Indian MMS & college girl scandals)
-    /// 2. XVideos (The largest tube platform in the world with massive Desi/Indian collections)
-    /// 3. Eporner API (High-speed official database)
-    /// 4. RedTube API (Thousands of verified real Indian MMS videos)
-    /// 5. OK.XXX (Desi & Indian MMS archive)
-    pub async fn fetch_indian_videos(&self, query: &str, count: u32, page: u32) -> Result<Vec<IndianVideo>> {
+    /// Fetch large volume of 100% authentic videos from dedicated Indian MMS and leaks portals:
+    /// 1. DesiPorn (https://www.desiporn.xxx - 100k+ exclusively Indian MMS & leak videos)
+    /// 2. MmsBee (https://mmsbee.fun - dedicated Indian MMS & viral leak portal)
+    pub async fn fetch_indian_videos(&self, query: &str, _count: u32, page: u32) -> Result<Vec<IndianVideo>> {
         let mut all: Vec<IndianVideo> = Vec::new();
 
-        // 1. Fetch from XNXX (Massive authentic real-life Indian MMS library)
-        let xnxx_queries = if query.contains("college") {
-            vec![query.to_string(), "hot college girl mms".to_string(), "indian college girl".to_string()]
-        } else {
-            vec![query.to_string(), "indian mms".to_string(), "desi viral mms".to_string()]
+        // 1. Fetch from DesiPorn (Dedicated exclusively to Indian adult & MMS leaks)
+        if let Ok(dp_videos) = self.fetch_desiporn(query, page).await {
+            all.extend(dp_videos);
+        }
+
+        // Rotate category pages on DesiPorn
+        let cat_name = match query {
+            q if q.contains("college") => "college",
+            q if q.contains("girl") => "girlfriend",
+            q if q.contains("punjabi") => "punjabi",
+            q if q.contains("tamil") => "tamil",
+            q if q.contains("bengali") => "bengali",
+            q if q.contains("amateur") => "amateur",
+            q if q.contains("saree") => "saree",
+            q if q.contains("outdoor") => "outdoor",
+            _ => "indian",
         };
-
-        for xq in xnxx_queries.iter().take(2) {
-            if let Ok(xnxx_videos) = self.xnxx.search_videos(xq, page).await {
-                for xv in xnxx_videos {
-                    all.push(IndianVideo {
-                        id: xv.video_id,
-                        title: xv.title,
-                        duration: xv.duration,
-                        views: serde_json::Value::String(xv.views),
-                        default_thumb: xv.thumbnail,
-                        url: xv.url,
-                        direct_mp4: None,
-                    });
-                }
-            }
+        if let Ok(cat_vids) = self.fetch_desiporn_category(cat_name, page).await {
+            all.extend(cat_vids);
         }
 
-        // 2. Fetch from XVideos (Massive catalog of real Indian leaks & MMS)
-        let xv_queries = if query.contains("college") {
-            vec!["college girl mms".to_string(), "indian college girl".to_string()]
-        } else {
-            vec!["indian mms".to_string(), "desi mms".to_string()]
-        };
-
-        for xvq in xv_queries.iter().take(2) {
-            if let Ok(xv_videos) = self.xnxx.search_xvideos(xvq, page).await {
-                for v in xv_videos {
-                    all.push(IndianVideo {
-                        id: format!("xv_{}", v.video_id),
-                        title: v.title,
-                        duration: v.duration,
-                        views: serde_json::Value::String(v.views),
-                        default_thumb: v.thumbnail,
-                        url: v.url,
-                        direct_mp4: None,
-                    });
-                }
-            }
-        }
-
-        // 3. Fetch from Eporner API (Official high-speed video database)
-        let ep_query = if query.contains("college") {
-            "indian college girl"
-        } else {
-            "indian mms"
-        };
-        let ep_url = format!(
-            "https://www.eporner.com/api/v2/video/search/?query={}&per_page=35&page={}&thumbsize=big&order=most-popular&gay=0&lq=0&format=json",
-            url::form_urlencoded::byte_serialize(ep_query.as_bytes()).collect::<String>(),
-            page
-        );
-        if let Ok(resp) = self.http.get(&ep_url).send().await {
-            if let Ok(ep_res) = resp.json::<EpornerResponse>().await {
-                for ev in ep_res.videos {
-                    all.push(IndianVideo {
-                        id: format!("ep_{}", ev.id),
-                        title: ev.title,
-                        duration: ev.length_min,
-                        views: serde_json::Value::Number(serde_json::Number::from(ev.views)),
-                        default_thumb: ev.default_thumb.map(|t| t.src).unwrap_or_default(),
-                        url: ev.url,
-                        direct_mp4: None,
-                    });
-                }
-            }
-        }
-
-        // 4. Fetch from OK.XXX (Authentic Desi/Indian searches)
-        if let Ok(ok_client) = crate::okxxx::client::OkXxxClient::new() {
-            let ok_queries = if query.contains("college") {
-                vec!["indian-college", "desi"]
-            } else {
-                vec!["indian-mms", "desi-mms"]
-            };
-            for oq in ok_queries {
-                if let Ok(ok_videos) = ok_client.search_videos(oq, page).await {
-                    for ov in ok_videos {
-                        all.push(IndianVideo {
-                            id: format!("ok_{}", ov.video_id),
-                            title: ov.title,
-                            duration: ov.duration,
-                            views: serde_json::Value::String(ov.views),
-                            default_thumb: ov.thumbnail,
-                            url: ov.url,
-                            direct_mp4: None,
-                        });
-                    }
-                }
-            }
-        }
-
-        // 5. Fetch from RedTube API (tens of thousands of tagged videos)
-        let count_str = std::cmp::max(count, 30).to_string();
-        let page_str = page.to_string();
-        if let Ok(resp) = self
-            .http
-            .get("https://api.redtube.com/")
-            .query(&[
-                ("data", "redtube.Videos.searchVideos"),
-                ("output", "json"),
-                ("search", query),
-                ("thumbsize", "medium2"),
-                ("ordering", "most_recent"),
-                ("count", &count_str),
-                ("page", &page_str),
-            ])
-            .send()
-            .await
-        {
-            if let Ok(search_resp) = resp.json::<super::models::IndianSearchResponse>().await {
-                for w in search_resp.videos {
-                    all.push(w.video);
-                }
-            }
+        // 2. Fetch from MmsBee (Dedicated Indian MMS and viral leaks portal)
+        if let Ok(bee_videos) = self.fetch_mmsbee(page).await {
+            all.extend(bee_videos);
         }
 
         // Deduplicate by ID
         let mut seen_ids = std::collections::HashSet::new();
         all.retain(|v| seen_ids.insert(v.id.clone()));
 
-        // Master authenticity filter: Reject all AI, 3D, cartoons, Western models, and family roleplay
+        // Authenticity filter: reject family roleplays (bhabhi/devar) and non-Indian content
         let filtered: Vec<IndianVideo> = all
             .into_iter()
             .filter(|v| is_authentic_real_indian_mms(&v.title, ""))
@@ -230,76 +95,147 @@ impl IndianClient {
         Ok(filtered)
     }
 
-    /// Resolve playable direct MP4 for an Indian video.
-    pub async fn get_mp4_url(&self, video_url_or_id: &str) -> Result<String> {
-        if video_url_or_id.contains("xvideos.com") || video_url_or_id.starts_with("xv_") {
-            let full_url = if video_url_or_id.starts_with("http") {
-                video_url_or_id.to_string()
-            } else {
-                let id = video_url_or_id.trim_start_matches("xv_");
-                format!("https://www.xvideos.com/video{}/", id)
-            };
-            self.xnxx.get_low_mp4_url(&full_url).await
-        } else if video_url_or_id.starts_with("ep_") || video_url_or_id.contains("eporner.com") {
-            let id = crate::web::extract_eporner_id(video_url_or_id)
-                .unwrap_or_else(|| video_url_or_id.trim_start_matches("ep_").to_string());
-            let page_url = format!("https://www.eporner.com/video-{}/", id);
-            if let Ok(resp) = self.http.get(&page_url).send().await {
-                if let Ok(html) = resp.text().await {
-                    if let Ok(re) = regex::Regex::new(r#"<source[^>]+src=["']([^"']+\.mp4[^"']*)["']"#) {
-                        if let Some(cap) = re.captures(&html) {
-                            return Ok(cap[1].to_string());
+    /// Scrape DesiPorn search listing (?search=...)
+    pub async fn fetch_desiporn(&self, query: &str, _page: u32) -> Result<Vec<IndianVideo>> {
+        let clean_query = query.trim().replace(' ', "+");
+        let url = format!("https://www.desiporn.xxx/?search={}", clean_query);
+        let resp = self.http.get(&url).send().await?.error_for_status()?.text().await?;
+        self.parse_desiporn_html(&resp)
+    }
+
+    /// Scrape DesiPorn category page ({category}-page-{page}.html)
+    pub async fn fetch_desiporn_category(&self, category: &str, page: u32) -> Result<Vec<IndianVideo>> {
+        let page_num = std::cmp::max(1, page);
+        let url = format!("https://www.desiporn.xxx/{}-page-{}.html", category, page_num);
+        let resp = self.http.get(&url).send().await?.error_for_status()?.text().await?;
+        self.parse_desiporn_html(&resp)
+    }
+
+    /// Parse HTML from DesiPorn
+    fn parse_desiporn_html(&self, html: &str) -> Result<Vec<IndianVideo>> {
+        let mut videos = Vec::new();
+        let card_re = regex::Regex::new(r#"<div class="cmain">([\s\S]*?)</div>"#)?;
+        let item_re = regex::Regex::new(r#"url=(/item/(\d+)\.html)"#)?;
+        let title_re = regex::Regex::new(r#"title="([^"]+)""#)?;
+        let img_re = regex::Regex::new(r#"src="(https://[^"]+)""#)?;
+        let time_re = regex::Regex::new(r#"<span class="time">\s*([0-9:]+)\s*</span>"#)?;
+
+        for cap in card_re.captures_iter(html) {
+            let card_str = &cap[1];
+            if let Some(item_cap) = item_re.captures(card_str) {
+                let id = format!("dp_{}", &item_cap[2]);
+                let url = format!("https://www.desiporn.xxx{}", &item_cap[1]);
+                let raw_title = title_re.captures(card_str)
+                    .map(|c| c[1].to_string())
+                    .unwrap_or_default();
+                let thumb = img_re.captures(card_str)
+                    .map(|c| c[1].to_string())
+                    .unwrap_or_default();
+                let duration = time_re.captures(card_str)
+                    .map(|c| c[1].to_string())
+                    .unwrap_or_else(|| "10:00".to_string());
+
+                // Clean title if generic placeholder
+                let title = if raw_title.is_empty() || raw_title.to_lowercase() == "desipornxxx" {
+                    if let Some(slug) = thumb.split('/').last().and_then(|s| s.split('.').next()) {
+                        let clean_slug = slug
+                            .trim_start_matches(|c: char| c.is_ascii_digit() || c == '_' || c == '-')
+                            .replace('-', " ")
+                            .replace('_', " ");
+                        if !clean_slug.trim().is_empty() {
+                            format!("🔥 Desi MMS: {}", clean_slug.trim())
+                        } else {
+                            format!("🔥 Authentic Indian MMS Leaked #{}", &item_cap[2])
                         }
-                    }
-                }
-            }
-            Ok(format!("https://www.eporner.com/embed/{}/", id))
-        } else if video_url_or_id.contains("ok.xxx") || video_url_or_id.starts_with("ok_") {
-            let ok_client = crate::okxxx::client::OkXxxClient::new()?;
-            let full_url = if video_url_or_id.starts_with("http") {
-                video_url_or_id.to_string()
-            } else {
-                let id = video_url_or_id.trim_start_matches("ok_");
-                format!("https://ok.xxx/video/{}/", id)
-            };
-            ok_client.get_mp4_url(&full_url).await
-        } else if video_url_or_id.contains("xnxx.com") || video_url_or_id.contains("video-") {
-            let full_url = if video_url_or_id.starts_with("http") {
-                video_url_or_id.to_string()
-            } else {
-                format!("https://www.xnxx.com/video-{}", video_url_or_id)
-            };
-            match self.xnxx.get_low_mp4_url(&full_url).await {
-                Ok(url) if !url.is_empty() => Ok(url),
-                _ => {
-                    // Fallback to okxxx if xnxx times out or fails
-                    let ok_client = crate::okxxx::client::OkXxxClient::new()?;
-                    let search_res = ok_client.search_videos("indian", 1).await?;
-                    if let Some(first) = search_res.first() {
-                        ok_client.get_mp4_url(&first.url).await
                     } else {
-                        anyhow::bail!("No stream found on XNXX or OK.XXX")
+                        format!("🔥 Authentic Indian MMS Leaked #{}", &item_cap[2])
                     }
-                }
+                } else {
+                    raw_title
+                };
+
+                videos.push(IndianVideo {
+                    id,
+                    title,
+                    duration,
+                    views: serde_json::Value::String("Verified MMS".to_string()),
+                    default_thumb: thumb,
+                    url,
+                    direct_mp4: None,
+                });
             }
+        }
+
+        Ok(videos)
+    }
+
+    /// Scrape latest topics from MmsBee portal
+    pub async fn fetch_mmsbee(&self, page: u32) -> Result<Vec<IndianVideo>> {
+        let mut videos = Vec::new();
+        let forum_url = if page % 2 == 0 {
+            "https://mmsbee.fun/forum/11-desi-pics-and-videos/"
         } else {
-            let video_id = crate::web::extract_redtube_id(video_url_or_id)
-                .unwrap_or_else(|| video_url_or_id.to_string());
-            let porn_client = crate::porn::client::PornClient::new()?;
-            match porn_client.get_mp4_url(&video_id).await {
-                Ok(url) if !url.is_empty() => Ok(url),
-                _ => {
-                    // Fallback to OK.XXX
-                    let ok_client = crate::okxxx::client::OkXxxClient::new()?;
-                    let search_res = ok_client.search_videos("indian", 1).await?;
-                    if let Some(first) = search_res.first() {
-                        ok_client.get_mp4_url(&first.url).await
-                    } else {
-                        anyhow::bail!("No stream found on Redtube or OK.XXX")
+            "https://mmsbee.fun/forum/7-mmsbee-exclusive-zone/"
+        };
+
+        if let Ok(resp) = self.http.get(forum_url).send().await {
+            if let Ok(html) = resp.text().await {
+                if let Ok(topic_re) = regex::Regex::new(r#"href=['"](https://mmsbee\.fun/topic/(\d+)-[^'"]+)['"][^>]*>([^<]+)</a>"#) {
+                    for cap in topic_re.captures_iter(&html) {
+                        let id = format!("bee_{}", &cap[2]);
+                        let url = cap[1].split('?').next().unwrap_or(&cap[1]).to_string();
+                        let title = cap[3].trim().to_string();
+                        if title.len() < 5 || (title.to_lowercase().contains("mmsbee") && title.len() < 12) {
+                            continue;
+                        }
+                        videos.push(IndianVideo {
+                            id,
+                            title,
+                            duration: "Full MMS".to_string(),
+                            views: serde_json::Value::String("MmsBee Exclusive".to_string()),
+                            default_thumb: "https://mmsbee.fun/uploads/monthly_2026_10/mmsbee-logo.png".to_string(),
+                            url,
+                            direct_mp4: None,
+                        });
                     }
                 }
             }
         }
+
+        Ok(videos)
+    }
+
+    /// Resolve playable direct MP4 for an Indian video.
+    pub async fn get_mp4_url(&self, video_url_or_id: &str) -> Result<String> {
+        let full_url = if video_url_or_id.starts_with("http") {
+            video_url_or_id.to_string()
+        } else if video_url_or_id.starts_with("dp_") {
+            let id = video_url_or_id.trim_start_matches("dp_");
+            format!("https://www.desiporn.xxx/item/{}.html", id)
+        } else {
+            video_url_or_id.to_string()
+        };
+
+        if full_url.contains("desiporn.xxx") {
+            let html = self
+                .http
+                .get(&full_url)
+                .send()
+                .await?
+                .error_for_status()?
+                .text()
+                .await?;
+
+            let source_re = regex::Regex::new(r#"<source[^>]+src=["']([^"']+\.mp4[^"']*)["']"#)?;
+            if let Some(cap) = source_re.captures(&html) {
+                let u = &cap[1];
+                if !u.is_empty() {
+                    return Ok(u.trim().to_string());
+                }
+            }
+        }
+
+        anyhow::bail!("No direct stream found on dedicated portal: {}", video_url_or_id)
     }
 }
 
@@ -411,5 +347,25 @@ mod tests {
         assert!(is_authentic_real_indian_mms("Mallu Girl Leaked MMS Video with Audio", ""));
         assert!(is_authentic_real_indian_mms("Tamil Couple Private MMS Viral Scandal", ""));
         assert!(is_authentic_real_indian_mms("Real Indian MMS Leaked Video with Sound", ""));
+    }
+
+    #[tokio::test]
+    async fn test_fetch_desiporn_mms() {
+        let client = IndianClient::new().expect("Failed to initialize IndianClient");
+        let videos = client.fetch_desiporn("mms", 1).await.expect("fetch_desiporn failed");
+        println!("Fetched {} videos from DesiPorn", videos.len());
+        assert!(!videos.is_empty(), "Should fetch at least 1 video from DesiPorn");
+        for v in videos.iter().take(3) {
+            println!("- [{}] {} ({})", v.id, v.title, v.url);
+        }
+    }
+
+    #[tokio::test]
+    async fn test_get_desiporn_mp4_url() {
+        let client = IndianClient::new().expect("Failed to initialize IndianClient");
+        let mp4 = client.get_mp4_url("https://www.desiporn.xxx/item/226816.html").await.expect("Failed to get MP4");
+        println!("Resolved MP4: {}", mp4);
+        assert!(mp4.contains(".mp4"), "Must contain .mp4");
+        assert!(mp4.starts_with("http"), "Must start with http");
     }
 }

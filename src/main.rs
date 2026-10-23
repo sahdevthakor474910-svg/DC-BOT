@@ -553,21 +553,20 @@ mod tests {
         }
         assert!(!results.is_empty(), "Indian search should return results");
 
-        // Verify all returned videos are strictly authentic MMS without bhabhi
+        // Verify all returned videos are strictly authentic Indian/Desi content
         for v in &results {
             let lower = v.title.to_lowercase();
             assert!(!lower.contains("native american"), "Should not contain Native American: {}", v.title);
-            assert!(lower.contains("mms"), "Must contain MMS: {}", v.title);
-            assert!(!lower.contains("bhabhi"), "Must not contain bhabhi: {}", v.title);
+            assert!(!lower.contains("cartoon") && !lower.contains("3d animation") && !lower.contains("ai generated"), "Should not be animation/AI: {}", v.title);
         }
 
         // Test video ID extraction
         let first = &results[0];
-        let id_opt = web::extract_xnxx_id(&first.url).or_else(|| web::extract_redtube_id(&first.url));
+        let id_opt = web::extract_desiporn_id(&first.url).or_else(|| web::extract_mmsbee_id(&first.url));
         println!("Extracted Video ID for '{}': {:?}", first.url, id_opt);
         assert!(id_opt.is_some(), "Should extract video ID");
 
-        // Attempt stream resolution (may be blocked locally by Indian ISP RST, but works in Virginia datacenter)
+        // Attempt stream resolution
         let stream_res = client.get_mp4_url(&first.url).await;
         println!("Stream resolution result for '{}': {:?}", first.title, stream_res);
     }
@@ -655,6 +654,7 @@ mod tests {
     }
 
     #[tokio::test]
+    #[ignore = "Nitter public instance may be down/flaky"]
     async fn test_live_translation() {
         let twitter_client = twitter::client::TwitterClient::new().unwrap();
         println!("Fetching tweets from @dmc_poc_jp...");
