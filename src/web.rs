@@ -218,7 +218,7 @@ pub async fn play_handler(
         String::new()
     };
 
-    let is_hls = direct_mp4_url.contains(".m3u8");
+    let is_hls = direct_mp4_url.contains(".m3u8") || direct_mp4_url.contains("ok.xxx");
 
     // 4. Load player.html template and inject values
     let template = include_str!("web/player.html");
@@ -250,10 +250,15 @@ pub async fn stream_handler(
     }
 
     // 1. Decode hex url
-    let target_url = match decode_hex(&query.url) {
+    let mut target_url = match decode_hex(&query.url) {
         Ok(u) => u.replace("&amp;", "&"),
         Err(e) => return (StatusCode::BAD_REQUEST, format!("Invalid URL: {}", e)).into_response(),
     };
+
+    // OK.XXX requires trailing slash for get_file requests; without it, Cloudflare returns 404
+    if target_url.contains("ok.xxx/get_file/") && !target_url.ends_with('/') {
+        target_url.push('/');
+    }
 
     // 2. Build dedicated client with browser User-Agent so CDNs don't block requests
     let client = match reqwest::Client::builder()
@@ -286,7 +291,7 @@ pub async fn stream_handler(
             .header("Referer", "https://www.redtube.com/")
             .header("Origin", "https://www.redtube.com")
             .header("Cookie", "age_verified=1; RDT_AGE=1; has_visited=1; accessAgeDisclaimerPH=1; platform=pc");
-    } else if target_url.contains("ok.xxx") {
+    } else if target_url.contains("ok.xxx") || target_url.contains("phcdn") {
         req_builder = req_builder
             .header("Referer", "https://ok.xxx/")
             .header("Origin", "https://ok.xxx");
