@@ -5,6 +5,7 @@ services:
     region: virginia
     branch: main
     autoDeployTrigger: commit
+    autoDeploy: true
     plan: free
     envVars:
       - key: DATABASE_URL
