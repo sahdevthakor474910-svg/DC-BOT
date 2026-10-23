@@ -55,7 +55,10 @@ pub async fn play_handler(
     } else {
         match query.source.as_str() {
             "jav" | "indian" => {
-                if raw_url.contains("xnxx.com") || raw_url.contains("video-") {
+                if raw_url.contains("redgifs.com") || raw_url.starts_with("clip_") {
+                    let id = raw_url.trim_start_matches("clip_").split('/').filter(|s| !s.is_empty()).next_back().unwrap_or(&raw_url);
+                    format!("https://media.redgifs.com/{}-mobile.mp4", id)
+                } else if raw_url.contains("xnxx.com") || raw_url.contains("video-") {
                     let mut stream = match crate::xnxx::client::XnxxClient::new() {
                         Ok(client) => client.get_mp4_url(&raw_url).await.unwrap_or_default(),
                         Err(_) => String::new(),
@@ -583,7 +586,14 @@ pub fn get_embed_url(source: &str, raw_url: &str) -> String {
             }
         }
         "jav" | "indian" => {
-            if raw_url.contains("xnxx.com") || raw_url.contains("video-") {
+            if raw_url.contains("redgifs.com") || raw_url.starts_with("clip_") {
+                if let Some(id) = extract_redgifs_id(raw_url) {
+                    format!("https://www.redgifs.com/ifr/{}", id)
+                } else {
+                    let id = raw_url.trim_start_matches("clip_").split('/').filter(|s| !s.is_empty()).next_back().unwrap_or(raw_url);
+                    format!("https://www.redgifs.com/ifr/{}", id)
+                }
+            } else if raw_url.contains("xnxx.com") || raw_url.contains("video-") {
                 if let Some(id) = extract_xnxx_id(raw_url) {
                     format!("https://www.xnxx.com/embedframe/{}", id)
                 } else {

@@ -25,4 +25,6 @@ pub struct IndianVideo {
     #[serde(default)]
     pub default_thumb: String,
     pub url: String,
+    #[serde(default)]
+    pub direct_mp4: Option<String>,
 }

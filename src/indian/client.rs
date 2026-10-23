@@ -29,6 +29,7 @@ pub const INDIAN_SEARCHES: &[&str] = &[
 pub struct IndianClient {
     http: reqwest::Client,
     xnxx: crate::xnxx::client::XnxxClient,
+    redgifs: tokio::sync::OnceCell<crate::pornclips::client::PornClipsClient>,
 }
 
 impl IndianClient {
@@ -42,14 +43,69 @@ impl IndianClient {
             .timeout(std::time::Duration::from_secs(12))
             .build()?;
         let xnxx = crate::xnxx::client::XnxxClient::new()?;
-        Ok(Self { http, xnxx })
+        let redgifs = tokio::sync::OnceCell::new();
+        Ok(Self { http, xnxx, redgifs })
     }
 
-    /// Fetch authentic Indian viral MMS videos combining RedTube API, OK.XXX, and XNXX.
+    pub async fn get_redgifs(&self) -> Option<&crate::pornclips::client::PornClipsClient> {
+        self.redgifs.get_or_try_init(|| async {
+            crate::pornclips::client::PornClipsClient::new().await
+        }).await.ok()
+    }
+
+    /// Download raw MP4 bytes for Discord video attachment (< 8MB).
+    pub async fn download_bytes(&self, url: &str) -> Result<Vec<u8>> {
+        let bytes = self
+            .http
+            .get(url)
+            .send()
+            .await?
+            .error_for_status()?
+            .bytes()
+            .await?;
+        Ok(bytes.to_vec())
+    }
+
+    /// Fetch authentic Indian viral MMS videos & short clips combining RedGIFs, RedTube, OK.XXX, and XNXX.
     pub async fn fetch_indian_videos(&self, query: &str, count: u32, page: u32) -> Result<Vec<IndianVideo>> {
         let mut all: Vec<IndianVideo> = Vec::new();
 
-        // 1. Fetch from RedTube API (tens of thousands of tagged videos)
+        // 1. Fetch short Indian MMS video clips from RedGIFs (direct native MP4s)
+        if let Some(rg) = self.get_redgifs().await {
+            let rg_query = if query.contains("college") {
+                "college girl mms"
+            } else if query.contains("scandal") {
+                "desi scandal"
+            } else {
+                "indian mms"
+            };
+            if let Ok(resp) = rg.search(rg_query, 30, page).await {
+                for g in resp.gifs {
+                    if let Some(sd) = g.urls.as_ref().and_then(|u| u.sd.as_ref()) {
+                        let dur = g.duration.unwrap_or(25.0);
+                        if dur <= 60.0 && dur >= 3.0 && crate::pornclips::client::is_straight_female_content(&g) {
+                            let tags_preview = g.tags.iter().take(3).map(|t| t.as_str()).collect::<Vec<_>>().join(" • ");
+                            let title = if tags_preview.is_empty() {
+                                format!("🔥 Indian MMS Clip #{}", g.id)
+                            } else {
+                                format!("🔥 {}", tags_preview)
+                            };
+                            all.push(IndianVideo {
+                                id: format!("clip_{}", g.id),
+                                title,
+                                duration: format!("{:.0}s", dur),
+                                views: serde_json::Value::Number(serde_json::Number::from(g.views.unwrap_or(0))),
+                                default_thumb: g.urls.as_ref().and_then(|u| u.thumbnail.clone()).unwrap_or_default(),
+                                url: format!("https://www.redgifs.com/watch/{}", g.id),
+                                direct_mp4: Some(sd.clone()),
+                            });
+                        }
+                    }
+                }
+            }
+        }
+
+        // 2. Fetch from RedTube API (tens of thousands of tagged videos)
         let count_str = std::cmp::max(count, 12).to_string();
         let page_str = page.to_string();
         if let Ok(resp) = self
@@ -74,7 +130,7 @@ impl IndianClient {
             }
         }
 
-        // 2. Fetch from OK.XXX
+        // 3. Fetch from OK.XXX
         if let Ok(ok_client) = crate::okxxx::client::OkXxxClient::new() {
             let ok_query = if query.contains("college") {
                 "college-girl"
@@ -90,12 +146,13 @@ impl IndianClient {
                         views: serde_json::Value::String(ov.views),
                         default_thumb: ov.thumbnail,
                         url: ov.url,
+                        direct_mp4: None,
                     });
                 }
             }
         }
 
-        // 3. Fetch from XNXX
+        // 4. Fetch from XNXX
         if let Ok(xnxx_videos) = self.xnxx.search_videos(query, page).await {
             for xv in xnxx_videos {
                 all.push(IndianVideo {
@@ -105,6 +162,7 @@ impl IndianClient {
                     views: serde_json::Value::String(xv.views),
                     default_thumb: xv.thumbnail,
                     url: xv.url,
+                    direct_mp4: None,
                 });
             }
         }
@@ -157,7 +215,14 @@ impl IndianClient {
 
     /// Resolve playable direct MP4 for an Indian video.
     pub async fn get_mp4_url(&self, video_url_or_id: &str) -> Result<String> {
-        if video_url_or_id.contains("ok.xxx") || video_url_or_id.starts_with("ok_") {
+        if video_url_or_id.starts_with("clip_") || video_url_or_id.contains("redgifs.com") {
+            let id = video_url_or_id
+                .trim_start_matches("clip_")
+                .split('/')
+                .next_back()
+                .unwrap_or(video_url_or_id);
+            return Ok(format!("https://media.redgifs.com/{}-mobile.mp4", id));
+        } else if video_url_or_id.contains("ok.xxx") || video_url_or_id.starts_with("ok_") {
             let ok_client = crate::okxxx::client::OkXxxClient::new()?;
             let full_url = if video_url_or_id.starts_with("http") {
                 video_url_or_id.to_string()

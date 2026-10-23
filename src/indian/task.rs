@@ -110,7 +110,7 @@ async fn tick_with_query(
 async fn post_videos(
     data: &Data,
     http: &Arc<serenity::Http>,
-    _client: &IndianClient,
+    client: &IndianClient,
     videos: &[IndianVideo],
     force: bool,
 ) -> Result<usize> {
@@ -200,11 +200,54 @@ async fn post_videos(
             }
 
             let content = format!("🇮🇳 **[{}]({})**", video.title, play_url);
-            let msg = serenity::CreateMessage::new()
-                .content(&content)
-                .embed(embed);
 
-            match channel.send_message(http, msg).await {
+            // Attempt to download MP4 if small enough (< 8MB) to send as native Discord video attachment
+            let maybe_bytes = if let Some(mp4_url) = &video.direct_mp4 {
+                match client.download_bytes(mp4_url).await {
+                    Ok(b) if b.len() <= 8 * 1024 * 1024 => Some(b),
+                    _ => None,
+                }
+            } else if let Ok(mp4_url) = client.get_mp4_url(&video.url).await {
+                if !mp4_url.contains(".m3u8") && mp4_url.starts_with("http") {
+                    match client.download_bytes(&mp4_url).await {
+                        Ok(b) if b.len() <= 8 * 1024 * 1024 => Some(b),
+                        _ => None,
+                    }
+                } else {
+                    None
+                }
+            } else {
+                None
+            };
+
+            let send_result = if let Some(bytes) = maybe_bytes {
+                let filename = format!("{}.mp4", video.id);
+                let attachment = serenity::CreateAttachment::bytes(bytes, filename);
+                let msg = serenity::CreateMessage::new()
+                    .content(&content)
+                    .embed(embed.clone())
+                    .add_file(attachment);
+                channel.send_message(http, msg).await
+            } else {
+                let msg = serenity::CreateMessage::new()
+                    .content(&content)
+                    .embed(embed.clone());
+                channel.send_message(http, msg).await
+            };
+
+            // If attachment upload failed (e.g. Discord 413 Payload Too Large), fallback to link
+            let final_result = match send_result {
+                Ok(m) => Ok(m),
+                Err(e) => {
+                    warn!("Attachment upload failed for Indian video {}, falling back to link: {:#}", video.id, e);
+                    let msg = serenity::CreateMessage::new()
+                        .content(&content)
+                        .embed(embed);
+                    channel.send_message(http, msg).await
+                }
+            };
+
+            match final_result {
                 Ok(_) => {
                     info!("🇮🇳 Posted Indian MMS video {} to guild {}", video.id, cfg.guild_id);
                     total += 1;

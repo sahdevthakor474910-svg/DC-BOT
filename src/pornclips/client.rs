@@ -44,7 +44,7 @@ const SEARCH_QUERIES: &[&str] = &[
 ];
 
 /// Strict filter to guarantee NO solo males, NO gay porn, NO trans content
-fn is_straight_female_content(gif: &RedGifsGif) -> bool {
+pub fn is_straight_female_content(gif: &RedGifsGif) -> bool {
     // 1. Sexuality check: reject gay/bi/trans
     for sex in &gif.sexuality {
         let s = sex.to_lowercase();
