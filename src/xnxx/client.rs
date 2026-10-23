@@ -40,7 +40,7 @@ impl XnxxClient {
             .error_for_status()?
             .text()
             .await?;
-        parse_videos(&html)
+        parse_videos(&html, BASE_URL)
     }
 
     /// Convenience: fetch a rotating page (tick_index mod MAX_PAGE).
@@ -49,7 +49,7 @@ impl XnxxClient {
         self.fetch_videos(page).await
     }
 
-    /// Search videos by keyword (e.g. "indian mms").
+    /// Search videos on XNXX by keyword (e.g. "indian mms").
     /// URL pattern: https://www.xnxx.com/search/{query} or https://www.xnxx.com/search/{query}/{page}
     pub async fn search_videos(&self, query: &str, page: u32) -> Result<Vec<XnxxVideo>> {
         let clean_query = query.trim().replace(' ', "+");
@@ -66,15 +66,37 @@ impl XnxxClient {
             .error_for_status()?
             .text()
             .await?;
-        parse_videos(&html)
+        parse_videos(&html, BASE_URL)
+    }
+
+    /// Search videos on XVideos by keyword (e.g. "indian mms", "college girl mms").
+    /// URL pattern: https://www.xvideos.com/?k={query}&p={page}
+    pub async fn search_xvideos(&self, query: &str, page: u32) -> Result<Vec<XnxxVideo>> {
+        let clean_query = query.trim().replace(' ', "+");
+        let url = format!("https://www.xvideos.com/?k={}&p={}", clean_query, page);
+        let html = self
+            .http
+            .get(&url)
+            .header("Referer", "https://www.xvideos.com/")
+            .send()
+            .await?
+            .error_for_status()?
+            .text()
+            .await?;
+        parse_videos(&html, "https://www.xvideos.com")
     }
 
     /// Fetch video page HTML and extract direct MP4 or video source URL.
     pub async fn get_mp4_url(&self, video_page_url: &str) -> Result<String> {
+        let referer = if video_page_url.contains("xvideos.com") {
+            "https://www.xvideos.com/"
+        } else {
+            "https://www.xnxx.com/"
+        };
         let html = self
             .http
             .get(video_page_url)
-            .header("Referer", "https://www.xnxx.com/")
+            .header("Referer", referer)
             .send()
             .await?
             .error_for_status()?
@@ -126,7 +148,45 @@ impl XnxxClient {
             }
         }
 
-        anyhow::bail!("No direct MP4/stream URL found on XNXX page: {}", video_page_url)
+        anyhow::bail!("No direct MP4/stream URL found on video page: {}", video_page_url)
+    }
+
+    /// Fetch low-resolution direct MP4 (ideal for Discord < 8MB video attachment).
+    pub async fn get_low_mp4_url(&self, video_page_url: &str) -> Result<String> {
+        let referer = if video_page_url.contains("xvideos.com") {
+            "https://www.xvideos.com/"
+        } else {
+            "https://www.xnxx.com/"
+        };
+        let html = self
+            .http
+            .get(video_page_url)
+            .header("Referer", referer)
+            .send()
+            .await?
+            .error_for_status()?
+            .text()
+            .await?;
+
+        // 1. html5player.setVideoUrlLow('https://...mp4')
+        let re_low = regex::Regex::new(r#"html5player\.setVideoUrlLow\(['"]([^'"]+)['"]\)"#)?;
+        if let Some(cap) = re_low.captures(&html) {
+            let u = &cap[1];
+            if !u.is_empty() {
+                return Ok(u.trim_end_matches('/').to_string());
+            }
+        }
+
+        // 2. html5player.setVideoUrlHigh('https://...mp4')
+        let re_high = regex::Regex::new(r#"html5player\.setVideoUrlHigh\(['"]([^'"]+)['"]\)"#)?;
+        if let Some(cap) = re_high.captures(&html) {
+            let u = &cap[1];
+            if !u.is_empty() {
+                return Ok(u.trim_end_matches('/').to_string());
+            }
+        }
+
+        self.get_mp4_url(video_page_url).await
     }
 }
 
@@ -134,7 +194,7 @@ impl XnxxClient {
 // HTML parser
 // ─────────────────────────────────────────────────────────────────────────────
 
-fn parse_videos(html: &str) -> Result<Vec<XnxxVideo>> {
+fn parse_videos(html: &str, base_url: &str) -> Result<Vec<XnxxVideo>> {
     let document = Html::parse_document(html);
 
     // Each video card: <div class="thumb-block">
@@ -184,19 +244,19 @@ fn parse_videos(html: &str) -> Result<Vec<XnxxVideo>> {
             continue;
         }
 
-        // ── Video ID (from href like /video-abc12345/title) ────────────────
-        // Extract the segment right after /video-
+        // ── Video ID (from href like /video-abc12345/title or /video12345/title) ───
         let video_id = href
             .split('/')
             .find_map(|seg| {
                 if seg.starts_with("video-") {
                     Some(seg.trim_start_matches("video-").to_string())
+                } else if seg.starts_with("video") && seg.len() > 5 {
+                    Some(seg.trim_start_matches("video").to_string())
                 } else {
                     None
                 }
             })
             .unwrap_or_else(|| {
-                // fallback: use last non-empty path segment
                 href.trim_matches('/')
                     .split('/')
                     .last()
@@ -235,10 +295,16 @@ fn parse_videos(html: &str) -> Result<Vec<XnxxVideo>> {
             }
         }
 
+        let full_url = if href.starts_with("http") {
+            href.to_string()
+        } else {
+            format!("{}{}", base_url, href)
+        };
+
         videos.push(XnxxVideo {
             video_id,
             title,
-            url: format!("{}{}", BASE_URL, href),
+            url: full_url,
             thumbnail,
             duration,
             views,
@@ -246,8 +312,7 @@ fn parse_videos(html: &str) -> Result<Vec<XnxxVideo>> {
     }
 
     if videos.is_empty() {
-        // Fallback regex matching standard XNXX search cards:
-        // <p class="title"><a href="([^"]+)" title="([^"]+)"
+        // Fallback regex matching standard search cards:
         if let Ok(re) = regex::Regex::new(r#"<p[^>]*class="title"[^>]*>\s*<a\s+href="([^"]+)"(?:\s+title="([^"]+)")?[^>]*>(?:([^<]+)</a>)?"#) {
             for cap in re.captures_iter(html) {
                 let href = cap.get(1).map(|m| m.as_str()).unwrap_or("");
@@ -260,16 +325,23 @@ fn parse_videos(html: &str) -> Result<Vec<XnxxVideo>> {
                     .find_map(|seg| {
                         if seg.starts_with("video-") {
                             Some(seg.trim_start_matches("video-").to_string())
+                        } else if seg.starts_with("video") && seg.len() > 5 {
+                            Some(seg.trim_start_matches("video").to_string())
                         } else {
                             None
                         }
                     })
                     .unwrap_or_else(|| href.trim_matches('/').split('/').last().unwrap_or_default().to_string());
                 if !video_id.is_empty() {
+                    let full_url = if href.starts_with("http") {
+                        href.to_string()
+                    } else {
+                        format!("{}{}", base_url, href)
+                    };
                     videos.push(XnxxVideo {
                         video_id,
                         title: title.to_string(),
-                        url: format!("{}{}", BASE_URL, href),
+                        url: full_url,
                         thumbnail: String::new(),
                         duration: String::new(),
                         views: String::new(),

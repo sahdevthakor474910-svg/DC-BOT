@@ -58,6 +58,17 @@ pub async fn play_handler(
                 if raw_url.contains("redgifs.com") || raw_url.starts_with("clip_") {
                     let id = raw_url.trim_start_matches("clip_").split('/').filter(|s| !s.is_empty()).next_back().unwrap_or(&raw_url);
                     format!("https://media.redgifs.com/{}-mobile.mp4", id)
+                } else if raw_url.contains("xvideos.com") || raw_url.starts_with("xv_") {
+                    let full_url = if raw_url.starts_with("http") {
+                        raw_url.clone()
+                    } else {
+                        let id = raw_url.trim_start_matches("xv_");
+                        format!("https://www.xvideos.com/video{}/", id)
+                    };
+                    match crate::xnxx::client::XnxxClient::new() {
+                        Ok(client) => client.get_mp4_url(&full_url).await.unwrap_or_default(),
+                        Err(_) => String::new(),
+                    }
                 } else if raw_url.contains("xnxx.com") || raw_url.contains("video-") {
                     let mut stream = match crate::xnxx::client::XnxxClient::new() {
                         Ok(client) => client.get_mp4_url(&raw_url).await.unwrap_or_default(),
@@ -561,6 +572,14 @@ pub fn extract_xnxx_id(url: &str) -> Option<String> {
     re.captures(url).map(|cap| cap[1].to_string())
 }
 
+pub fn extract_xvideos_id(url: &str) -> Option<String> {
+    if !url.contains("http") && !url.contains('/') {
+        return Some(url.trim_start_matches("xv_").to_string());
+    }
+    let re = regex::Regex::new(r"video([0-9]+)").ok()?;
+    re.captures(url).map(|cap| cap[1].to_string())
+}
+
 pub fn extract_redgifs_id(url: &str) -> Option<String> {
     if !url.contains("http") && !url.contains('/') {
         return Some(url.to_string());
@@ -592,6 +611,12 @@ pub fn get_embed_url(source: &str, raw_url: &str) -> String {
                 } else {
                     let id = raw_url.trim_start_matches("clip_").split('/').filter(|s| !s.is_empty()).next_back().unwrap_or(raw_url);
                     format!("https://www.redgifs.com/ifr/{}", id)
+                }
+            } else if raw_url.contains("xvideos.com") || raw_url.starts_with("xv_") {
+                if let Some(id) = extract_xvideos_id(raw_url) {
+                    format!("https://www.xvideos.com/embedframe/{}", id)
+                } else {
+                    raw_url.to_string()
                 }
             } else if raw_url.contains("xnxx.com") || raw_url.contains("video-") {
                 if let Some(id) = extract_xnxx_id(raw_url) {
