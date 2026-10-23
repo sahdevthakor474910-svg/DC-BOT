@@ -43,8 +43,11 @@ pub async fn play_handler(
 
     info!("Resolving video stream for [source={}] url: {}", query.source, raw_url);
 
-    // Compute official embed URL as guaranteed fallback
+    // Compute official embed URL as fallback
     let mut embed_url = get_embed_url(&query.source, &raw_url);
+    if query.source == "indian" && embed_url.contains("redtube.com") {
+        embed_url.clear(); // Never serve blocked Redtube embed to Indian users
+    }
 
     // 2. Resolve direct MP4/stream URL based on source (or use directly if already a media file)
     let direct_mp4_url = if raw_url.contains(".mp4") || raw_url.contains(".webm") || raw_url.contains(".m3u8") {
@@ -83,10 +86,54 @@ pub async fn play_handler(
                     }
                     stream
                 } else if raw_url.contains("ok.xxx") {
-                    match crate::okxxx::client::OkXxxClient::new() {
+                    let mut stream = match crate::okxxx::client::OkXxxClient::new() {
                         Ok(client) => client.get_mp4_url(&raw_url).await.unwrap_or_default(),
                         Err(_) => String::new(),
+                    };
+                    if stream.is_empty() {
+                        info!("OK.XXX direct stream empty. Fast fallback search for '{}'...", query.title);
+                        if let Ok(ok_client) = crate::okxxx::client::OkXxxClient::new() {
+                            let ok_query = if query.title.to_lowercase().contains("college") {
+                                "college-girl"
+                            } else {
+                                "indian"
+                            };
+                            if let Ok(results) = ok_client.search_videos(ok_query, 1).await {
+                                for v in results {
+                                    let lower = v.title.to_lowercase();
+                                    if !lower.contains("bhabhi") && !lower.contains("devar") && !lower.contains("saali") {
+                                        if let Ok(mp4) = ok_client.get_mp4_url(&v.url).await {
+                                            if !mp4.is_empty() {
+                                                stream = mp4;
+                                                embed_url = format!("https://ok.xxx/embed/{}", v.video_id);
+                                                break;
+                                            }
+                                        }
+                                    }
+                                }
+                            }
+                        }
+
+                        if stream.is_empty() {
+                            if let Ok(xnxx) = crate::xnxx::client::XnxxClient::new_with_timeout(5) {
+                                if let Ok(results) = xnxx.search_videos("indian mms", 0).await {
+                                    for v in results {
+                                        let lower = v.title.to_lowercase();
+                                        if !lower.contains("bhabhi") && !lower.contains("devar") && !lower.contains("saali") {
+                                            if let Ok(mp4) = xnxx.get_mp4_url(&v.url).await {
+                                                if !mp4.is_empty() {
+                                                    stream = mp4;
+                                                    embed_url = format!("https://www.xnxx.com/embedframe/{}", v.video_id);
+                                                    break;
+                                                }
+                                            }
+                                        }
+                                    }
+                                }
+                            }
+                        }
                     }
+                    stream
                 } else {
                     let video_id = extract_redtube_id(&raw_url).unwrap_or_else(|| raw_url.clone());
                     let mut stream = match crate::porn::client::PornClient::new() {
@@ -148,6 +195,11 @@ pub async fn play_handler(
                             }
                         }
                     }
+
+                    if query.source == "indian" && embed_url.contains("redtube.com") {
+                        embed_url.clear();
+                    }
+
                     stream
                 }
             }

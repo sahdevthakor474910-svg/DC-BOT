@@ -140,6 +140,58 @@
             border: 0;
             display: none;
         }
+        /* Tap to Play / Overlay */
+        .play-overlay {
+            position: absolute;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background: rgba(0, 0, 0, 0.65);
+            backdrop-filter: blur(8px);
+            -webkit-backdrop-filter: blur(8px);
+            display: flex;
+            flex-direction: column;
+            justify-content: center;
+            align-items: center;
+            cursor: pointer;
+            z-index: 10;
+            transition: all 0.25s ease;
+        }
+        .play-overlay:hover {
+            background: rgba(0, 0, 0, 0.45);
+        }
+        .play-btn-circle {
+            width: 76px;
+            height: 76px;
+            background: linear-gradient(135deg, #ff2a5f 0%, #ff6b8b 100%);
+            border-radius: 50%;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            box-shadow: 0 0 35px rgba(255, 42, 95, 0.7);
+            transition: transform 0.2s ease, box-shadow 0.2s ease;
+        }
+        .play-overlay:hover .play-btn-circle {
+            transform: scale(1.1);
+            box-shadow: 0 0 50px rgba(255, 42, 95, 0.9);
+        }
+        .play-btn-circle svg {
+            margin-left: 4px;
+        }
+        .play-btn-label {
+            font-size: 1.15rem;
+            font-weight: 700;
+            color: #ffffff;
+            margin-top: 14px;
+            letter-spacing: 0.5px;
+            text-shadow: 0 2px 10px rgba(0,0,0,0.8);
+        }
+        .play-btn-sub {
+            font-size: 0.8rem;
+            color: #9ca3af;
+            margin-top: 4px;
+        }
         .status-badge {
             font-size: 0.8rem;
             color: #9ca3af;
@@ -221,9 +273,16 @@
         </div>
 
         <div class="player-wrapper">
-            <video id="webVideo" controls autoplay playsinline style="display: none;">
+            <video id="webVideo" controls autoplay playsinline webkit-playsinline preload="auto" style="display: none;">
                 Your browser does not support HTML5 video.
             </video>
+            <div id="playOverlay" class="play-overlay" onclick="handleUserPlay()" style="display: none;">
+                <div class="play-btn-circle">
+                    <svg viewBox="0 0 24 24" width="42" height="42" fill="#ffffff"><path d="M8 5v14l11-7z"/></svg>
+                </div>
+                <div id="playOverlayText" class="play-btn-label">Tap to Play Stream</div>
+                <div class="play-btn-sub">Routed via US Proxy (Bypassing ISP Blocks)</div>
+            </div>
             <iframe id="embedFrame" src="" allowfullscreen allow="autoplay; encrypted-media; picture-in-picture" style="display: none;"></iframe>
         </div>
 
@@ -250,6 +309,8 @@
         const btnHtml5 = document.getElementById('btnHtml5');
         const btnEmbed = document.getElementById('btnEmbed');
         const ispNotice = document.getElementById('ispNotice');
+        const playOverlay = document.getElementById('playOverlay');
+        const playOverlayText = document.getElementById('playOverlayText');
 
         const streamUrl = "{stream_url}";
         const directUrl = "{direct_url}";
@@ -258,6 +319,7 @@
 
         let hlsInstance = null;
         let isEmbedActive = false;
+        let retryCount = 0;
 
         function setStatus(msg, isSuccess = true) {
             if (statusEl) {
@@ -266,18 +328,52 @@
             }
         }
 
+        function showPlayOverlay(text) {
+            if (playOverlay) {
+                if (text && playOverlayText) playOverlayText.innerText = text;
+                playOverlay.style.display = 'flex';
+            }
+        }
+
+        function hidePlayOverlay() {
+            if (playOverlay) {
+                playOverlay.style.display = 'none';
+            }
+        }
+
+        function handleUserPlay() {
+            if (isEmbedActive) {
+                switchToHtml5();
+                return;
+            }
+            hidePlayOverlay();
+            video.play()
+                .then(() => setStatus("⚡ Stream Playing (Virginia US Proxy)"))
+                .catch(err => {
+                    console.warn("User tap play error:", err);
+                    video.muted = true;
+                    video.play().then(() => {
+                        setStatus("🔊 Video playing muted (Click video for audio)");
+                    }).catch(e => {
+                        setStatus("⚠️ Tap Play again to start video", false);
+                        showPlayOverlay("Tap to Retry Play");
+                    });
+                });
+        }
+
         function switchToEmbed() {
-            if (!embedUrl || embedUrl.length < 5) {
-                setStatus("⚠️ No official embed available for this source.", false);
+            if (!embedUrl || embedUrl.length < 5 || embedUrl.includes("redtube.com")) {
+                setStatus("⚠️ Official embed unavailable or restricted. Use HTML5 Stream.", false);
                 return;
             }
             isEmbedActive = true;
             if (hlsInstance) {
-                hlsInstance.destroy();
+                try { hlsInstance.destroy(); } catch(e){}
                 hlsInstance = null;
             }
             video.pause();
             video.style.display = 'none';
+            hidePlayOverlay();
 
             embedFrame.style.display = 'block';
             if (embedFrame.src !== embedUrl) {
@@ -287,42 +383,60 @@
             btnHtml5.classList.remove('active');
             btnEmbed.classList.add('active');
             if (ispNotice) ispNotice.style.display = 'flex';
-            setStatus("🎬 Switched to Official Embed Player (Click HTML5 Stream if ISP blocked)");
+            setStatus("🎬 Switched to Embed Player (If ISP blocked, click HTML5 Stream)");
         }
 
         function switchToHtml5() {
-            if (streamUrl && streamUrl.length > 5) {
-                isEmbedActive = false;
-                embedFrame.style.display = 'none';
-                embedFrame.src = '';
-                if (ispNotice) ispNotice.style.display = 'none';
+            isEmbedActive = false;
+            embedFrame.style.display = 'none';
+            embedFrame.src = '';
+            if (ispNotice) ispNotice.style.display = 'none';
 
-                video.style.display = 'block';
-                btnEmbed.classList.remove('active');
-                btnHtml5.classList.add('active');
+            video.style.display = 'block';
+            btnEmbed.classList.remove('active');
+            btnHtml5.classList.add('active');
+
+            if (streamUrl && streamUrl.length > 5) {
                 setStatus("⚡ Loading Stream Proxy (Bypassing ISP block)...");
                 playStream(streamUrl);
             } else if (directUrl && directUrl.length > 5 && (directUrl.includes('.mp4') || directUrl.includes('.webm') || directUrl.includes('.m3u8'))) {
-                isEmbedActive = false;
-                embedFrame.style.display = 'none';
-                embedFrame.src = '';
-                if (ispNotice) ispNotice.style.display = 'none';
-
-                video.style.display = 'block';
-                btnEmbed.classList.remove('active');
-                btnHtml5.classList.add('active');
                 setStatus("⚡ Loading Direct Stream...");
                 playStream(directUrl);
-            } else if (embedUrl && embedUrl.length > 5) {
+            } else if (embedUrl && embedUrl.length > 5 && !embedUrl.includes("redtube.com")) {
                 switchToEmbed();
             } else {
-                setStatus("⚠️ Video stream unavailable.", false);
+                setStatus("⚠️ Video stream resolving, tap below to retry...", false);
+                showPlayOverlay("Tap to Reload Stream");
+            }
+        }
+
+        function playStandardMp4(targetUrl) {
+            console.log("Playing standard HTML5 MP4:", targetUrl);
+            video.style.display = 'block';
+            if (video.src !== targetUrl) {
+                video.src = targetUrl;
+                video.load();
+            }
+            const p = video.play();
+            if (p !== undefined) {
+                p.then(() => {
+                    hidePlayOverlay();
+                    setStatus("⚡ Video Stream Playing (Virginia US Proxy)");
+                }).catch(err => {
+                    console.log("Autoplay paused by browser policy:", err);
+                    showPlayOverlay("Tap to Play Video");
+                    setStatus("▶️ Tap Play button to start video");
+                });
             }
         }
 
         function playStream(targetUrl) {
             if (!targetUrl || targetUrl.length < 3) {
-                switchToEmbed();
+                if (embedUrl && embedUrl.length > 5 && !embedUrl.includes("redtube.com")) {
+                    switchToEmbed();
+                } else {
+                    setStatus("⚠️ Video stream unavailable.", false);
+                }
                 return;
             }
 
@@ -330,98 +444,113 @@
 
             const isHls = isHlsServer || targetUrl.includes('.m3u8') || (directUrl && directUrl.includes('.m3u8'));
 
-            if (isHls && Hls.isSupported()) {
-                if (hlsInstance) hlsInstance.destroy();
+            if (typeof Hls !== 'undefined' && isHls && Hls.isSupported()) {
+                if (hlsInstance) {
+                    try { hlsInstance.destroy(); } catch(e){}
+                    hlsInstance = null;
+                }
                 hlsInstance = new Hls({
                     enableWorker: true,
                     lowLatencyMode: true,
                     maxBufferLength: 30,
-                    maxMaxBufferLength: 60
+                    maxMaxBufferLength: 60,
+                    manifestLoadingMaxRetry: 4,
+                    levelLoadingMaxRetry: 4
                 });
                 hlsInstance.loadSource(targetUrl);
                 hlsInstance.attachMedia(video);
+
                 hlsInstance.on(Hls.Events.MANIFEST_PARSED, function() {
-                    video.play().catch(e => console.log("HLS autoplay prevented:", e));
-                    setStatus("⚡ Adaptive Stream Playing (Virginia US Proxy)");
+                    video.play()
+                        .then(() => {
+                            hidePlayOverlay();
+                            setStatus("⚡ Adaptive Stream Playing (Virginia US Proxy)");
+                        })
+                        .catch(e => {
+                            console.log("HLS autoplay prevented by policy:", e);
+                            showPlayOverlay("Tap to Play Stream");
+                            setStatus("▶️ Tap Play button to start stream");
+                        });
                 });
+
                 hlsInstance.on(Hls.Events.ERROR, function(event, data) {
                     if (data.fatal) {
                         console.warn("HLS fatal error:", data);
                         switch (data.type) {
                             case Hls.ErrorTypes.NETWORK_ERROR:
-                                console.log("HLS network error, recovering...");
+                                console.log("HLS network error, recovering startLoad...");
                                 hlsInstance.startLoad();
                                 break;
                             case Hls.ErrorTypes.MEDIA_ERROR:
-                                console.log("HLS media error, recovering...");
+                                console.log("HLS media error, recovering recoverMediaError...");
                                 hlsInstance.recoverMediaError();
                                 break;
                             default:
-                                console.warn("HLS unrecoverable, falling back to embed:", data);
-                                switchToEmbed();
+                                console.log("HLS non-media fatal error. Attempting standard HTML5 MP4 playback:", data);
+                                if (hlsInstance) {
+                                    try { hlsInstance.destroy(); } catch(e){}
+                                    hlsInstance = null;
+                                }
+                                playStandardMp4(targetUrl);
                                 break;
                         }
                     }
                 });
             } else if (video.canPlayType('application/vnd.apple.mpegurl') && isHls) {
-                // Native Safari HLS
+                // Native Safari iOS HLS
                 video.src = targetUrl;
-                video.play().catch(e => console.log("Safari HLS autoplay prevented:", e));
-                setStatus("🔄 Native Apple HLS Stream Active");
+                video.play()
+                    .then(() => {
+                        hidePlayOverlay();
+                        setStatus("🔄 Native Apple HLS Stream Active");
+                    })
+                    .catch(e => {
+                        console.log("Safari HLS autoplay prevented:", e);
+                        showPlayOverlay("Tap to Play Stream");
+                        setStatus("▶️ Tap Play button to start stream");
+                    });
             } else {
                 // Standard MP4 stream
-                video.src = targetUrl;
-                video.load();
-                video.play()
-                    .then(() => setStatus("⚡ Fast Video Stream Playing (Virginia US Proxy)"))
-                    .catch(err => {
-                        console.log("Autoplay paused by browser policy. Click to play.", err);
-                        setStatus("▶️ Click Play to start video");
-                    });
+                playStandardMp4(targetUrl);
             }
         }
 
-        let fallbackCount = 0;
+        video.addEventListener('play', () => hidePlayOverlay());
+        video.addEventListener('playing', () => hidePlayOverlay());
+
         video.addEventListener('loadedmetadata', function() {
-            // Eporner anti-hotlink placeholder clip is 61s (1:01).
-            // Virginia age-verification PSA clip is 94s (1:34) or contains video ID 430658121.
-            // If placeholder clip is detected and an embed URL is available, auto-switch to embed player!
-            const dur = Math.round(video.duration);
-            if ((dur === 61 || dur === 94 || directUrl.includes("430658121")) && embedUrl && embedUrl.length > 5) {
-                console.warn("Anti-hotlink or age-verification clip detected (" + dur + "s), auto-switching to embed player...");
-                switchToEmbed();
+            // Virginia age-verification PSA clip check
+            if (directUrl && directUrl.includes("430658121")) {
+                console.warn("Virginia age-verification clip detected in proxy stream");
+                setStatus("⚠️ Video age verification restricted upstream", false);
             }
         });
 
         video.addEventListener('error', function(e) {
-            console.warn("HTML5 video error:", e);
-            if (fallbackCount === 0 && directUrl && directUrl.startsWith('http') && directUrl !== streamUrl) {
-                fallbackCount++;
-                setStatus("🔄 Retrying stream directly from CDN source...");
-                playStream(directUrl);
-            } else if (fallbackCount <= 1 && embedUrl && embedUrl.length > 5) {
-                fallbackCount++;
-                console.log("Stream playback failed, auto-switching to embed player...");
-                setStatus("🎬 Switching to official embed player...");
-                switchToEmbed();
+            console.warn("HTML5 video element error:", e);
+            // Do NOT fall back to direct blocked CDN domains or RedTube embed
+            if (retryCount < 2 && streamUrl && streamUrl.length > 5) {
+                retryCount++;
+                setStatus("🔄 Reconnecting stream proxy (" + retryCount + "/2)...");
+                setTimeout(() => playStream(streamUrl), 1000);
             } else {
-                console.log("Stream playback error encountered");
-                setStatus("⚠️ Stream playback interrupted. Click '⚡ HTML5 Stream' to retry or toggle 'Embed Player' above.", false);
-                if (ispNotice) ispNotice.style.display = 'flex';
+                setStatus("⚠️ Stream interrupted. Tap to retry stream.", false);
+                showPlayOverlay("Tap to Retry Stream");
             }
         });
 
         function startPlayback() {
-            fallbackCount = 0;
-            // Prioritize unblocked HTML5 stream proxy so ISP blocks (e.g. in India) never stop playback
+            retryCount = 0;
+            // Always prioritize HTML5 stream proxy to bypass regional ISP block
             if (streamUrl && streamUrl.length > 5) {
                 switchToHtml5();
             } else if (directUrl && directUrl.length > 5 && (directUrl.includes('.mp4') || directUrl.includes('.webm') || directUrl.includes('.m3u8'))) {
                 switchToHtml5();
-            } else if (embedUrl && embedUrl.length > 5) {
+            } else if (embedUrl && embedUrl.length > 5 && !embedUrl.includes("redtube.com")) {
                 switchToEmbed();
             } else {
                 setStatus("⚠️ Video stream unavailable.", false);
+                showPlayOverlay("Stream Unavailable");
             }
         }
 
