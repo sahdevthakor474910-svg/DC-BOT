@@ -53,10 +53,35 @@ pub async fn play_handler(
         match query.source.as_str() {
             "jav" | "indian" => {
                 if raw_url.contains("xnxx.com") || raw_url.contains("video-") {
-                    match crate::xnxx::client::XnxxClient::new() {
+                    let mut stream = match crate::xnxx::client::XnxxClient::new() {
                         Ok(client) => client.get_mp4_url(&raw_url).await.unwrap_or_default(),
                         Err(_) => String::new(),
+                    };
+                    if stream.is_empty() {
+                        info!("XNXX stream unavailable. Fast OK.XXX fallback for '{}'...", query.title);
+                        if let Ok(ok_client) = crate::okxxx::client::OkXxxClient::new() {
+                            let ok_query = if query.title.to_lowercase().contains("college") {
+                                "college-girl"
+                            } else {
+                                "indian"
+                            };
+                            if let Ok(results) = ok_client.search_videos(ok_query, 1).await {
+                                for v in results {
+                                    let lower = v.title.to_lowercase();
+                                    if !lower.contains("bhabhi") && !lower.contains("devar") && !lower.contains("saali") {
+                                        if let Ok(mp4) = ok_client.get_mp4_url(&v.url).await {
+                                            if !mp4.is_empty() {
+                                                stream = mp4;
+                                                embed_url = format!("https://ok.xxx/embed/{}", v.video_id);
+                                                break;
+                                            }
+                                        }
+                                    }
+                                }
+                            }
+                        }
                     }
+                    stream
                 } else if raw_url.contains("ok.xxx") {
                     match crate::okxxx::client::OkXxxClient::new() {
                         Ok(client) => client.get_mp4_url(&raw_url).await.unwrap_or_default(),
@@ -68,76 +93,58 @@ pub async fn play_handler(
                         Ok(client) => client.get_mp4_url(&video_id).await.unwrap_or_default(),
                         Err(_) => String::new(),
                     };
-                    // If Redtube stream is empty (due to Virginia age-verification geoblock),
-                    // seamlessly search XNXX for authentic Indian viral MMS to guarantee a 100% playable stream!
+                    // If RedTube stream is empty (Virginia geoblock), fast fallback to OK.XXX or XNXX
                     if stream.is_empty() {
-                        info!("RedTube stream unavailable in Virginia datacenter. Resolving authentic MMS stream from XNXX for '{}'...", query.title);
-                        if let Ok(xnxx) = crate::xnxx::client::XnxxClient::new() {
-                            let is_clean_mms_title = {
-                                let l = query.title.to_lowercase();
-                                l.contains("mms") && !l.contains("bhabhi") && !l.contains("devar") && !l.contains("saali")
-                            };
-                            let search_term = if is_clean_mms_title {
-                                let clean = query.title
-                                    .split(|c: char| !c.is_alphanumeric())
-                                    .filter(|w| w.len() > 3)
-                                    .take(3)
-                                    .collect::<Vec<_>>()
-                                    .join(" ");
-                                if clean.is_empty() { "indian viral mms".to_string() } else { clean }
+                        info!("RedTube geoblocked in Virginia. Fast fallback for '{}'...", query.title);
+                        if let Ok(ok_client) = crate::okxxx::client::OkXxxClient::new() {
+                            let ok_query = if query.title.to_lowercase().contains("college") {
+                                "college-girl"
                             } else {
-                                "indian viral mms".to_string()
+                                "indian"
                             };
-
-                            if let Ok(results) = xnxx.search_videos(&search_term, 0).await {
+                            if let Ok(results) = ok_client.search_videos(ok_query, 1).await {
                                 for v in results {
                                     let lower = v.title.to_lowercase();
-                                    if lower.contains("mms") && !lower.contains("bhabhi") && !lower.contains("devar") && !lower.contains("saali") {
-                                        if let Ok(mp4) = xnxx.get_mp4_url(&v.url).await {
+                                    if !lower.contains("bhabhi") && !lower.contains("devar") && !lower.contains("saali") {
+                                        if let Ok(mp4) = ok_client.get_mp4_url(&v.url).await {
                                             if !mp4.is_empty() {
                                                 stream = mp4;
-                                                embed_url = format!("https://www.xnxx.com/embedframe/{}", v.video_id);
+                                                embed_url = format!("https://ok.xxx/embed/{}", v.video_id);
                                                 break;
                                             }
                                         }
                                     }
                                 }
                             }
+                        }
 
-                            if stream.is_empty() {
-                                if let Ok(results) = xnxx.search_videos("indian viral mms", 0).await {
+                        if stream.is_empty() {
+                            let fallback = tokio::time::timeout(
+                                std::time::Duration::from_secs(6),
+                                async {
+                                    let xnxx = crate::xnxx::client::XnxxClient::new_with_timeout(5)?;
+                                    let results = xnxx.search_videos("indian mms", 0).await?;
                                     for v in results {
                                         let lower = v.title.to_lowercase();
                                         if !lower.contains("bhabhi") && !lower.contains("devar") && !lower.contains("saali") {
                                             if let Ok(mp4) = xnxx.get_mp4_url(&v.url).await {
                                                 if !mp4.is_empty() {
-                                                    stream = mp4;
-                                                    embed_url = format!("https://www.xnxx.com/embedframe/{}", v.video_id);
-                                                    break;
+                                                    return Ok::<(String, String), anyhow::Error>((
+                                                        mp4,
+                                                        format!("https://www.xnxx.com/embedframe/{}", v.video_id),
+                                                    ));
                                                 }
                                             }
+                                            break;
                                         }
                                     }
+                                    anyhow::bail!("No fallback found")
                                 }
-                            }
+                            ).await;
 
-                            if stream.is_empty() {
-                                if let Ok(okxxx) = crate::okxxx::client::OkXxxClient::new() {
-                                    if let Ok(results) = okxxx.search_videos("indian viral mms", 1).await {
-                                        for v in results {
-                                            let lower = v.title.to_lowercase();
-                                            if !lower.contains("bhabhi") && !lower.contains("devar") && !lower.contains("saali") {
-                                                if let Ok(mp4) = okxxx.get_mp4_url(&v.url).await {
-                                                    if !mp4.is_empty() {
-                                                        stream = mp4;
-                                                        embed_url = format!("https://ok.xxx/embed/{}", v.video_id);
-                                                        break;
-                                                    }
-                                                }
-                                            }
-                                        }
-                                    }
-                                }
+                            if let Ok(Ok((mp4, new_embed))) = fallback {
+                                stream = mp4;
+                                embed_url = new_embed;
                             }
                         }
                     }

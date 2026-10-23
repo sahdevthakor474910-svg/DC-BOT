@@ -13,13 +13,17 @@ pub struct XnxxClient {
 
 impl XnxxClient {
     pub fn new() -> Result<Self> {
+        Self::new_with_timeout(20)
+    }
+
+    pub fn new_with_timeout(timeout_secs: u64) -> Result<Self> {
         let http = Client::builder()
             .user_agent(
                 "Mozilla/5.0 (Windows NT 10.0; Win64; x64) \
                  AppleWebKit/537.36 (KHTML, like Gecko) \
                  Chrome/124.0.0.0 Safari/537.36",
             )
-            .timeout(std::time::Duration::from_secs(20))
+            .timeout(std::time::Duration::from_secs(timeout_secs))
             .build()?;
         Ok(Self { http })
     }
@@ -101,6 +105,24 @@ impl XnxxClient {
             let u = &cap[1];
             if !u.is_empty() {
                 return Ok(u.trim_end_matches('/').to_string());
+            }
+        }
+
+        // 4. General setVideoUrl('https://...')
+        let re_gen = regex::Regex::new(r#"html5player\.setVideoUrl\(['"]([^'"]+)['"]\)"#)?;
+        if let Some(cap) = re_gen.captures(&html) {
+            let u = &cap[1];
+            if !u.is_empty() {
+                return Ok(u.trim_end_matches('/').to_string());
+            }
+        }
+
+        // 5. Broad regex fallback for any CDN stream inside script
+        let re_broad = regex::Regex::new(r#"https?://[^"'\s<>]+\.(?:mp4|m3u8)[^"'\s<>]*"#)?;
+        for mat in re_broad.find_iter(&html) {
+            let s = mat.as_str();
+            if !s.contains("trailer") && !s.contains("preview") && !s.contains("thumb") {
+                return Ok(s.trim_end_matches('/').to_string());
             }
         }
 

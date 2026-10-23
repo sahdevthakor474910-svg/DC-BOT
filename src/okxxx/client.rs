@@ -49,7 +49,7 @@ impl OkXxxClient {
 
     /// Search OK.XXX for a specific query (e.g. "indian", "desi", "mms").
     pub async fn search_videos(&self, query: &str, page: u32) -> Result<Vec<OkXxxVideo>> {
-        let clean_query = query.replace(' ', "+");
+        let clean_query = query.trim().replace(' ', "-");
         let url = if page <= 1 {
             format!("{}/search/{}/", BASE_URL, clean_query)
         } else {
