@@ -200,8 +200,6 @@ async fn post_videos(
                 embed = embed.image(&video.default_thumb);
             }
 
-            let content = format!("🇮🇳 **[{}]({})**", video.title, play_url);
-
             // Attempt to download MP4 if small enough (< 8MB) to send as native Discord video attachment
             let maybe_bytes = if let Some(mp4_url) = &video.direct_mp4 {
                 match client.download_bytes(mp4_url).await {
@@ -225,24 +223,21 @@ async fn post_videos(
                 let filename = format!("{}.mp4", video.id);
                 let attachment = serenity::CreateAttachment::bytes(bytes, filename);
                 let msg = serenity::CreateMessage::new()
-                    .content(&content)
                     .embed(embed.clone())
                     .add_file(attachment);
                 channel.send_message(http, msg).await
             } else {
                 let msg = serenity::CreateMessage::new()
-                    .content(&content)
                     .embed(embed.clone());
                 channel.send_message(http, msg).await
             };
 
-            // If attachment upload failed (e.g. Discord 413 Payload Too Large), fallback to link
+            // If attachment upload failed (e.g. Discord 413 Payload Too Large), fallback to embed
             let final_result = match send_result {
                 Ok(m) => Ok(m),
                 Err(e) => {
-                    warn!("Attachment upload failed for Indian video {}, falling back to link: {:#}", video.id, e);
+                    warn!("Attachment upload failed for Indian video {}, falling back to embed: {:#}", video.id, e);
                     let msg = serenity::CreateMessage::new()
-                        .content(&content)
                         .embed(embed);
                     channel.send_message(http, msg).await
                 }
