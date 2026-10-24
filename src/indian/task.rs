@@ -52,17 +52,22 @@ pub async fn run(data: Data, http: Arc<serenity::Http>) {
         }
     };
 
-    let mut tick_idx: usize = 0;
+    let now_secs = std::time::SystemTime::now()
+        .duration_since(std::time::UNIX_EPOCH)
+        .unwrap_or_default()
+        .as_secs();
+    // Deterministic start offset based on 20-min intervals since epoch to prevent restart resets
+    let mut tick_idx: usize = ((now_secs / 1200) % 100) as usize;
 
     loop {
         // Try up to 3 queries each tick until videos are successfully posted
         for offset in 0..3 {
             let query = INDIAN_SEARCHES[(tick_idx + offset) % INDIAN_SEARCHES.len()];
-            let page = (((tick_idx + offset) / INDIAN_SEARCHES.len()) % 5 + 1) as u32;
+            let page = ((tick_idx * 2 + offset) % 10 + 1) as u32;
 
             match tick_with_query(&data, &http, &client, query, page, false).await {
                 Ok(n) if n > 0 => {
-                    info!("🇮🇳 Posted {} Indian MMS video(s) for query '{}'", n, query);
+                    info!("🇮🇳 Posted {} Indian MMS video(s) for query '{}' (page {})", n, query, page);
                     break;
                 }
                 Ok(_) => {}
@@ -139,6 +144,11 @@ async fn post_videos(
         let mut posted_this_tick = 0usize;
 
         for video in videos {
+            // Limit to 2 per tick per guild to conserve bandwidth
+            if posted_this_tick >= 2 {
+                break;
+            }
+
             if !force {
                 // Deduplicate via seen_indian table
                 match queries::is_indian_seen(&data.db, &cfg.guild_id, &video.id).await {
@@ -149,15 +159,6 @@ async fn post_videos(
                     }
                     _ => {}
                 }
-            }
-
-            if let Err(e) = queries::mark_indian_seen(&data.db, &cfg.guild_id, &video.id).await {
-                error!("DB error marking indian seen: {}", e);
-            }
-
-            // Limit to 2 per tick per guild to conserve bandwidth
-            if posted_this_tick >= 2 {
-                break;
             }
 
             let views_str = match &video.views {
@@ -177,7 +178,7 @@ async fn post_videos(
             };
 
             let footer = format!(
-                "🇮🇳 Indian Viral MMS • ⏱️ {} • 👁️ {} views",
+                "🇮🇳 Instagram Viral MMS • ⏱️ {} • 👁️ {}",
                 video.duration, views_str
             );
 
@@ -250,6 +251,10 @@ async fn post_videos(
             match final_result {
                 Ok(_) => {
                     info!("🇮🇳 Posted Indian MMS video {} to guild {}", video.id, cfg.guild_id);
+                    // Mark as seen only after successful delivery
+                    if let Err(e) = queries::mark_indian_seen(&data.db, &cfg.guild_id, &video.id).await {
+                        error!("DB error marking indian seen: {}", e);
+                    }
                     total += 1;
                     posted_this_tick += 1;
                 }
