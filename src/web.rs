@@ -55,7 +55,18 @@ pub async fn play_handler(
     } else {
         match query.source.as_str() {
             "indian" => {
-                if raw_url.contains("desiporn.xxx") || raw_url.starts_with("dp_") {
+                if raw_url.contains("fsiblog") || raw_url.starts_with("fsi_") {
+                    let full_url = if raw_url.starts_with("http") {
+                        raw_url.clone()
+                    } else {
+                        let slug = raw_url.trim_start_matches("fsi_");
+                        format!("https://www.fsiblogxx.com/mms/{}/", slug)
+                    };
+                    match crate::indian::client::IndianClient::new() {
+                        Ok(client) => client.get_mp4_url(&full_url).await.unwrap_or_default(),
+                        Err(_) => String::new(),
+                    }
+                } else if raw_url.contains("desiporn.xxx") || raw_url.starts_with("dp_") {
                     let full_url = if raw_url.starts_with("http") {
                         raw_url.clone()
                     } else {
@@ -407,6 +418,10 @@ pub async fn stream_handler(
         req_builder = req_builder
             .header("Referer", "https://www.redgifs.com/")
             .header("Origin", "https://www.redgifs.com");
+    } else if target_url.contains("fsiblog") {
+        req_builder = req_builder
+            .header("Referer", "https://www.fsiblogxx.com/")
+            .header("Origin", "https://www.fsiblogxx.com");
     }
 
     // 4. Send request to target media file
@@ -634,6 +649,14 @@ pub fn extract_mmsbee_id(url: &str) -> Option<String> {
     re.captures(url).map(|cap| cap[1].to_string())
 }
 
+pub fn extract_fsiblog_id(url: &str) -> Option<String> {
+    if !url.contains("http") && !url.contains('/') {
+        return Some(url.trim_start_matches("fsi_").to_string());
+    }
+    let re = regex::Regex::new(r"fsiblogxx\.com/[^/]+/([^/]+)").ok()?;
+    re.captures(url).map(|cap| cap[1].to_string())
+}
+
 pub fn get_embed_url(source: &str, raw_url: &str) -> String {
     match source {
         "okxxx" => {
@@ -651,7 +674,9 @@ pub fn get_embed_url(source: &str, raw_url: &str) -> String {
             }
         }
         "indian" => {
-            if let Some(id) = extract_desiporn_id(raw_url) {
+            if raw_url.contains("fsiblog") {
+                raw_url.to_string()
+            } else if let Some(id) = extract_desiporn_id(raw_url) {
                 format!("https://www.desiporn.xxx/item/{}.html", id)
             } else {
                 raw_url.to_string()

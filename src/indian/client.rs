@@ -4,13 +4,17 @@ use super::models::IndianVideo;
 
 /// Dedicated Indian MMS search categories and terms rotated across ticks.
 pub const INDIAN_SEARCHES: &[&str] = &[
+    "instagram viral",
     "mms",
+    "instagram mms",
     "college",
     "college girl",
+    "instagram model",
     "viral mms",
     "scandal",
     "leaked",
     "girlfriend",
+    "reels viral",
     "amateur",
     "punjabi",
     "tamil",
@@ -39,9 +43,13 @@ impl IndianClient {
 
     /// Download raw MP4 bytes for Discord video attachment (< 8MB).
     pub async fn download_bytes(&self, url: &str) -> Result<Vec<u8>> {
-        let bytes = self
-            .http
-            .get(url)
+        let mut req = self.http.get(url);
+        if url.contains("fsiblog") {
+            req = req
+                .header("Referer", "https://www.fsiblogxx.com/")
+                .header("Origin", "https://www.fsiblogxx.com");
+        }
+        let bytes = req
             .send()
             .await?
             .error_for_status()?
@@ -52,7 +60,8 @@ impl IndianClient {
 
     /// Fetch large volume of 100% authentic videos from dedicated Indian MMS and leaks portals:
     /// 1. DesiPorn (https://www.desiporn.xxx - 100k+ exclusively Indian MMS & leak videos)
-    /// 2. MmsBee (https://mmsbee.fun - dedicated Indian MMS & viral leak portal)
+    /// 2. FsiBlog (https://www.fsiblogxx.com - latest authentic Instagram viral MMS & influencer leaks)
+    /// 3. MmsBee (https://mmsbee.fun - dedicated Indian MMS & viral leak portal)
     pub async fn fetch_indian_videos(&self, query: &str, _count: u32, page: u32) -> Result<Vec<IndianVideo>> {
         let mut all: Vec<IndianVideo> = Vec::new();
 
@@ -71,13 +80,26 @@ impl IndianClient {
             q if q.contains("amateur") => "amateur",
             q if q.contains("saree") => "saree",
             q if q.contains("outdoor") => "outdoor",
+            q if q.contains("model") || q.contains("instagram") => "actress",
             _ => "indian",
         };
         if let Ok(cat_vids) = self.fetch_desiporn_category(cat_name, page).await {
             all.extend(cat_vids);
         }
 
-        // 2. Fetch from MmsBee (Dedicated Indian MMS and viral leaks portal)
+        // 2. Fetch from FsiBlog (Authentic Instagram viral MMS & influencer leaks)
+        let fsi_query = if query.contains("instagram") || query.contains("reels") || query.contains("model") {
+            query
+        } else if page % 2 == 0 {
+            "instagram"
+        } else {
+            "viral mms"
+        };
+        if let Ok(fsi_videos) = self.fetch_fsiblog(fsi_query, page).await {
+            all.extend(fsi_videos);
+        }
+
+        // 3. Fetch from MmsBee (Dedicated Indian MMS and viral leaks portal)
         if let Ok(bee_videos) = self.fetch_mmsbee(page).await {
             all.extend(bee_videos);
         }
@@ -86,7 +108,7 @@ impl IndianClient {
         let mut seen_ids = std::collections::HashSet::new();
         all.retain(|v| seen_ids.insert(v.id.clone()));
 
-        // Authenticity filter: reject family roleplays (bhabhi/devar) and non-Indian content
+        // Authenticity filter: reject family roleplays and non-Indian content (preserve Instagram MMS)
         let filtered: Vec<IndianVideo> = all
             .into_iter()
             .filter(|v| is_authentic_real_indian_mms(&v.title, ""))
@@ -205,6 +227,69 @@ impl IndianClient {
         Ok(videos)
     }
 
+    /// Scrape authentic Instagram viral MMS & influencer leaks from FsiBlog
+    pub async fn fetch_fsiblog(&self, query: &str, page: u32) -> Result<Vec<IndianVideo>> {
+        let clean_query = query.trim().replace(' ', "+");
+        let page_num = std::cmp::max(1, page);
+        let url = if page_num == 1 {
+            format!("https://www.fsiblogxx.com/?s={}", clean_query)
+        } else {
+            format!("https://www.fsiblogxx.com/page/{}/?s={}", page_num, clean_query)
+        };
+
+        let resp = self.http.get(&url)
+            .header("Referer", "https://www.fsiblogxx.com/")
+            .send()
+            .await?;
+        if !resp.status().is_success() {
+            return Ok(Vec::new());
+        }
+        let html = resp.text().await?;
+
+        let mut videos = Vec::new();
+        let article_re = regex::Regex::new(r#"<article[^>]*>([\s\S]*?)</article>"#)?;
+        let title_re = regex::Regex::new(r#"<h3 class="elementor-post__title">\s*<a href="([^"]+)">\s*([^<]+)\s*</a>\s*</h3>"#)?;
+        let thumb_re = regex::Regex::new(r#"<img[^>]+src="([^"]+)""#)?;
+
+        for cap in article_re.captures_iter(&html) {
+            let art = &cap[1];
+            if let Some(t_cap) = title_re.captures(art) {
+                let post_url = t_cap[1].trim().to_string();
+                let raw_title = t_cap[2].trim().to_string();
+
+                let thumb = thumb_re.captures(art)
+                    .map(|c| c[1].trim().to_string())
+                    .unwrap_or_default();
+
+                let slug = post_url
+                    .trim_end_matches('/')
+                    .split('/')
+                    .last()
+                    .unwrap_or("video")
+                    .to_string();
+
+                let id = format!("fsi_{}", slug);
+                let title = if raw_title.to_lowercase().contains("instagram") {
+                    format!("📸 {}", raw_title)
+                } else {
+                    format!("📸 Instagram Viral MMS: {}", raw_title)
+                };
+
+                videos.push(IndianVideo {
+                    id,
+                    title,
+                    duration: "Viral MMS".to_string(),
+                    views: serde_json::Value::String("Instagram Leaked".to_string()),
+                    default_thumb: thumb,
+                    url: post_url,
+                    direct_mp4: None,
+                });
+            }
+        }
+
+        Ok(videos)
+    }
+
     /// Resolve playable direct MP4 for an Indian video.
     pub async fn get_mp4_url(&self, video_url_or_id: &str) -> Result<String> {
         let full_url = if video_url_or_id.starts_with("http") {
@@ -212,11 +297,34 @@ impl IndianClient {
         } else if video_url_or_id.starts_with("dp_") {
             let id = video_url_or_id.trim_start_matches("dp_");
             format!("https://www.desiporn.xxx/item/{}.html", id)
+        } else if video_url_or_id.starts_with("fsi_") {
+            let slug = video_url_or_id.trim_start_matches("fsi_");
+            format!("https://www.fsiblogxx.com/mms/{}/", slug)
         } else {
             video_url_or_id.to_string()
         };
 
-        if full_url.contains("desiporn.xxx") {
+        if full_url.contains("fsiblog") {
+            let html = self
+                .http
+                .get(&full_url)
+                .header("Referer", "https://www.fsiblogxx.com/")
+                .send()
+                .await?
+                .error_for_status()?
+                .text()
+                .await?;
+
+            let mp4_re = regex::Regex::new(r#"https?://cdn\.fsiblogxx\.com/[^"'\s<>]+\.mp4"#)?;
+            if let Some(m) = mp4_re.find(&html) {
+                return Ok(m.as_str().to_string());
+            }
+
+            let generic_mp4 = regex::Regex::new(r#"https?://[^"'\s<>]+\.mp4(?:\?[^"'\s<>]*)?"#)?;
+            if let Some(m) = generic_mp4.find(&html) {
+                return Ok(m.as_str().to_string());
+            }
+        } else if full_url.contains("desiporn.xxx") {
             let html = self
                 .http
                 .get(&full_url)
@@ -240,7 +348,7 @@ impl IndianClient {
 }
 
 /// Strict filter guaranteeing only 100% REAL, AUTHENTIC human Indian MMS/Desi recordings.
-/// Absolutely NO AI-generated, NO 3D animation, NO cartoons, NO Western pornstars, NO bhabhi/family roleplays.
+/// Absolutely NO AI-generated, NO 3D animation, NO cartoons, NO Western pornstars.
 pub fn is_authentic_real_indian_mms(title: &str, tags_text: &str) -> bool {
     let combined = format!("{} {}", title, tags_text).to_lowercase();
 
@@ -261,15 +369,23 @@ pub fn is_authentic_real_indian_mms(title: &str, tags_text: &str) -> bool {
         }
     }
 
-    // 2. Family roleplay / scripted blacklist per user request:
-    const SCRIPTED_FAMILY_BLACKLIST: &[&str] = &[
-        "bhabhi", "bhabi", "devar", "saali", "sali ", "chachi", "sasur",
-        "bahu", "jija", "aunty", "aunt", "step", "family",
-    ];
+    // 2. Family roleplay / scripted blacklist:
+    // Do not blacklist if it's explicitly an Instagram / Reels viral leak!
+    let is_insta = combined.contains("instagram")
+        || combined.contains("insta ")
+        || combined.contains("reels")
+        || combined.contains("influencer");
 
-    for &word in SCRIPTED_FAMILY_BLACKLIST {
-        if combined.contains(word) {
-            return false;
+    if !is_insta {
+        const SCRIPTED_FAMILY_BLACKLIST: &[&str] = &[
+            "bhabhi", "bhabi", "devar", "saali", "sali ", "chachi", "sasur",
+            "bahu", "jija", "aunty", "aunt", "step", "family",
+        ];
+
+        for &word in SCRIPTED_FAMILY_BLACKLIST {
+            if combined.contains(word) {
+                return false;
+            }
         }
     }
 
@@ -312,6 +428,7 @@ pub fn is_authentic_real_indian_mms(title: &str, tags_text: &str) -> bool {
         "hotel mms", "room mms", "viral video", "viral mms", "sharma",
         "verma", "singh", "patel", "gupta", "kumar", "kaur", "yadav",
         "salwar", "sari", "saree", "kerala", "chennai", "jaipur", "rajasthan",
+        "instagram", "reels", "influencer",
     ];
 
     INDIAN_IDENTIFIERS.iter().any(|&word| combined.contains(word))
@@ -365,6 +482,26 @@ mod tests {
         let client = IndianClient::new().expect("Failed to initialize IndianClient");
         let mp4 = client.get_mp4_url("https://www.desiporn.xxx/item/226816.html").await.expect("Failed to get MP4");
         println!("Resolved MP4: {}", mp4);
+        assert!(mp4.contains(".mp4"), "Must contain .mp4");
+        assert!(mp4.starts_with("http"), "Must start with http");
+    }
+
+    #[tokio::test]
+    async fn test_fetch_fsiblog_instagram() {
+        let client = IndianClient::new().expect("Failed to initialize IndianClient");
+        let videos = client.fetch_fsiblog("instagram", 1).await.expect("fetch_fsiblog failed");
+        println!("Fetched {} Instagram viral MMS from FsiBlog", videos.len());
+        assert!(!videos.is_empty(), "Should fetch Instagram viral MMS videos");
+        for v in videos.iter().take(3) {
+            println!("- [{}] {} ({})", v.id, v.title, v.url);
+        }
+    }
+
+    #[tokio::test]
+    async fn test_get_fsiblog_mp4_url() {
+        let client = IndianClient::new().expect("Failed to initialize IndianClient");
+        let mp4 = client.get_mp4_url("https://www.fsiblogxx.com/blowjob/beautiful-instagram-influencer-blowjob/").await.expect("Failed to get fsiblog MP4");
+        println!("Resolved FsiBlog MP4: {}", mp4);
         assert!(mp4.contains(".mp4"), "Must contain .mp4");
         assert!(mp4.starts_with("http"), "Must start with http");
     }

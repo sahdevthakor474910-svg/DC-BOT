@@ -562,7 +562,9 @@ mod tests {
 
         // Test video ID extraction
         let first = &results[0];
-        let id_opt = web::extract_desiporn_id(&first.url).or_else(|| web::extract_mmsbee_id(&first.url));
+        let id_opt = web::extract_desiporn_id(&first.url)
+            .or_else(|| web::extract_fsiblog_id(&first.url))
+            .or_else(|| web::extract_mmsbee_id(&first.url));
         println!("Extracted Video ID for '{}': {:?}", first.url, id_opt);
         assert!(id_opt.is_some(), "Should extract video ID");
 
