@@ -228,15 +228,24 @@ impl PornClipsClient {
         let time_block = now_secs / 600;
 
         let base_idx = ((time_block + tick) as usize) % SEARCH_QUERIES.len();
-        let base_page = (((time_block + tick) as u32) % 40) + 1;
+        // RedGIFs search endpoints have 1-6 pages for niche/amateur tags. Clamp to 1..=6!
+        let base_page = (((time_block + tick) as u32) % 6) + 1;
 
-        // Try up to 4 queries across pages to guarantee plenty of fresh clips
-        for offset in 0..4 {
+        // Try up to 5 queries across pages to guarantee plenty of fresh clips
+        for offset in 0..5 {
             let query_idx = (base_idx + offset) % SEARCH_QUERIES.len();
             let query = SEARCH_QUERIES[query_idx];
-            let page = ((base_page + offset as u32) % 40) + 1;
+            let page = ((base_page + offset as u32) % 6) + 1;
 
-            if let Ok(resp) = self.search(query, 80, page).await {
+            let mut resp = self.search(query, 80, page).await;
+            // If higher page returned empty on RedGIFs, fallback immediately to page 1
+            if let Ok(ref r) = resp {
+                if r.gifs.is_empty() && page > 1 {
+                    resp = self.search(query, 80, 1).await;
+                }
+            }
+
+            if let Ok(resp) = resp {
                 for g in resp.gifs {
                     let has_sd = g.urls.as_ref().and_then(|u| u.sd.as_ref()).is_some();
                     let dur = g.duration.unwrap_or(15.0);
@@ -246,10 +255,35 @@ impl PornClipsClient {
                 }
             }
 
-            if results.len() >= 20 {
+            if results.len() >= 25 {
                 break;
             }
         }
+
+        // Guaranteed fallback to high-volume queries if niche tags returned too few clips
+        if results.len() < 10 {
+            const HIGH_VOLUME_FALLBACKS: &[&str] = &[
+                "creampie", "blowjob", "amateur", "couple", "doggystyle", "cowgirl", "facial",
+            ];
+            for &fallback_query in HIGH_VOLUME_FALLBACKS {
+                if let Ok(resp) = self.search(fallback_query, 80, 1).await {
+                    for g in resp.gifs {
+                        let has_sd = g.urls.as_ref().and_then(|u| u.sd.as_ref()).is_some();
+                        let dur = g.duration.unwrap_or(15.0);
+                        if has_sd && dur <= 60.0 && dur >= 2.0 && is_straight_female_content(&g) {
+                            results.push(g);
+                        }
+                    }
+                }
+                if results.len() >= 25 {
+                    break;
+                }
+            }
+        }
+
+        // Deduplicate results by ID
+        let mut seen_ids = std::collections::HashSet::new();
+        results.retain(|g| seen_ids.insert(g.id.clone()));
 
         debug!("🎬 PornClips: collected {} valid clips for tick {}", results.len(), tick);
         Ok(results)
@@ -268,3 +302,23 @@ impl PornClipsClient {
         Ok(bytes.to_vec())
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[tokio::test]
+    async fn test_pornclips_fetch() {
+        let client = PornClipsClient::new().await.expect("Failed to create PornClipsClient");
+        let tick = std::time::SystemTime::now()
+            .duration_since(std::time::UNIX_EPOCH)
+            .map(|d| d.as_secs())
+            .unwrap_or(0);
+        let clips = client.fetch_for_tick(tick).await.expect("fetch_for_tick failed");
+        println!("Fetched {} clips for tick {}", clips.len(), tick);
+        for c in clips.iter().take(3) {
+            println!("- [{}] tags: {:?}, url: {:?}", c.id, c.tags, c.urls.as_ref().and_then(|u| u.sd.as_ref()));
+        }
+    }
+}
+

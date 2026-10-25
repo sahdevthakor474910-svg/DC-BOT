@@ -19,7 +19,6 @@ mod okxxx;
 mod porn;
 mod pornclips;
 mod reddit;
-mod twitter;
 mod web;
 mod xnxx;
 
@@ -479,12 +478,6 @@ fn build_framework(bot_data: Data) -> poise::Framework<Data, Error> {
                 }
                 info!("⏱️  CoC update task spawned (every 10 min — r/ClashOfClans + YouTube)");
 
-                {
-                    let d = bot_data.clone();
-                    let h = Arc::clone(&http);
-                    tokio::spawn(async move { twitter::task::run(d, h).await });
-                }
-                info!("⏱️  Twitter/X task spawned (every 10 min — @dmc_poc & @dmc_poc_jp via Nitter RSS)");
 
                 {
                     let d = bot_data.clone();
@@ -640,41 +633,6 @@ mod tests {
         assert!(!posts.is_empty(), "Scrolller posts list should not be empty");
     }
 
-    #[tokio::test]
-    async fn test_japanese_translation() {
-        let client = reqwest::Client::new();
-        
-        let jp_text = "こんにちは、世界！";
-        assert!(twitter::translate::is_japanese(jp_text), "Should detect Japanese text");
-
-        let en_text = "Hello, world!";
-        assert!(!twitter::translate::is_japanese(en_text), "Should detect SFW/non-Japanese text as false");
-
-        let translated = twitter::translate::translate_ja_to_en(&client, jp_text, "").await;
-        println!("Translated '{}' -> '{}'", jp_text, translated);
-        assert!(!translated.is_empty());
-    }
-
-    #[tokio::test]
-    #[ignore = "Nitter public instance may be down/flaky"]
-    async fn test_live_translation() {
-        let twitter_client = twitter::client::TwitterClient::new().unwrap();
-        println!("Fetching tweets from @dmc_poc_jp...");
-        let tweets = twitter_client.fetch_tweets("dmc_poc_jp", 5).await;
-        assert!(tweets.is_ok(), "Failed to fetch tweets: {:?}", tweets.err());
-        let tweets = tweets.unwrap();
-        for (i, tweet) in tweets.iter().enumerate() {
-            println!("\n--- Tweet {} ---", i + 1);
-            println!("  ID: {}", tweet.id);
-            println!("  Text: {}", tweet.text);
-            let is_jp = twitter::translate::is_japanese(&tweet.text);
-            println!("  Is Japanese? {}", is_jp);
-            if is_jp {
-                let translated = twitter::translate::translate_ja_to_en(twitter_client.http(), &tweet.text, "").await;
-                println!("  Translated: {}", translated);
-            }
-        }
-    }
 
     #[test]
     fn test_dmc_calculator() {

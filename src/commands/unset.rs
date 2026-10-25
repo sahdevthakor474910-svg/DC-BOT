@@ -41,12 +41,6 @@ pub async fn unset(
     #[description = "Clear the 📸 Hot Photos channel"]
     hot_photos: Option<bool>,
 
-    #[description = "Clear the 🌍 X / Twitter Global channel"]
-    twitter_global: Option<bool>,
-
-    #[description = "Clear the 🌏 X / Twitter Asia channel"]
-    twitter_asia: Option<bool>,
-
     #[description = "Clear the 🎮 DMC Boss Results channel"]
     dmc: Option<bool>,
 
@@ -121,15 +115,6 @@ pub async fn unset(
         cleared.push("📸 Hot Photos");
     }
 
-    if twitter_global.unwrap_or(false) {
-        queries::set_twitter_global_channel(db, &guild_id, None).await?;
-        cleared.push("🌍 X Global");
-    }
-
-    if twitter_asia.unwrap_or(false) {
-        queries::set_twitter_asia_channel(db, &guild_id, None).await?;
-        cleared.push("🌏 X Asia");
-    }
 
     if dmc.unwrap_or(false) {
         queries::set_dmc_channel(db, &guild_id, None).await?;

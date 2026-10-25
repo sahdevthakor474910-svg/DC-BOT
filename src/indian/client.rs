@@ -16,6 +16,12 @@ pub const INDIAN_SEARCHES: &[&str] = &[
     "instagram leak",
     "viral leak",
     "desi mms",
+    "desi leak",
+    "indian viral",
+    "college mms",
+    "tiktoker",
+    "influencer viral",
+    "indian mms",
 ];
 
 pub struct IndianClient {
@@ -58,34 +64,46 @@ impl IndianClient {
     pub async fn fetch_indian_videos(&self, query: &str, _count: u32, page: u32) -> Result<Vec<IndianVideo>> {
         let mut all: Vec<IndianVideo> = Vec::new();
 
-        // 1. TOP PRIORITY: FsiBlog Instagram Viral MMS & Influencer Leaks
-        let fsi_query = if query.contains("instagram") || query.contains("reels") || query.contains("influencer") || query.contains("model") || query.contains("leak") {
-            query
-        } else {
-            "instagram"
-        };
-        if let Ok(fsi_videos) = self.fetch_fsiblog(fsi_query, page).await {
+        // 1. TOP PRIORITY: Search the specific query on FsiBlog
+        let clean_q = if query.trim().is_empty() { "instagram" } else { query.trim() };
+        if let Ok(fsi_videos) = self.fetch_fsiblog(clean_q, page).await {
             all.extend(fsi_videos);
         }
 
-        // 2. Fresh daily MMS from /category/mms/
-        if let Ok(cat_mms) = self.fetch_fsiblog_category_mms(page).await {
-            all.extend(cat_mms);
+        // 2. If below 10 videos, supplement with fresh MMS from /category/mms/
+        if all.len() < 10 {
+            if let Ok(cat_mms) = self.fetch_fsiblog_category_mms(page).await {
+                all.extend(cat_mms);
+            }
         }
 
-        // 3. Complementary Instagram / Reels query to guarantee plenty of fresh viral leaks
-        let sec_query = if fsi_query == "instagram" {
-            "reels"
-        } else if fsi_query == "reels" {
-            "influencer"
-        } else {
-            "instagram viral"
-        };
-        if let Ok(sec_videos) = self.fetch_fsiblog(sec_query, page).await {
-            all.extend(sec_videos);
+        // 3. If still below 10 videos, supplement with related Instagram / Reels viral search
+        if all.len() < 10 {
+            let sec_query = if clean_q.contains("instagram") {
+                "reels"
+            } else if clean_q.contains("reels") {
+                "influencer"
+            } else {
+                "instagram viral"
+            };
+            if let Ok(sec_videos) = self.fetch_fsiblog(sec_query, page).await {
+                all.extend(sec_videos);
+            }
         }
 
-        // 4. Extreme emergency fallback only if FsiBlog returns 0 videos
+        // 4. If higher page returned 0 videos, fallback to page 1
+        if all.is_empty() && page > 1 {
+            if let Ok(p1_videos) = self.fetch_fsiblog(clean_q, 1).await {
+                all.extend(p1_videos);
+            }
+            if all.is_empty() {
+                if let Ok(cat_p1) = self.fetch_fsiblog_category_mms(1).await {
+                    all.extend(cat_p1);
+                }
+            }
+        }
+
+        // 5. Extreme emergency fallback only if FsiBlog returns 0 videos
         if all.is_empty() {
             if let Ok(dp_videos) = self.fetch_desiporn("mms", 1).await {
                 all.extend(dp_videos);
@@ -522,6 +540,18 @@ mod tests {
         assert!(videos.iter().all(|v| v.id.starts_with("fsi_")), "All top videos should be fresh FsiBlog Instagram leaks!");
         for v in videos.iter().take(5) {
             println!("- [{}] {} ({})", v.id, v.title, v.url);
+        }
+    }
+
+    #[tokio::test]
+    async fn test_fetch_pages() {
+        let client = IndianClient::new().expect("Failed to initialize IndianClient");
+        let p1 = client.fetch_fsiblog("instagram", 1).await.unwrap();
+        let p2 = client.fetch_fsiblog("instagram", 2).await.unwrap();
+        println!("Page 1: {} videos, Page 2: {} videos", p1.len(), p2.len());
+        if !p1.is_empty() && !p2.is_empty() {
+            println!("P1 first: [{}] {}", p1[0].id, p1[0].title);
+            println!("P2 first: [{}] {}", p2[0].id, p2[0].title);
         }
     }
 }

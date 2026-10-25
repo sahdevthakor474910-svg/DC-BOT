@@ -1,10 +1,113 @@
-use tracing::{info, warn};
+use tracing::info;
 
-use crate::twitter::client::TwitterClient;
 use super::models::CocUpdate;
 
 // Only show posts from the last N hours — prevents old content flooding on first run
 const MAX_AGE_HOURS: i64 = 48;
+
+fn strip_html(html: &str) -> String {
+    let mut out = String::with_capacity(html.len());
+    let mut in_tag = false;
+    for c in html.chars() {
+        match c {
+            '<' => in_tag = true,
+            '>' => {
+                in_tag = false;
+                out.push(' ');
+            }
+            _ if !in_tag => out.push(c),
+            _ => {}
+        }
+    }
+    let decoded = out
+        .replace("&amp;",  "&")
+        .replace("&lt;",   "<")
+        .replace("&gt;",   ">")
+        .replace("&quot;", "\"")
+        .replace("&#39;",  "'")
+        .replace("&nbsp;", " ");
+
+    decoded.split_whitespace().collect::<Vec<_>>().join(" ")
+}
+
+struct CocTweet {
+    id: String,
+    text: String,
+    link: String,
+    published_at: Option<chrono::DateTime<chrono::Utc>>,
+}
+
+async fn fetch_coc_tweets(http: &reqwest::Client, limit: usize) -> Vec<CocTweet> {
+    let instances = &[
+        "https://nitter.net",
+        "https://nitter.privacyredirect.com",
+        "https://nitter.poast.org",
+    ];
+
+    for &base_url in instances {
+        let url = format!("{}/ClashofClans/rss", base_url);
+        let res = match http.get(&url).timeout(std::time::Duration::from_secs(8)).send().await {
+            Ok(r) if r.status().is_success() => r,
+            _ => continue,
+        };
+
+        let bytes = match res.bytes().await {
+            Ok(b) => b,
+            _ => continue,
+        };
+
+        let feed = match feed_rs::parser::parse(bytes.as_ref()) {
+            Ok(f) => f,
+            _ => continue,
+        };
+
+        let mut tweets = Vec::new();
+        for entry in feed.entries {
+            let id = entry.id.clone();
+            let doc_link = entry.links.first().map(|l| l.href.clone()).unwrap_or_else(|| id.clone());
+            let tweet_id = if id.chars().all(|c| c.is_ascii_digit()) {
+                id
+            } else {
+                let parsed = doc_link.split("/status/").nth(1)
+                    .and_then(|s| s.split('#').next())
+                    .and_then(|s| s.split('?').next())
+                    .unwrap_or("")
+                    .to_string();
+                if parsed.is_empty() {
+                    continue;
+                }
+                parsed
+            };
+
+            let title = entry.title.map(|t| t.content).unwrap_or_default();
+            let summary_html = entry.summary.map(|s| s.content).unwrap_or_default();
+            let text = if !summary_html.is_empty() {
+                strip_html(&summary_html)
+            } else {
+                title
+            };
+
+            let link = format!("https://twitter.com/ClashofClans/status/{}", tweet_id);
+
+            tweets.push(CocTweet {
+                id: tweet_id,
+                text,
+                link,
+                published_at: entry.published,
+            });
+
+            if tweets.len() >= limit {
+                break;
+            }
+        }
+
+        if !tweets.is_empty() {
+            return tweets;
+        }
+    }
+
+    vec![]
+}
 
 // =============================================================================
 // Keyword classifier
@@ -72,22 +175,8 @@ fn is_recent(ts: Option<chrono::DateTime<chrono::Utc>>) -> bool {
 // Public API
 // =============================================================================
 
-pub async fn fetch_all_updates(_client: &reqwest::Client) -> Vec<CocUpdate> {
-    let twitter_client = match TwitterClient::new() {
-        Ok(tc) => tc,
-        Err(e) => {
-            warn!("CoC fetcher: failed to initialize TwitterClient: {}", e);
-            return vec![];
-        }
-    };
-
-    let tweets = match twitter_client.fetch_tweets("ClashofClans", 10).await {
-        Ok(t) => t,
-        Err(e) => {
-            warn!("CoC fetcher: failed to fetch tweets: {}", e);
-            vec![]
-        }
-    };
+pub async fn fetch_all_updates(client: &reqwest::Client) -> Vec<CocUpdate> {
+    let tweets = fetch_coc_tweets(client, 10).await;
 
     let mut updates = Vec::new();
     for tweet in tweets {

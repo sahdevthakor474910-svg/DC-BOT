@@ -10,11 +10,33 @@ use crate::db::queries;
 use super::client::{IndianClient, INDIAN_SEARCHES};
 use super::models::IndianVideo;
 
+/// Deterministic Knuth/Fisher-Yates pseudo-random shuffle to avoid repeating items across reboots
+fn pseudo_shuffle<T>(slice: &mut [T], mut seed: u64) {
+    if slice.len() <= 1 {
+        return;
+    }
+    for i in (1..slice.len()).rev() {
+        seed = seed.wrapping_mul(6364136223846793005).wrapping_add(1442695040888963407);
+        let j = (seed as usize) % (i + 1);
+        slice.swap(i, j);
+    }
+}
+
 /// Single tick exposed for `/admin force-refresh` and `/post`.
+/// Scans across 15 pages and diverse queries starting from dynamic time offset to guarantee unseen videos.
 pub async fn run_once(data: &Data, http: &Arc<serenity::Http>, force: bool) -> Result<usize> {
     let client = IndianClient::new()?;
-    for &query in INDIAN_SEARCHES.iter().take(8) {
-        for page in 1..=3 {
+    let now_secs = std::time::SystemTime::now()
+        .duration_since(std::time::UNIX_EPOCH)
+        .unwrap_or_default()
+        .as_secs();
+
+    // Start from a dynamic page based on current time (changes every 15 min, cycling 1..35)
+    let start_page = ((now_secs / 900) % 35 + 1) as u32;
+
+    for page_offset in 0..15 {
+        let page = ((start_page + page_offset - 1) % 35) + 1;
+        for &query in INDIAN_SEARCHES.iter() {
             let videos = match client.fetch_indian_videos(query, 10, page).await {
                 Ok(v) if !v.is_empty() => v,
                 _ => continue,
@@ -25,6 +47,19 @@ pub async fn run_once(data: &Data, http: &Arc<serenity::Http>, force: bool) -> R
             }
         }
     }
+
+    // Ultimate fallback: check top queries on page 1
+    for &query in INDIAN_SEARCHES.iter().take(4) {
+        if let Ok(videos) = client.fetch_indian_videos(query, 10, 1).await {
+            if !videos.is_empty() {
+                let posted = post_videos(data, http, &client, &videos, force).await?;
+                if posted > 0 {
+                    return Ok(posted);
+                }
+            }
+        }
+    }
+
     Ok(0)
 }
 
@@ -60,10 +95,11 @@ pub async fn run(data: Data, http: Arc<serenity::Http>) {
     let mut tick_idx: usize = ((now_secs / 1200) % 100) as usize;
 
     loop {
-        // Try up to 3 queries each tick until videos are successfully posted
-        for offset in 0..3 {
+        // Try up to 4 queries each tick until videos are successfully posted
+        for offset in 0..4 {
             let query = INDIAN_SEARCHES[(tick_idx + offset) % INDIAN_SEARCHES.len()];
-            let page = ((tick_idx * 2 + offset) % 10 + 1) as u32;
+            // Smoothly rotate across all pages 1 to 35
+            let page = ((tick_idx + offset) % 35 + 1) as u32;
 
             match tick_with_query(&data, &http, &client, query, page, false).await {
                 Ok(n) if n > 0 => {
@@ -130,6 +166,10 @@ async fn post_videos(
     }
 
     let mut total = 0usize;
+    let now_seed = std::time::SystemTime::now()
+        .duration_since(std::time::UNIX_EPOCH)
+        .unwrap_or_default()
+        .as_secs();
 
     for cfg in relevant {
         let channel_id_str = cfg.indian_channel_id.as_ref().unwrap();
@@ -143,7 +183,11 @@ async fn post_videos(
         let channel = serenity::ChannelId::new(channel_id_u64);
         let mut posted_this_tick = 0usize;
 
-        for video in videos {
+        // Shuffle candidate videos to prevent repeating the same top videos across reboots
+        let mut candidates = videos.to_vec();
+        pseudo_shuffle(&mut candidates, now_seed ^ channel_id_u64);
+
+        for video in &candidates {
             // Limit to 2 per tick per guild to conserve bandwidth
             if posted_this_tick >= 2 {
                 break;

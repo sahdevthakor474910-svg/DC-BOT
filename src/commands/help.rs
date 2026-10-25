@@ -8,7 +8,7 @@ pub async fn help(ctx: Context<'_>) -> Result<(), Error> {
     let embed = serenity::CreateEmbed::new()
         .title("📖 Quick Start Guide")
         .description(
-            "This bot auto-posts **memes**, **gaming news**, **free games**, **NSFW contents**, **X / Twitter updates**, \
+            "This bot auto-posts **memes**, **gaming news**, **free games**, **NSFW contents**, \
             and **Clash of Clans updates** into your chosen channels — hands free!\n\n\
             Configure and manage the bot with these simple commands:"
         )
@@ -22,8 +22,6 @@ pub async fn help(ctx: Context<'_>) -> Result<(), Error> {
              • **news** → 📰 Gaming news every 5 min\n\
              • **free_games** → 🎁 Epic & Steam free game alerts\n\
              • **coc** → ⚔️ Clash of Clans: updates, news, free rewards every 10 min\n\
-             • **twitter_global** → 🌍 X updates of @dmc_poc every 10 min\n\
-             • **twitter_asia** → 🌏 X updates of @dmc_poc_jp every 10 min\n\
              • **dmc** → 🎮 DMC boss results leaderboard screenshot calculator\n\
              • **hot_photos** → 📸 18+ amateur slides *(Age-Restricted!)*\n\
              • **jav** → 🎌 JAV videos from Eporner *(Age-Restricted!)*\n\

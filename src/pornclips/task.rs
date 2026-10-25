@@ -9,15 +9,39 @@ use crate::data::Data;
 use crate::db::queries;
 use super::client::PornClipsClient;
 
+/// Deterministic Knuth/Fisher-Yates pseudo-random shuffle to avoid repeating items across reboots
+fn pseudo_shuffle<T>(slice: &mut [T], mut seed: u64) {
+    if slice.len() <= 1 {
+        return;
+    }
+    for i in (1..slice.len()).rev() {
+        seed = seed.wrapping_mul(6364136223846793005).wrapping_add(1442695040888963407);
+        let j = (seed as usize) % (i + 1);
+        slice.swap(i, j);
+    }
+}
+
 /// Single tick exposed for `/admin force-refresh` and `/post`.
+/// Retries across multiple tick variations until unseen clips are posted.
 pub async fn run_once(data: &Data, http: &Arc<serenity::Http>, force: bool) -> Result<usize> {
     let client = PornClipsClient::new().await?;
-    let tick = std::time::SystemTime::now()
+    let now = std::time::SystemTime::now()
         .duration_since(std::time::UNIX_EPOCH)
         .map(|d| d.as_secs())
         .unwrap_or(0);
-    let clips = client.fetch_for_tick(tick).await?;
-    post_clips(data, http, &client, &clips, force).await
+
+    for attempt in 0..10 {
+        let tick = now.wrapping_add(attempt * 47);
+        let clips = client.fetch_for_tick(tick).await?;
+        if clips.is_empty() {
+            continue;
+        }
+        let posted = post_clips(data, http, &client, &clips, force).await?;
+        if posted > 0 {
+            return Ok(posted);
+        }
+    }
+    Ok(0)
 }
 
 /// Background task — runs every 10 minutes.
@@ -32,7 +56,12 @@ pub async fn run(data: Data, http: Arc<serenity::Http>) {
         }
     };
 
-    let mut tick = 0u64;
+    let now_secs = std::time::SystemTime::now()
+        .duration_since(std::time::UNIX_EPOCH)
+        .map(|d| d.as_secs())
+        .unwrap_or(0);
+    // Seed tick from 10-minute intervals since epoch so reboots don't reset to 0
+    let mut tick = now_secs / 600;
 
     loop {
         match client.fetch_for_tick(tick).await {
@@ -46,7 +75,7 @@ pub async fn run(data: Data, http: Arc<serenity::Http>) {
             Err(e) => error!("Failed to fetch Porn Clips for tick {}: {:#}", tick, e),
         }
 
-        tick += 1;
+        tick = tick.wrapping_add(1);
 
         if let Err(e) = queries::prune_old_seen_pornclips(&data.db, 90).await {
             warn!("Could not prune seen_pornclips: {}", e);
@@ -75,6 +104,10 @@ async fn post_clips(
     }
 
     let mut total = 0usize;
+    let now_seed = std::time::SystemTime::now()
+        .duration_since(std::time::UNIX_EPOCH)
+        .unwrap_or_default()
+        .as_secs();
 
     for cfg in relevant {
         let channel_id_str = cfg.pornclips_channel_id.as_ref().unwrap();
@@ -88,7 +121,11 @@ async fn post_clips(
         let channel = serenity::ChannelId::new(channel_id_u64);
         let mut posted_this_tick = 0usize;
 
-        for clip in clips {
+        // Shuffle candidate clips per guild and tick so repeats never occur even across container reboots
+        let mut candidates = clips.to_vec();
+        pseudo_shuffle(&mut candidates, now_seed ^ channel_id_u64);
+
+        for clip in &candidates {
             // Cap at 1 clip per 10-minute tick per guild to conserve free-tier bandwidth
             if posted_this_tick >= 1 {
                 break;

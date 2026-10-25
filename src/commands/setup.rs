@@ -43,12 +43,6 @@ pub async fn setup(
     #[description = "📸 Hot Photos (NSFW 18+ amateurs, curves, naked girls — every 1 min)"]
     hot_photos: Option<serenity::GuildChannel>,
 
-    #[description = "🌍 X / Twitter Global updates — @dmc_poc every 10 min"]
-    twitter_global: Option<serenity::GuildChannel>,
-
-    #[description = "🌏 X / Twitter Asia updates — @dmc_poc_jp every 10 min"]
-    twitter_asia: Option<serenity::GuildChannel>,
-
     #[description = "🎮 DMC Boss Battle Result screenshot analyzer"]
     dmc: Option<serenity::GuildChannel>,
 
@@ -202,17 +196,7 @@ pub async fn setup(
         }
     }
 
-    // ── Twitter / X (Global) ───────────────────────────────────────────────
-    if let Some(ch) = &twitter_global {
-        queries::set_twitter_global_channel(db, &guild_id, Some(ch.id.to_string().as_str())).await?;
-        lines.push(format!("🌍  **X Global Updates** → {} *(@dmc_poc — every 10 min)*", ch.id.mention()));
-    }
 
-    // ── Twitter / X (Asia) ─────────────────────────────────────────────────
-    if let Some(ch) = &twitter_asia {
-        queries::set_twitter_asia_channel(db, &guild_id, Some(ch.id.to_string().as_str())).await?;
-        lines.push(format!("🌏  **X Asia Updates** → {} *(@dmc_poc_jp — every 10 min)*", ch.id.mention()));
-    }
 
     // ── DMC Boss Result Analyzer ───────────────────────────────────────────
     if let Some(ch) = &dmc {
