@@ -12,10 +12,12 @@ const SEARCH_QUERIES: &[&str] = &[
     "desi",
     "indian viral",
     "desi viral",
-    "indian bhabhi",
-    "desi bhabhi",
+    "indian girl",
+    "desi girl",
     "indian amateur",
     "desi couple",
+    "indian college",
+    "desi amateur",
     "creampie",
     "blowjob",
     "doggystyle",
@@ -25,7 +27,6 @@ const SEARCH_QUERIES: &[&str] = &[
     "titfuck",
     "facial",
     "hardcore",
-    "milf",
     "amateur",
     "couple",
     "brunette",
@@ -43,7 +44,7 @@ const SEARCH_QUERIES: &[&str] = &[
     "squirt",
 ];
 
-/// Strict filter to guarantee NO solo males, NO gay porn, NO trans content
+/// Strict filter to guarantee NO solo males, NO gay porn, NO trans, NO aunties/milfs, NO black/ebony content
 pub fn is_straight_female_content(gif: &RedGifsGif) -> bool {
     // 1. Sexuality check: reject gay/bi/trans
     for sex in &gif.sexuality {
@@ -68,7 +69,7 @@ pub fn is_straight_female_content(gif: &RedGifsGif) -> bool {
         text.push_str(&desc.to_lowercase());
     }
 
-    // 3. Blacklist terms (male solo, gay, trans, femboy, cock ratings, etc.)
+    // 3. Blacklist terms (male solo, gay, trans, femboy, cock ratings, aunty/mature, black/ebony)
     const BLACKLIST: &[&str] = &[
         "solo male",
         "male only",
@@ -105,6 +106,30 @@ pub fn is_straight_female_content(gif: &RedGifsGif) -> bool {
         "findom",
         "pegging",
         "chubby male",
+        // Reject aunty / mature / milf / bhabhi
+        "aunty",
+        "auntie",
+        "aunt",
+        "mature",
+        "granny",
+        "milf",
+        "bhabhi",
+        "bhabi",
+        "housewife",
+        "old woman",
+        "old lady",
+        // Reject black / ebony
+        "ebony",
+        "black girl",
+        "black woman",
+        "black female",
+        "black teen",
+        "black pussy",
+        "black bbw",
+        "bbc",
+        "african",
+        "nigerian",
+        "interracial",
     ];
 
     for &word in BLACKLIST {
@@ -126,14 +151,14 @@ pub fn is_straight_female_content(gif: &RedGifsGif) -> bool {
     }
 
     const POSITIVE_FEMALE: &[&str] = &[
-        "pussy", "tits", "boobs", "milf", "amateur", "babe", "teen", "ass",
+        "pussy", "tits", "boobs", "amateur", "babe", "teen", "ass",
         "blowjob", "creampie", "doggystyle", "cowgirl", "riding", "facial",
         "cumshot", "deepthroat", "titfuck", "threesome", "gangbang", "anal",
-        "lingerie", "brunette", "blonde", "redhead", "bbw", "pawg", "ebony",
+        "lingerie", "brunette", "blonde", "redhead", "bbw", "pawg",
         "latina", "asian", "pornstar", "petite", "curvy", "oral", "orgasm",
         "swallow", "squirt", "masturbating", "fingering", "strip", "nude",
         "naked", "cute", "hot", "couple", "wife", "step", "fuck", "cum",
-        "indian", "desi", "bhabhi", "bhabi", "mallu", "aunty", "viral",
+        "indian", "desi", "mallu", "viral",
     ];
 
     POSITIVE_FEMALE.iter().any(|&word| text.contains(word))
