@@ -2,7 +2,7 @@ services:
   - type: web
     name: dc-bot
     runtime: docker
-    region: virginia
+    region: oregon
     branch: main
     autoDeployTrigger: commit
     autoDeploy: true

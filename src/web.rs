@@ -367,10 +367,10 @@ pub async fn stream_handler(
         target_url.push('/');
     }
 
-    // 2. Build dedicated client with browser User-Agent so CDNs don't block requests
+    // 2. Build dedicated client with browser User-Agent and connection timeout
     let client = match reqwest::Client::builder()
         .user_agent("Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36")
-        .timeout(std::time::Duration::from_secs(60))
+        .connect_timeout(std::time::Duration::from_secs(15))
         .build()
     {
         Ok(c) => c,
@@ -422,6 +422,10 @@ pub async fn stream_handler(
         req_builder = req_builder
             .header("Referer", "https://www.fsiblogxx.com/")
             .header("Origin", "https://www.fsiblogxx.com");
+    } else if target_url.contains("xvideos") || target_url.contains("desiporn") {
+        req_builder = req_builder
+            .header("Referer", "https://www.xvideos.com/")
+            .header("Origin", "https://www.xvideos.com");
     }
 
     // 4. Send request to target media file

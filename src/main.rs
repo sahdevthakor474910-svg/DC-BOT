@@ -412,21 +412,20 @@ fn build_framework(bot_data: Data) -> poise::Framework<Data, Error> {
                 }
 
                 // ── Slash Command Deployment ──────────────────────────────
-                // Automatically register slash commands across all connected guilds so schema changes
-                // (new commands and new options) take effect immediately in Discord without delay.
-                info!("[DEPLOY] Deploying slash commands across {} guild(s)...", guild_ids.len());
-                for guild_id in &guild_ids {
-                    match poise::builtins::register_in_guild(ctx, &framework.options().commands, *guild_id).await {
-                        Ok(()) => info!("[DEPLOY] Commands registered in guild {}", guild_id),
-                        Err(e) => tracing::warn!("[DEPLOY] Failed to register commands in guild {}: {:?}", guild_id, e),
+                let should_deploy = std::env::var("DEPLOY_COMMANDS")
+                    .map(|v| v.eq_ignore_ascii_case("true") || v == "1")
+                    .unwrap_or(false);
+
+                if should_deploy {
+                    info!("[DEPLOY] DEPLOY_COMMANDS is true: Deploying slash commands globally...");
+                    if let Err(e) = poise::builtins::register_globally(ctx, &framework.options().commands).await {
+                        tracing::warn!("[DEPLOY] Failed to register commands globally: {:?}", e);
+                    } else {
+                        info!("[DEPLOY] Slash commands successfully deployed globally!");
                     }
-                    tokio::time::sleep(std::time::Duration::from_millis(500)).await;
+                } else {
+                    info!("[DEPLOY] Skipping slash command deployment on startup (DEPLOY_COMMANDS not true). Use /admin deploy-commands in Discord to re-sync.");
                 }
-                // Also register globally as fallback
-                if let Err(e) = poise::builtins::register_globally(ctx, &framework.options().commands).await {
-                    tracing::warn!("[DEPLOY] Failed to register commands globally: {:?}", e);
-                }
-                info!("[DEPLOY] Command deployment complete");
 
                 // ── Spawn background tasks ──────────────────────────────
                 {

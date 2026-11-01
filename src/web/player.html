@@ -347,8 +347,13 @@
                 return;
             }
             hidePlayOverlay();
+            if (video.error && streamUrl && streamUrl.length > 5) {
+                retryCount = 0;
+                playStream(streamUrl);
+                return;
+            }
             video.play()
-                .then(() => setStatus("⚡ Stream Playing (Virginia US Proxy)"))
+                .then(() => setStatus("⚡ Stream Playing"))
                 .catch(err => {
                     console.warn("User tap play error:", err);
                     video.muted = true;
@@ -528,11 +533,14 @@
 
         video.addEventListener('error', function(e) {
             console.warn("HTML5 video element error:", e);
-            // Do NOT fall back to direct blocked CDN domains or RedTube embed
             if (retryCount < 2 && streamUrl && streamUrl.length > 5) {
                 retryCount++;
                 setStatus("🔄 Reconnecting stream proxy (" + retryCount + "/2)...");
                 setTimeout(() => playStream(streamUrl), 1000);
+            } else if (embedUrl && embedUrl.length > 5 && !embedUrl.includes("redtube.com")) {
+                console.log("Stream proxy unavailable, falling back to official embed player");
+                setStatus("⚠️ Proxy stream interrupted. Switching to Embed Player...", false);
+                setTimeout(() => switchToEmbed(), 1200);
             } else {
                 setStatus("⚠️ Stream interrupted. Tap to retry stream.", false);
                 showPlayOverlay("Tap to Retry Stream");
