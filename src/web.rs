@@ -60,7 +60,7 @@ pub async fn play_handler(
                         raw_url.clone()
                     } else {
                         let slug = raw_url.trim_start_matches("fsi_");
-                        format!("https://www.fsiblogxx.com/mms/{}/", slug)
+                        format!("https://www.fsiblogmms.com/mms/{}/", slug)
                     };
                     match crate::indian::client::IndianClient::new() {
                         Ok(client) => client.get_mp4_url(&full_url).await.unwrap_or_default(),
@@ -419,9 +419,28 @@ pub async fn stream_handler(
             .header("Referer", "https://www.redgifs.com/")
             .header("Origin", "https://www.redgifs.com");
     } else if target_url.contains("fsiblog") {
-        req_builder = req_builder
-            .header("Referer", "https://www.fsiblogxx.com/")
-            .header("Origin", "https://www.fsiblogxx.com");
+        if let Ok(parsed) = url::Url::parse(&target_url) {
+            if let Some(host) = parsed.host_str() {
+                let main_host = if let Some(base) = host.strip_prefix("cdn.") {
+                    format!("https://www.{}", base)
+                } else if host.starts_with("www.") {
+                    format!("https://{}", host)
+                } else {
+                    format!("https://www.{}", host)
+                };
+                req_builder = req_builder
+                    .header("Referer", format!("{}/", main_host))
+                    .header("Origin", main_host);
+            } else {
+                req_builder = req_builder
+                    .header("Referer", "https://www.fsiblogmms.com/")
+                    .header("Origin", "https://www.fsiblogmms.com");
+            }
+        } else {
+            req_builder = req_builder
+                .header("Referer", "https://www.fsiblogmms.com/")
+                .header("Origin", "https://www.fsiblogmms.com");
+        }
     } else if target_url.contains("xvideos") || target_url.contains("desiporn") {
         req_builder = req_builder
             .header("Referer", "https://www.xvideos.com/")
@@ -657,7 +676,7 @@ pub fn extract_fsiblog_id(url: &str) -> Option<String> {
     if !url.contains("http") && !url.contains('/') {
         return Some(url.trim_start_matches("fsi_").to_string());
     }
-    let re = regex::Regex::new(r"fsiblogxx\.com/[^/]+/([^/]+)").ok()?;
+    let re = regex::Regex::new(r"fsiblog(?:xx|mms)?\.com/[^/]+/([^/]+)").ok()?;
     re.captures(url).map(|cap| cap[1].to_string())
 }
 

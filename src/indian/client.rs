@@ -45,9 +45,10 @@ impl IndianClient {
     pub async fn download_bytes(&self, url: &str) -> Result<Vec<u8>> {
         let mut req = self.http.get(url);
         if url.contains("fsiblog") {
+            let domain = if url.contains("fsiblogxx") { "fsiblogxx.com" } else { "fsiblogmms.com" };
             req = req
-                .header("Referer", "https://www.fsiblogxx.com/")
-                .header("Origin", "https://www.fsiblogxx.com");
+                .header("Referer", format!("https://www.{}/", domain))
+                .header("Origin", format!("https://www.{}", domain));
         }
         let bytes = req
             .send()
@@ -235,8 +236,9 @@ impl IndianClient {
 
     /// Parse and extract videos from any FsiBlog listing page (search results, category pages)
     pub async fn fetch_fsiblog_url(&self, url: &str) -> Result<Vec<IndianVideo>> {
+        let domain = if url.contains("fsiblogxx") { "fsiblogxx.com" } else { "fsiblogmms.com" };
         let resp = self.http.get(url)
-            .header("Referer", "https://www.fsiblogxx.com/")
+            .header("Referer", format!("https://www.{}/", domain))
             .send()
             .await?;
         if !resp.status().is_success() {
@@ -297,9 +299,9 @@ impl IndianClient {
         let clean_query = query.trim().replace(' ', "+");
         let page_num = std::cmp::max(1, page);
         let url = if page_num == 1 {
-            format!("https://www.fsiblogxx.com/?s={}", clean_query)
+            format!("https://www.fsiblogmms.com/?s={}", clean_query)
         } else {
-            format!("https://www.fsiblogxx.com/page/{}/?s={}", page_num, clean_query)
+            format!("https://www.fsiblogmms.com/page/{}/?s={}", page_num, clean_query)
         };
         self.fetch_fsiblog_url(&url).await
     }
@@ -308,9 +310,9 @@ impl IndianClient {
     pub async fn fetch_fsiblog_category_mms(&self, page: u32) -> Result<Vec<IndianVideo>> {
         let page_num = std::cmp::max(1, page);
         let url = if page_num == 1 {
-            "https://www.fsiblogxx.com/category/mms/".to_string()
+            "https://www.fsiblogmms.com/category/mms/".to_string()
         } else {
-            format!("https://www.fsiblogxx.com/category/mms/page/{}/", page_num)
+            format!("https://www.fsiblogmms.com/category/mms/page/{}/", page_num)
         };
         self.fetch_fsiblog_url(&url).await
     }
@@ -324,23 +326,24 @@ impl IndianClient {
             format!("https://www.desiporn.xxx/item/{}.html", id)
         } else if video_url_or_id.starts_with("fsi_") {
             let slug = video_url_or_id.trim_start_matches("fsi_");
-            format!("https://www.fsiblogxx.com/mms/{}/", slug)
+            format!("https://www.fsiblogmms.com/mms/{}/", slug)
         } else {
             video_url_or_id.to_string()
         };
 
         if full_url.contains("fsiblog") {
+            let domain = if full_url.contains("fsiblogxx") { "fsiblogxx.com" } else { "fsiblogmms.com" };
             let html = self
                 .http
                 .get(&full_url)
-                .header("Referer", "https://www.fsiblogxx.com/")
+                .header("Referer", format!("https://www.{}/", domain))
                 .send()
                 .await?
                 .error_for_status()?
                 .text()
                 .await?;
 
-            let mp4_re = regex::Regex::new(r#"https?://cdn\.fsiblogxx\.com/[^"'\s<>]+\.mp4"#)?;
+            let mp4_re = regex::Regex::new(r#"https?://cdn\.fsiblog(?:xx|mms)?\.com/[^"'\s<>]+\.mp4"#)?;
             if let Some(m) = mp4_re.find(&html) {
                 return Ok(m.as_str().to_string());
             }
