@@ -2,26 +2,26 @@ use anyhow::Result;
 
 use super::models::IndianVideo;
 
-/// Dedicated Indian MMS search categories and terms rotated across ticks (Instagram leaks prioritized).
+/// Dedicated personal college girl, girlfriend/boyfriend, and viral MMS search terms.
 pub const INDIAN_SEARCHES: &[&str] = &[
-    "instagram",
-    "instagram viral",
-    "reels",
-    "influencer",
-    "instagram mms",
-    "viral mms",
-    "instagram model",
-    "reels viral",
-    "influencer leak",
-    "instagram leak",
-    "viral leak",
-    "trending leak",
-    "reels leak",
-    "indian viral",
+    "college girl",
     "college mms",
-    "tiktoker",
-    "influencer viral",
-    "indian mms",
+    "girlfriend leak",
+    "college student",
+    "couple mms",
+    "gf bf leak",
+    "hotel mms",
+    "personal mms",
+    "college viral",
+    "girlfriend mms",
+    "private couple",
+    "room mms",
+    "college phone",
+    "whatsapp call",
+    "university girl",
+    "influencer leak",
+    "reels viral",
+    "homemade couple",
 ];
 
 pub struct IndianClient {
@@ -59,55 +59,48 @@ impl IndianClient {
         Ok(bytes.to_vec())
     }
 
-    /// Fetch large volume of 100% authentic videos from dedicated Indian MMS and leaks portals:
-    /// 1. FsiBlog (https://www.fsiblogxx.com - #1 source for latest Instagram viral MMS & influencer leaks)
-    /// 2. DesiPorn / MmsBee (extreme fallback only if FsiBlog returns 0 videos)
+    /// Fetch authentic personal college girl, girlfriend/boyfriend, and viral couple MMS leaks from FsiBlog
     pub async fn fetch_indian_videos(&self, query: &str, _count: u32, page: u32) -> Result<Vec<IndianVideo>> {
         let mut all: Vec<IndianVideo> = Vec::new();
+        let page_num = std::cmp::max(1, page);
 
-        // 1. TOP PRIORITY: Search the specific query on FsiBlog
-        let clean_q = if query.trim().is_empty() { "instagram" } else { query.trim() };
-        if let Ok(fsi_videos) = self.fetch_fsiblog(clean_q, page).await {
-            all.extend(fsi_videos);
+        // 1. Search the specific query on FsiBlog (college, girlfriend, couple, etc.)
+        let clean_q = if query.trim().is_empty() { "college" } else { query.trim() };
+        if let Ok(search_videos) = self.fetch_fsiblog(clean_q, page_num).await {
+            all.extend(search_videos);
         }
 
-        // 2. If below 10 videos, supplement with fresh MMS from /category/mms/
-        if all.len() < 10 {
-            if let Ok(cat_mms) = self.fetch_fsiblog_category_mms(page).await {
-                all.extend(cat_mms);
+        // 2. High priority: Fetch from dedicated College leaks category (/category/college/)
+        if let Ok(college_videos) = self.fetch_fsiblog_category("college", page_num).await {
+            all.extend(college_videos);
+        }
+
+        // 3. High priority: Fetch from dedicated Couple / GF-BF leaks category (/category/couple/)
+        if let Ok(couple_videos) = self.fetch_fsiblog_category("couple", page_num).await {
+            all.extend(couple_videos);
+        }
+
+        // 4. Supplement with Amateur homemade leaks (/category/amateur/)
+        if all.len() < 12 {
+            if let Ok(amateur_videos) = self.fetch_fsiblog_category("amateur", page_num).await {
+                all.extend(amateur_videos);
             }
         }
 
-        // 3. If still below 10 videos, supplement with related Instagram / Reels viral search
-        if all.len() < 10 {
-            let sec_query = if clean_q.contains("instagram") {
-                "reels"
-            } else if clean_q.contains("reels") {
-                "influencer"
-            } else {
-                "instagram viral"
-            };
-            if let Ok(sec_videos) = self.fetch_fsiblog(sec_query, page).await {
-                all.extend(sec_videos);
+        // 5. Supplement with MMS leaks (/category/mms/)
+        if all.len() < 12 {
+            if let Ok(mms_videos) = self.fetch_fsiblog_category("mms", page_num).await {
+                all.extend(mms_videos);
             }
         }
 
-        // 4. If higher page returned 0 videos, fallback to page 1
-        if all.is_empty() && page > 1 {
-            if let Ok(p1_videos) = self.fetch_fsiblog(clean_q, 1).await {
-                all.extend(p1_videos);
+        // 6. If page > 1 returned nothing, fallback to page 1 of college and couple
+        if all.is_empty() && page_num > 1 {
+            if let Ok(p1_college) = self.fetch_fsiblog_category("college", 1).await {
+                all.extend(p1_college);
             }
-            if all.is_empty() {
-                if let Ok(cat_p1) = self.fetch_fsiblog_category_mms(1).await {
-                    all.extend(cat_p1);
-                }
-            }
-        }
-
-        // 5. Extreme emergency fallback only if FsiBlog returns 0 videos
-        if all.is_empty() {
-            if let Ok(dp_videos) = self.fetch_desiporn("mms", 1).await {
-                all.extend(dp_videos);
+            if let Ok(p1_couple) = self.fetch_fsiblog_category("couple", 1).await {
+                all.extend(p1_couple);
             }
         }
 
@@ -115,13 +108,24 @@ impl IndianClient {
         let mut seen_ids = std::collections::HashSet::new();
         all.retain(|v| seen_ids.insert(v.id.clone()));
 
-        // Authenticity filter: reject aunties, mature women, family roleplays, black/ebony, and non-Indian content
+        // Authenticity filter: reject generic desi, aunty, mature, bhabhi, and studio videos
         let filtered: Vec<IndianVideo> = all
             .into_iter()
             .filter(|v| is_authentic_real_indian_mms(&v.title, &v.url))
             .collect();
 
         Ok(filtered)
+    }
+
+    /// Scrape any category from FsiBlog (e.g. "college", "couple", "amateur", "mms")
+    pub async fn fetch_fsiblog_category(&self, category: &str, page: u32) -> Result<Vec<IndianVideo>> {
+        let page_num = std::cmp::max(1, page);
+        let url = if page_num == 1 {
+            format!("https://www.fsiblogmms.com/category/{}/", category)
+        } else {
+            format!("https://www.fsiblogmms.com/category/{}/page/{}/", category, page_num)
+        };
+        self.fetch_fsiblog_url(&url).await
     }
 
     /// Scrape DesiPorn search listing (?search=...)
@@ -248,8 +252,9 @@ impl IndianClient {
 
         let mut videos = Vec::new();
         let article_re = regex::Regex::new(r#"<article[^>]*>([\s\S]*?)</article>"#)?;
-        let title_re = regex::Regex::new(r#"<h3 class="elementor-post__title">\s*<a href="([^"]+)">\s*([^<]+)\s*</a>\s*</h3>"#)?;
-        let thumb_re = regex::Regex::new(r#"<img[^>]+src="([^"]+)""#)?;
+        let title_re = regex::Regex::new(r#"<h3[^>]*class="[^"]*(?:card__title|elementor-post__title)[^"]*"[^>]*>\s*<a[^>]+href="([^"]+)"[^>]*>\s*([^<]+)\s*</a>\s*</h3>"#)?;
+        let thumb_re = regex::Regex::new(r#"<img[^>]+(?:src|data-src)="([^"]+)""#)?;
+        let dur_re = regex::Regex::new(r#"<span[^>]*class="[^"]*card__dur[^"]*"[^>]*>([^<]+)</span>"#)?;
 
         for cap in article_re.captures_iter(&html) {
             let art = &cap[1];
@@ -261,6 +266,10 @@ impl IndianClient {
                     .map(|c| c[1].trim().to_string())
                     .unwrap_or_default();
 
+                let duration = dur_re.captures(art)
+                    .map(|c| c[1].trim().to_string())
+                    .unwrap_or_else(|| "Viral MMS".to_string());
+
                 let slug = post_url
                     .trim_end_matches('/')
                     .split('/')
@@ -269,21 +278,25 @@ impl IndianClient {
                     .to_string();
 
                 let id = format!("fsi_{}", slug);
-                let title = if raw_title.to_lowercase().contains("instagram") {
+                let title = if raw_title.to_lowercase().contains("college") {
+                    format!("🎓 {}", raw_title)
+                } else if raw_title.to_lowercase().contains("girlfriend") || raw_title.to_lowercase().contains(" gf ") || raw_title.to_lowercase().contains("couple") || raw_title.to_lowercase().contains("boyfriend") {
+                    format!("💑 {}", raw_title)
+                } else if raw_title.to_lowercase().contains("instagram") {
                     format!("📸 {}", raw_title)
                 } else if raw_title.to_lowercase().contains("reels") {
                     format!("📹 {}", raw_title)
                 } else if raw_title.to_lowercase().contains("leak") || raw_title.to_lowercase().contains("influencer") {
                     format!("🔥 {}", raw_title)
                 } else {
-                    format!("📸 Instagram Viral MMS: {}", raw_title)
+                    format!("🔥 College GF/BF Leaked MMS: {}", raw_title)
                 };
 
                 videos.push(IndianVideo {
                     id,
                     title,
-                    duration: "Viral MMS".to_string(),
-                    views: serde_json::Value::String("Instagram Leaked".to_string()),
+                    duration,
+                    views: serde_json::Value::String("Personal MMS".to_string()),
                     default_thumb: thumb,
                     url: post_url,
                     direct_mp4: None,
@@ -424,17 +437,23 @@ pub fn is_authentic_real_indian_mms(title: &str, tags_text: &str) -> bool {
         }
     }
 
-    // 4. Reject generic "desi" tags unless it's a real Instagram / Reels / Influencer leak
-    let is_insta_or_influencer = combined.contains("instagram")
-        || combined.contains("reels")
-        || combined.contains("influencer")
-        || combined.contains("tiktoker");
-
-    if !is_insta_or_influencer && combined.contains("desi") {
+    // 4. Reject generic "desi" tags entirely - user strictly requested personal college gf/bf leaks
+    if combined.contains("desi") {
         return false;
     }
 
-    // 5. Gay, trans, solo male blacklist:
+    // 5. Village / Dehati / Rural / Scripted roleplay blacklist:
+    const VILLAGE_SCRIPTED_BLACKLIST: &[&str] = &[
+        "village", "dehati", "rural", "padosan", "maid", "kamwali",
+    ];
+
+    for &word in VILLAGE_SCRIPTED_BLACKLIST {
+        if combined.contains(word) {
+            return false;
+        }
+    }
+
+    // 6. Gay, trans, solo male blacklist:
     const GAY_TRANS_BLACKLIST: &[&str] = &[
         "gay", "trans", "transgender", "trans woman", "trans girl", "shemale",
         "ladyboy", "femboy", "crossdresser", "sissy", "male only", "solo male",
@@ -463,15 +482,16 @@ pub fn is_authentic_real_indian_mms(title: &str, tags_text: &str) -> bool {
         }
     }
 
-    // 7. Positive Indian identifier (MUST match at least one):
+    // 8. Positive College / Girlfriend / Couple / Viral MMS identifier (MUST match at least one):
     const INDIAN_IDENTIFIERS: &[&str] = &[
+        "college", "girlfriend", "boyfriend", "couple", "student", "university",
         "indian", "viral", "mms", "mallu", "tamil", "telugu", "kavya",
         "poonam", "priya", "neha", "puja", "pooja", "anjali", "bengali",
         "marathi", "punjabi", "kannada", "gujarati", "pakistani", "hindi",
-        "delhi", "mumbai", "bangalore", "kolkata", "bihari", "dehati",
-        "chudai", "scandal", "leaked", "college girl", "college mms",
-        "hotel mms", "room mms", "viral video", "viral mms", "sharma",
-        "verma", "singh", "patel", "gupta", "kumar", "kaur", "yadav",
+        "delhi", "mumbai", "bangalore", "kolkata", "bihari",
+        "chudai", "scandal", "leaked", "leak", "hotel", "room",
+        "viral video", "viral mms", "sharma", "verma", "singh", "patel",
+        "gupta", "kumar", "kaur", "yadav", "whatsapp", "cctv", "personal",
         "salwar", "sari", "saree", "kerala", "chennai", "jaipur", "rajasthan",
         "instagram", "reels", "influencer",
     ];
@@ -512,9 +532,10 @@ mod tests {
         // Gay / Trans should be rejected
         assert!(!is_authentic_real_indian_mms("Indian trans woman blowjob", ""));
 
-        // Desi tags without Instagram / Influencer leak should be rejected
+        // Desi tags should be strictly rejected
         assert!(!is_authentic_real_indian_mms("Desi College Girl Boyfriend Secret Phone Recording MMS", ""));
-        assert!(is_authentic_real_indian_mms("Instagram Leaked Desi Influencer Viral MMS", ""));
+        assert!(!is_authentic_real_indian_mms("Instagram Leaked Desi Influencer Viral MMS", ""));
+        assert!(is_authentic_real_indian_mms("Instagram Leaked College Influencer Viral MMS", ""));
 
         // Genuine authentic Indian MMS should be accepted
         assert!(is_authentic_real_indian_mms("Viral Indian College Girl Leaked MMS Scandal in Hotel Room", ""));
