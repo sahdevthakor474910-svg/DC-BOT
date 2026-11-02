@@ -15,8 +15,8 @@ pub const INDIAN_SEARCHES: &[&str] = &[
     "influencer leak",
     "instagram leak",
     "viral leak",
-    "desi mms",
-    "desi leak",
+    "trending leak",
+    "reels leak",
     "indian viral",
     "college mms",
     "tiktoker",
@@ -172,7 +172,7 @@ impl IndianClient {
                             .replace('-', " ")
                             .replace('_', " ");
                         if !clean_slug.trim().is_empty() {
-                            format!("🔥 Desi MMS: {}", clean_slug.trim())
+                            format!("🔥 Indian MMS: {}", clean_slug.trim())
                         } else {
                             format!("🔥 Authentic Indian MMS Leaked #{}", &item_cap[2])
                         }
@@ -424,7 +424,17 @@ pub fn is_authentic_real_indian_mms(title: &str, tags_text: &str) -> bool {
         }
     }
 
-    // 4. Gay, trans, solo male blacklist:
+    // 4. Reject generic "desi" tags unless it's a real Instagram / Reels / Influencer leak
+    let is_insta_or_influencer = combined.contains("instagram")
+        || combined.contains("reels")
+        || combined.contains("influencer")
+        || combined.contains("tiktoker");
+
+    if !is_insta_or_influencer && combined.contains("desi") {
+        return false;
+    }
+
+    // 5. Gay, trans, solo male blacklist:
     const GAY_TRANS_BLACKLIST: &[&str] = &[
         "gay", "trans", "transgender", "trans woman", "trans girl", "shemale",
         "ladyboy", "femboy", "crossdresser", "sissy", "male only", "solo male",
@@ -453,9 +463,9 @@ pub fn is_authentic_real_indian_mms(title: &str, tags_text: &str) -> bool {
         }
     }
 
-    // 6. Positive Indian / Desi identifier (MUST match at least one):
+    // 7. Positive Indian identifier (MUST match at least one):
     const INDIAN_IDENTIFIERS: &[&str] = &[
-        "indian", "desi", "mms", "mallu", "tamil", "telugu", "kavya",
+        "indian", "viral", "mms", "mallu", "tamil", "telugu", "kavya",
         "poonam", "priya", "neha", "puja", "pooja", "anjali", "bengali",
         "marathi", "punjabi", "kannada", "gujarati", "pakistani", "hindi",
         "delhi", "mumbai", "bangalore", "kolkata", "bihari", "dehati",
@@ -502,9 +512,13 @@ mod tests {
         // Gay / Trans should be rejected
         assert!(!is_authentic_real_indian_mms("Indian trans woman blowjob", ""));
 
+        // Desi tags without Instagram / Influencer leak should be rejected
+        assert!(!is_authentic_real_indian_mms("Desi College Girl Boyfriend Secret Phone Recording MMS", ""));
+        assert!(is_authentic_real_indian_mms("Instagram Leaked Desi Influencer Viral MMS", ""));
+
         // Genuine authentic Indian MMS should be accepted
         assert!(is_authentic_real_indian_mms("Viral Indian College Girl Leaked MMS Scandal in Hotel Room", ""));
-        assert!(is_authentic_real_indian_mms("Desi College Girl Boyfriend Secret Phone Recording MMS", ""));
+        assert!(is_authentic_real_indian_mms("Indian College Girl Boyfriend Secret Phone Recording MMS", ""));
         assert!(is_authentic_real_indian_mms("Mallu Girl Leaked MMS Video with Audio", ""));
         assert!(is_authentic_real_indian_mms("Tamil Couple Private MMS Viral Scandal", ""));
         assert!(is_authentic_real_indian_mms("Real Indian MMS Leaked Video with Sound", ""));

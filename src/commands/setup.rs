@@ -58,7 +58,7 @@ pub async fn setup(
     #[description = "🎬 Porn Clips channel — must be Age-Restricted! (short reels — every 10 min)"]
     pornclips: Option<serenity::GuildChannel>,
 
-    #[description = "🇮🇳 Indian Viral MMS channel — must be Age-Restricted! (desi mms, real leaked mms — every 20 min)"]
+    #[description = "🇮🇳 Indian Viral MMS channel — must be Age-Restricted! (viral mms, instagram leaks — every 20 min)"]
     indian: Option<serenity::GuildChannel>,
 ) -> Result<(), Error> {
     let _ = ctx.defer().await; // prevent Discord 3-second timeout on slow DB queries
@@ -265,7 +265,7 @@ pub async fn setup(
         match ensure_nsfw(ctx, ch).await {
             Ok(_) => {
                 queries::set_indian_channel(db, &guild_id, Some(ch.id.to_string().as_str())).await?;
-                lines.push(format!("🇮🇳  **Indian Viral MMS** → {} *(desi mms & viral videos — every 20 min)*", ch.id.mention()));
+                lines.push(format!("🇮🇳  **Indian Viral MMS** → {} *(viral mms & instagram leaks — every 20 min)*", ch.id.mention()));
             }
             Err(warn_msg) => {
                 warnings.push(format!("⚠️  **Indian Viral MMS** warning: {}", warn_msg));
