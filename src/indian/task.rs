@@ -1,4 +1,5 @@
-use std::sync::Arc;
+use std::collections::HashSet;
+use std::sync::{Arc, LazyLock, RwLock};
 use std::time::Duration;
 
 use anyhow::Result;
@@ -9,6 +10,10 @@ use crate::data::Data;
 use crate::db::queries;
 use super::client::{IndianClient, INDIAN_SEARCHES};
 use super::models::IndianVideo;
+
+/// In-memory LRU / FIFO set of recently posted video IDs and titles to guarantee NO duplicate or repetitive posts
+static RECENT_POSTED: LazyLock<RwLock<HashSet<String>>> =
+    LazyLock::new(|| RwLock::new(HashSet::new()));
 
 /// Deterministic Knuth/Fisher-Yates pseudo-random shuffle to avoid repeating items across reboots
 fn pseudo_shuffle<T>(slice: &mut [T], mut seed: u64) {
@@ -156,9 +161,18 @@ async fn post_videos(
     force: bool,
 ) -> Result<usize> {
     let configs = queries::get_all_guild_configs(&data.db).await?;
+
+    // Deduplicate target channels so a channel is NEVER posted to twice in the same tick across guilds
+    let mut seen_channels = HashSet::new();
     let relevant: Vec<_> = configs
         .into_iter()
-        .filter(|c| c.indian_channel_id.is_some())
+        .filter(|c| {
+            if let Some(ch) = &c.indian_channel_id {
+                seen_channels.insert(ch.clone())
+            } else {
+                false
+            }
+        })
         .collect();
 
     if relevant.is_empty() {
@@ -193,8 +207,25 @@ async fn post_videos(
                 break;
             }
 
+            let item_id = video.id.trim().to_lowercase();
+            let clean_title = video.title.to_lowercase()
+                .replace("📸", "")
+                .replace("🔥", "")
+                .replace("📹", "")
+                .replace("🎓", "")
+                .replace("💑", "")
+                .trim()
+                .to_string();
+
             if !force {
-                // Deduplicate via seen_indian table
+                // 1. Fast In-Memory Deduplication: check if already posted recently
+                if let Ok(recent) = RECENT_POSTED.read() {
+                    if recent.contains(&item_id) || recent.contains(&clean_title) {
+                        continue;
+                    }
+                }
+
+                // 2. Database Deduplication: check seen_indian table
                 match queries::is_indian_seen(&data.db, &cfg.guild_id, &video.id).await {
                     Ok(true) => continue,
                     Err(e) => {
@@ -276,21 +307,35 @@ async fn post_videos(
                 channel.send_message(http, msg).await
             };
 
-            // If attachment upload failed (e.g. Discord 413 Payload Too Large), fallback to embed
+            // If attachment upload failed, ONLY fallback to embed if error is explicitly 413 Payload Too Large.
+            // On timeouts or network disconnects, do NOT send a second message as Discord may have already posted the attachment!
             let final_result = match send_result {
                 Ok(m) => Ok(m),
                 Err(e) => {
-                    warn!("Attachment upload failed for Indian video {}, falling back to embed: {:#}", video.id, e);
-                    let msg = serenity::CreateMessage::new()
-                        .embed(embed);
-                    channel.send_message(http, msg).await
+                    let err_str = e.to_string();
+                    if err_str.contains("413") || err_str.contains("Payload Too Large") || err_str.contains("Entity Too Large") {
+                        warn!("Attachment upload exceeded size limit for video {}, falling back to embed: {:#}", video.id, e);
+                        let msg = serenity::CreateMessage::new()
+                            .embed(embed);
+                        channel.send_message(http, msg).await
+                    } else {
+                        Err(e)
+                    }
                 }
             };
 
             match final_result {
                 Ok(_) => {
                     info!("🇮🇳 Posted Indian MMS video {} to guild {}", video.id, cfg.guild_id);
-                    // Mark as seen only after successful delivery
+                    // Record in in-memory set immediately to prevent duplicate sends across ticks and threads
+                    if let Ok(mut recent) = RECENT_POSTED.write() {
+                        recent.insert(item_id.clone());
+                        recent.insert(clean_title.clone());
+                        if recent.len() > 1000 {
+                            recent.clear();
+                        }
+                    }
+                    // Mark as seen in SQLite database
                     if let Err(e) = queries::mark_indian_seen(&data.db, &cfg.guild_id, &video.id).await {
                         error!("DB error marking indian seen: {}", e);
                     }

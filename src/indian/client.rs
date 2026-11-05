@@ -66,21 +66,26 @@ impl IndianClient {
     /// 2. DesiPorn / MmsBee (extreme fallback only if FsiBlog returns 0 videos)
     pub async fn fetch_indian_videos(&self, query: &str, _count: u32, page: u32) -> Result<Vec<IndianVideo>> {
         let mut all: Vec<IndianVideo> = Vec::new();
+        let page_num = std::cmp::max(1, page);
+
+        // Search queries only have 1-2 pages on FsiBlog before 404.
+        // Clamp search query page to cycle 1..2 so it never hits 404!
+        let search_page = (page_num - 1) % 2 + 1;
 
         // 1. TOP PRIORITY: Search the specific query on FsiBlog
         let clean_q = if query.trim().is_empty() { "instagram" } else { query.trim() };
-        if let Ok(fsi_videos) = self.fetch_fsiblog(clean_q, page).await {
+        if let Ok(fsi_videos) = self.fetch_fsiblog(clean_q, search_page).await {
             all.extend(fsi_videos);
         }
 
-        // 2. If below 10 videos, supplement with fresh MMS from /category/mms/
-        if all.len() < 10 {
-            if let Ok(cat_mms) = self.fetch_fsiblog_category_mms(page).await {
-                all.extend(cat_mms);
-            }
+        // 2. High Priority: Deep category MMS leaks (/category/mms/page/{page}/)
+        // /category/mms/ has 50+ pages! Rotating page_num here guarantees hundreds of fresh, non-repetitive videos!
+        let mms_page = (page_num - 1) % 35 + 1;
+        if let Ok(cat_mms) = self.fetch_fsiblog_category_mms(mms_page).await {
+            all.extend(cat_mms);
         }
 
-        // 3. If still below 10 videos, supplement with related Instagram / Reels viral search
+        // 3. If below 10 videos, supplement with related Instagram / Reels viral search
         if all.len() < 10 {
             let sec_query = if clean_q.contains("instagram") {
                 "reels"
@@ -89,33 +94,32 @@ impl IndianClient {
             } else {
                 "instagram viral"
             };
-            if let Ok(sec_videos) = self.fetch_fsiblog(sec_query, page).await {
+            if let Ok(sec_videos) = self.fetch_fsiblog(sec_query, search_page).await {
                 all.extend(sec_videos);
             }
         }
 
-        // 4. If higher page returned 0 videos, fallback to page 1
-        if all.is_empty() && page > 1 {
-            if let Ok(p1_videos) = self.fetch_fsiblog(clean_q, 1).await {
-                all.extend(p1_videos);
-            }
-            if all.is_empty() {
-                if let Ok(cat_p1) = self.fetch_fsiblog_category_mms(1).await {
-                    all.extend(cat_p1);
-                }
-            }
-        }
-
-        // 5. Extreme emergency fallback only if FsiBlog returns 0 videos
+        // 4. Extreme emergency fallback only if FsiBlog returns 0 videos
         if all.is_empty() {
             if let Ok(dp_videos) = self.fetch_desiporn("mms", 1).await {
                 all.extend(dp_videos);
             }
         }
 
-        // Deduplicate by ID
+        // Deduplicate by ID AND normalized title so near-identical duplicates are removed
         let mut seen_ids = std::collections::HashSet::new();
-        all.retain(|v| seen_ids.insert(v.id.clone()));
+        let mut seen_titles = std::collections::HashSet::new();
+        all.retain(|v| {
+            let clean_title = v.title.to_lowercase()
+                .replace("📸", "")
+                .replace("🔥", "")
+                .replace("📹", "")
+                .replace("🎓", "")
+                .replace("💑", "")
+                .trim()
+                .to_string();
+            seen_ids.insert(v.id.clone()) && seen_titles.insert(clean_title)
+        });
 
         // Authenticity filter: reject aunties, mature women, family roleplays, black/ebony, and non-Indian content
         let filtered: Vec<IndianVideo> = all
