@@ -5,14 +5,13 @@ use crate::data::{Context, Error};
 /// Usage: `/ping`
 #[poise::command(slash_command, description_localized("en-US", "Check bot latency"))]
 pub async fn ping(ctx: Context<'_>) -> Result<(), Error> {
-    let now = std::time::Instant::now();
-    let msg = ctx.say("🏓 Pinging…").await?;
-    let elapsed = now.elapsed().as_millis();
+    let shard_latency = ctx.ping().await;
+    let latency_ms = shard_latency.as_millis();
 
-    msg.edit(ctx, poise::CreateReply::default().content(format!(
-        "🏓 Pong! Round-trip: **{}ms**",
-        elapsed
-    )))
+    ctx.say(format!(
+        "🏓 Pong! Gateway Latency: **{}ms**",
+        latency_ms
+    ))
     .await?;
 
     Ok(())

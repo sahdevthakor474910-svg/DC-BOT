@@ -265,12 +265,8 @@ async fn main() -> Result<()> {
     );
 
     info!("[STARTUP] Creating Discord client");
-    let http = serenity::http::HttpBuilder::new(&token)
-        .ratelimiter_disabled(true)
-        .build();
-
     let framework = build_framework(bot_data.clone());
-    let mut client = serenity::ClientBuilder::new_with_http(http, intents)
+    let mut client = serenity::ClientBuilder::new(&token, intents)
         .framework(framework)
         .await
         .context("Failed to build Discord client")?;
