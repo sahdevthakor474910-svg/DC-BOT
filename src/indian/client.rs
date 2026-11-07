@@ -353,13 +353,26 @@ impl IndianClient {
                 .text()
                 .await?;
 
-            let mp4_re = regex::Regex::new(r#"https?://cdn\.fsiblog(?:xx|mms)?\.com/[^"'\s<>]+\.mp4"#)?;
-            if let Some(m) = mp4_re.find(&html) {
+            // Unescape JSON-encoded slashes (\/) from Yoast SEO schema and inline JSON
+            let clean_html = html.replace(r"\/", "/");
+
+            let mp4_re = regex::Regex::new(r#"https?://cdn\.fsiblog(?:xx|mms)?\.com/[^"'\s<>\\]+\.mp4"#)?;
+            if let Some(m) = mp4_re.find(&clean_html) {
                 return Ok(m.as_str().to_string());
             }
 
-            let generic_mp4 = regex::Regex::new(r#"https?://[^"'\s<>]+\.mp4(?:\?[^"'\s<>]*)?"#)?;
-            if let Some(m) = generic_mp4.find(&html) {
+            // Check for Yoast SEO Schema "contentUrl": "https://..."
+            if let Ok(content_url_re) = regex::Regex::new(r#""contentUrl"\s*:\s*"([^"]+\.mp4)""#) {
+                if let Some(cap) = content_url_re.captures(&clean_html) {
+                    let u = &cap[1];
+                    if !u.is_empty() {
+                        return Ok(u.to_string());
+                    }
+                }
+            }
+
+            let generic_mp4 = regex::Regex::new(r#"https?://[^"'\s<>\\]+\.mp4(?:\?[^"'\s<>\\]*)?"#)?;
+            if let Some(m) = generic_mp4.find(&clean_html) {
                 return Ok(m.as_str().to_string());
             }
         } else if full_url.contains("desiporn.xxx") {

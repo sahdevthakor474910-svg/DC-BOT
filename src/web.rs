@@ -45,8 +45,11 @@ pub async fn play_handler(
 
     // Compute official embed URL as fallback
     let mut embed_url = get_embed_url(&query.source, &raw_url);
-    if query.source == "indian" && embed_url.contains("redtube.com") {
-        embed_url.clear(); // Never serve blocked Redtube embed to Indian users
+    if (query.source == "indian" && embed_url.contains("redtube.com"))
+        || embed_url.contains("fsiblog")
+        || embed_url.starts_with("fsi_")
+    {
+        embed_url.clear(); // Never serve blocked or non-embeddable URLs
     }
 
     // 2. Resolve direct MP4/stream URL based on source (or use directly if already a media file)
@@ -55,7 +58,7 @@ pub async fn play_handler(
     } else {
         match query.source.as_str() {
             "indian" => {
-                if raw_url.contains("fsiblog") || raw_url.starts_with("fsi_") {
+                let mut stream = if raw_url.contains("fsiblog") || raw_url.starts_with("fsi_") {
                     let full_url = if raw_url.starts_with("http") {
                         raw_url.clone()
                     } else {
@@ -79,7 +82,54 @@ pub async fn play_handler(
                     }
                 } else {
                     String::new()
+                };
+
+                // Fallback to OK.XXX or XNXX if FsiBlog / DesiPorn direct MP4 failed
+                if stream.is_empty() {
+                    info!("Indian stream extraction empty. Fast fallback search for '{}'...", query.title);
+                    if let Ok(ok_client) = crate::okxxx::client::OkXxxClient::new() {
+                        let ok_query = if query.title.to_lowercase().contains("college") {
+                            "college-girl"
+                        } else if query.title.to_lowercase().contains("girlfriend") || query.title.to_lowercase().contains(" gf ") {
+                            "girlfriend"
+                        } else {
+                            "indian"
+                        };
+                        if let Ok(results) = ok_client.search_videos(ok_query, 1).await {
+                            for v in results {
+                                let lower = v.title.to_lowercase();
+                                if !lower.contains("bhabhi") && !lower.contains("devar") && !lower.contains("saali") {
+                                    if let Ok(mp4) = ok_client.get_mp4_url(&v.url).await {
+                                        if !mp4.is_empty() {
+                                            stream = mp4;
+                                            embed_url = format!("https://ok.xxx/embed/{}", v.video_id);
+                                            break;
+                                        }
+                                    }
+                                }
+                            }
+                        }
+                    }
+                    if stream.is_empty() {
+                        if let Ok(xnxx) = crate::xnxx::client::XnxxClient::new_with_timeout(5) {
+                            if let Ok(results) = xnxx.search_videos("indian mms", 0).await {
+                                for v in results {
+                                    let lower = v.title.to_lowercase();
+                                    if !lower.contains("bhabhi") && !lower.contains("devar") && !lower.contains("saali") {
+                                        if let Ok(mp4) = xnxx.get_mp4_url(&v.url).await {
+                                            if !mp4.is_empty() {
+                                                stream = mp4;
+                                                embed_url = format!("https://www.xnxx.com/embedframe/{}", v.video_id);
+                                                break;
+                                            }
+                                        }
+                                    }
+                                }
+                            }
+                        }
+                    }
                 }
+                stream
             }
             "jav" => {
                 if raw_url.contains("redgifs.com") || raw_url.starts_with("clip_") {
@@ -332,16 +382,6 @@ pub async fn stream_handler(
     headers: HeaderMap,
     Query(query): Query<StreamQuery>,
 ) -> Response {
-    // 0. If a user opens /stream or /stream/video.mp4 directly in a browser tab,
-    // redirect them to the Web Player instead of dumping raw media bytes or 401 errors!
-    let is_browser_nav = headers.get("sec-fetch-dest").map_or(false, |v| v == "document")
-        || headers.get("accept").map_or(false, |a| a.to_str().unwrap_or("").contains("text/html"));
-
-    if is_browser_nav {
-        let redirect_url = format!("/play?url={}&source=indian", query.url);
-        return axum::response::Redirect::temporary(&redirect_url).into_response();
-    }
-
     // Block automated crawlers (Discordbot, Twitterbot, etc.) from draining proxy bandwidth
     if let Some(ua) = headers.get("user-agent").and_then(|u| u.to_str().ok()) {
         let ua_lower = ua.to_lowercase();
@@ -697,8 +737,8 @@ pub fn get_embed_url(source: &str, raw_url: &str) -> String {
             }
         }
         "indian" => {
-            if raw_url.contains("fsiblog") {
-                raw_url.to_string()
+            if raw_url.contains("fsiblog") || raw_url.starts_with("fsi_") {
+                String::new()
             } else if let Some(id) = extract_desiporn_id(raw_url) {
                 format!("https://www.desiporn.xxx/item/{}.html", id)
             } else {

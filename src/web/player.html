@@ -367,8 +367,8 @@
         }
 
         function switchToEmbed() {
-            if (!embedUrl || embedUrl.length < 5 || embedUrl.includes("redtube.com")) {
-                setStatus("⚠️ Official embed unavailable or restricted. Use HTML5 Stream.", false);
+            if (!embedUrl || embedUrl.length < 5 || embedUrl.includes("redtube.com") || embedUrl.includes("fsiblog")) {
+                setStatus("⚠️ Official embed unavailable for this video. Use HTML5 Stream.", false);
                 return;
             }
             isEmbedActive = true;
@@ -407,11 +407,9 @@
             } else if (directUrl && directUrl.length > 5 && (directUrl.includes('.mp4') || directUrl.includes('.webm') || directUrl.includes('.m3u8'))) {
                 setStatus("⚡ Loading Direct Stream...");
                 playStream(directUrl);
-            } else if (embedUrl && embedUrl.length > 5 && !embedUrl.includes("redtube.com")) {
-                switchToEmbed();
             } else {
-                setStatus("⚠️ Video stream resolving, tap below to retry...", false);
-                showPlayOverlay("Tap to Reload Stream");
+                setStatus("⚠️ Stream loading, tap below to play...", false);
+                showPlayOverlay("Tap to Play Stream");
             }
         }
 
@@ -437,11 +435,8 @@
 
         function playStream(targetUrl) {
             if (!targetUrl || targetUrl.length < 3) {
-                if (embedUrl && embedUrl.length > 5 && !embedUrl.includes("redtube.com")) {
-                    switchToEmbed();
-                } else {
-                    setStatus("⚠️ Video stream unavailable.", false);
-                }
+                setStatus("⚠️ Video stream unavailable. Tap Direct Source above.", false);
+                showPlayOverlay("Tap to Play Stream");
                 return;
             }
 
@@ -537,10 +532,6 @@
                 retryCount++;
                 setStatus("🔄 Reconnecting stream proxy (" + retryCount + "/2)...");
                 setTimeout(() => playStream(streamUrl), 1000);
-            } else if (embedUrl && embedUrl.length > 5 && !embedUrl.includes("redtube.com")) {
-                console.log("Stream proxy unavailable, falling back to official embed player");
-                setStatus("⚠️ Proxy stream interrupted. Switching to Embed Player...", false);
-                setTimeout(() => switchToEmbed(), 1200);
             } else {
                 setStatus("⚠️ Stream interrupted. Tap to retry stream.", false);
                 showPlayOverlay("Tap to Retry Stream");
@@ -549,16 +540,26 @@
 
         function startPlayback() {
             retryCount = 0;
+            // Hide Embed button if embed is unavailable or restricted
+            if (!embedUrl || embedUrl.length < 5 || embedUrl.includes("redtube.com") || embedUrl.includes("fsiblog")) {
+                if (btnEmbed) btnEmbed.style.display = 'none';
+                if (ispNotice) ispNotice.style.display = 'none';
+            }
+            if (!directUrl || directUrl.length < 5) {
+                const btnDirect = document.getElementById('btnDirect');
+                if (btnDirect) btnDirect.style.display = 'none';
+            }
+
             // Always prioritize HTML5 stream proxy to bypass regional ISP block
             if (streamUrl && streamUrl.length > 5) {
                 switchToHtml5();
             } else if (directUrl && directUrl.length > 5 && (directUrl.includes('.mp4') || directUrl.includes('.webm') || directUrl.includes('.m3u8'))) {
                 switchToHtml5();
-            } else if (embedUrl && embedUrl.length > 5 && !embedUrl.includes("redtube.com")) {
+            } else if (embedUrl && embedUrl.length > 5 && !embedUrl.includes("redtube.com") && !embedUrl.includes("fsiblog")) {
                 switchToEmbed();
             } else {
-                setStatus("⚠️ Video stream unavailable.", false);
-                showPlayOverlay("Stream Unavailable");
+                setStatus("⚠️ Video stream loading, tap below to play...", false);
+                showPlayOverlay("Tap to Play Stream");
             }
         }
 
