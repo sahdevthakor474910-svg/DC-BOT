@@ -252,9 +252,17 @@ async fn post_videos(
                 _ => "N/A".to_string(),
             };
 
+            let tag_name = if video.title.contains("🎓") || video.title.to_lowercase().contains("college") {
+                "🎓 College MMS Leak"
+            } else if video.title.contains("💑") || video.title.to_lowercase().contains("girlfriend") {
+                "💑 Girlfriend MMS Leak"
+            } else {
+                "🇮🇳 Instagram Viral MMS"
+            };
+
             let footer = format!(
-                "🇮🇳 Instagram Viral MMS • ⏱️ {} • 👁️ {}",
-                video.duration, views_str
+                "{} • ⏱️ {} • 👁️ {}",
+                tag_name, video.duration, views_str
             );
 
             let play_url = format!(

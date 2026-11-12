@@ -2,14 +2,21 @@ use anyhow::Result;
 
 use super::models::IndianVideo;
 
-/// Dedicated Indian MMS search categories and terms rotated across ticks (Instagram leaks prioritized).
+/// Dedicated Indian MMS search categories and terms rotated across ticks (Instagram leaks & College MMS prioritized).
 pub const INDIAN_SEARCHES: &[&str] = &[
+    "college",
     "instagram",
+    "college leak",
     "instagram viral",
+    "college girl",
     "reels",
+    "college mms",
     "influencer",
+    "campus leak",
     "instagram mms",
+    "college girlfriend",
     "viral mms",
+    "hostel leak",
     "instagram model",
     "reels viral",
     "influencer leak",
@@ -17,11 +24,6 @@ pub const INDIAN_SEARCHES: &[&str] = &[
     "viral leak",
     "trending leak",
     "reels leak",
-    "indian viral",
-    "college mms",
-    "college girl",
-    "tiktoker",
-    "influencer viral",
     "girlfriend leak",
     "indian mms",
 ];
@@ -85,7 +87,13 @@ impl IndianClient {
             all.extend(cat_mms);
         }
 
-        // 3. If below 10 videos, supplement with related Instagram / Reels viral search
+        // 3. High Priority: Deep college MMS leaks (/college-sex/page/{page}/)
+        let college_page = (page_num - 1) % 25 + 1;
+        if let Ok(cat_college) = self.fetch_fsiblog_college(college_page).await {
+            all.extend(cat_college);
+        }
+
+        // 4. If below 10 videos, supplement with related Instagram / Reels viral search
         if all.len() < 10 {
             let sec_query = if clean_q.contains("instagram") {
                 "reels"
@@ -327,6 +335,14 @@ impl IndianClient {
         self.fetch_fsiblog_url(&url).await
     }
 
+    /// Scrape fresh College MMS & leaks from FsiBlog
+    pub async fn fetch_fsiblog_college(&self, page: u32) -> Result<Vec<IndianVideo>> {
+        let page_num = std::cmp::max(1, page);
+        // Alternate between "college" and "college leak" based on page
+        let q = if page_num % 2 == 0 { "college leak" } else { "college" };
+        self.fetch_fsiblog(q, page_num).await
+    }
+
     /// Resolve playable direct MP4 for an Indian video.
     pub async fn get_mp4_url(&self, video_url_or_id: &str) -> Result<String> {
         let full_url = if video_url_or_id.starts_with("http") {
@@ -552,6 +568,16 @@ mod tests {
         println!("Resolved MP4: {}", mp4);
         assert!(mp4.contains(".mp4"), "Must contain .mp4");
         assert!(mp4.starts_with("http"), "Must start with http");
+    }
+
+    #[tokio::test]
+    async fn test_fetch_college_leaks() {
+        let client = IndianClient::new().expect("Failed to initialize IndianClient");
+        let videos = client.fetch_fsiblog("college", 1).await.unwrap();
+        println!("Fetched {} College videos from FsiBlog search", videos.len());
+        for v in videos.iter().take(3) {
+            println!("- [{}] {} ({})", v.id, v.title, v.url);
+        }
     }
 
     #[tokio::test]

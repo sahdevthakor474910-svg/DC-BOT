@@ -318,8 +318,17 @@ fn build_framework(bot_data: Data) -> poise::Framework<Data, Error> {
                                     error!("Command '{}' failed: {:#}", ctx.command().name, error);
                                 }
                             }
+                            let err_str = error.to_string();
+                            let user_msg = if err_str.contains("missing field `code`")
+                                || err_str.contains("missing field code")
+                                || err_str.contains("Could not decode json when receiving error response from discord")
+                            {
+                                "⏳ **Discord Rate Limit / Busy**: Discord temporarily rate-limited the interaction response or is experiencing high gateway traffic. Please try again in a moment.".to_string()
+                            } else {
+                                format!("❌ Error: {}", error)
+                            };
                             let _ = ctx
-                                .say(format!("❌ Error: {}", error))
+                                .say(user_msg)
                                 .await;
                         }
                         poise::FrameworkError::CommandCheckFailed { error, ctx, .. } => {
