@@ -5,12 +5,11 @@ use tracing::{debug, warn};
 use super::models::*;
 
 const GEMINI_CHAT_MODELS: &[&str] = &[
-    "gemini-3.5-flash",
-    "gemini-3.5-flash-lite",
+    "gemini-2.5-flash",
+    "gemini-2.0-flash",
+    "gemini-1.5-flash",
+    "gemini-1.5-flash-8b",
     "gemini-flash-latest",
-    "gemini-flash-lite-latest",
-    "gemini-3.8-flash",
-    "gemini-3.1-flash-lite",
 ];
 
 const SYSTEM_PROMPT: &str = r#"You are "Honored one", a Discord bot with an authentic modern personality. You talk like a real person in a Discord server — short, punchy, casual.
@@ -168,8 +167,8 @@ impl AiClient {
         ];
 
         let generation_config = GeminiGenerationConfig {
-            max_output_tokens: Some(300),
-            temperature: Some(0.9),
+            max_output_tokens: Some(1200),
+            temperature: Some(0.85),
         };
 
         let mut parts = vec![GeminiPart::text(full_prompt)];

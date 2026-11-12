@@ -6,6 +6,10 @@ use crate::data::Data;
 use crate::db::queries;
 use crate::dmc::{calculator, gemini};
 
+/// In-memory deduplication cache to prevent processing the same Discord message twice (60s TTL)
+static PROCESSED_MESSAGES: std::sync::LazyLock<std::sync::Mutex<std::collections::VecDeque<(u64, std::time::Instant)>>> =
+    std::sync::LazyLock::new(|| std::sync::Mutex::new(std::collections::VecDeque::new()));
+
 /// Called for every new message received by the bot.
 ///
 /// 1. If the message has image attachments → try DMC: Peak of Combat analysis.
@@ -18,6 +22,26 @@ pub async fn handle(
     // Ignore messages from bots (including ourselves)
     if message.author.bot {
         return Ok(());
+    }
+
+    // Deduplicate incoming message events: ignore if this message ID was already processed in the last 60 seconds
+    let msg_id = message.id.get();
+    {
+        if let Ok(mut seen) = PROCESSED_MESSAGES.lock() {
+            let now = std::time::Instant::now();
+            while let Some((_, time)) = seen.front() {
+                if now.duration_since(*time).as_secs() > 60 {
+                    seen.pop_front();
+                } else {
+                    break;
+                }
+            }
+            if seen.iter().any(|(id, _)| *id == msg_id) {
+                debug!("Ignoring duplicate message event for message ID {}", msg_id);
+                return Ok(());
+            }
+            seen.push_back((msg_id, now));
+        }
     }
 
     // 1. Get current bot user ID & check mentions
@@ -127,6 +151,7 @@ pub async fn handle(
                 }
             }
         }
+        return Ok(());
     }
 
     // ── Check if bot chat responses are enabled for this server ─────────────
