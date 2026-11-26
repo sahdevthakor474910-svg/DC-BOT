@@ -353,32 +353,10 @@ fn build_framework(bot_data: Data) -> poise::Framework<Data, Error> {
                 })
             },
             initialize_owners: false,
-            // ── Pre-command hook: auto-defer all slash commands immediately ──
+            // ── Pre-command hook: log incoming commands ──
             pre_command: |ctx| {
                 Box::pin(async move {
                     info!("[COMMAND] Interaction received: /{}", ctx.command().name);
-                    if let poise::Context::Application(_) = ctx {
-                        match ctx.defer().await {
-                            Ok(()) => info!("[COMMAND] Interaction acknowledged: /{}", ctx.command().name),
-                            Err(e) => {
-                                match &e {
-                                    serenity::Error::Http(serenity::http::HttpError::UnsuccessfulRequest(resp)) => {
-                                        tracing::warn!(
-                                            "[COMMAND HTTP] Failed to acknowledge /{}: status={} url={} method={} error=\"{}\"",
-                                            ctx.command().name,
-                                            resp.status_code,
-                                            resp.url,
-                                            resp.method,
-                                            resp.error.message
-                                        );
-                                    }
-                                    _ => {
-                                        tracing::warn!("[COMMAND] Failed to acknowledge /{}: {}", ctx.command().name, e);
-                                    }
-                                }
-                            }
-                        }
-                    }
                 })
             },
             post_command: |ctx| {
