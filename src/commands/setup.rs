@@ -61,7 +61,6 @@ pub async fn setup(
     #[description = "🇮🇳 Indian Viral MMS channel — must be Age-Restricted! (viral mms, instagram leaks — every 20 min)"]
     indian: Option<serenity::GuildChannel>,
 ) -> Result<(), Error> {
-    let _ = ctx.defer().await; // prevent Discord 3-second timeout on slow DB queries
     let guild_id = ctx.guild_id().unwrap().to_string();
     let db = &ctx.data().db;
 
@@ -348,7 +347,6 @@ pub async fn setup_indian(
     #[description = "Channel for 🇮🇳 Indian Viral MMS (must be Age-Restricted)"]
     channel: serenity::GuildChannel,
 ) -> Result<(), Error> {
-    let _ = ctx.defer().await;
     let guild_id = ctx.guild_id().unwrap().to_string();
     let db = &ctx.data().db;
 

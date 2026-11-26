@@ -59,7 +59,6 @@ pub async fn unset(
     #[description = "Clear the 🇮🇳 Indian Viral MMS channel"]
     indian: Option<bool>,
 ) -> Result<(), Error> {
-    let _ = ctx.defer().await; // prevent Discord 3-second timeout on slow DB queries
     let guild_id = ctx.guild_id().unwrap().to_string();
     let db = &ctx.data().db;
 

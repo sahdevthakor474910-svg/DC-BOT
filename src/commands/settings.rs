@@ -338,8 +338,6 @@ pub async fn export_setup(ctx: Context<'_>) -> Result<(), Error> {
     let guild_id = ctx.guild_id().unwrap().to_string();
     let db = &ctx.data().db;
 
-    let _ = ctx.defer().await;
-
     let backup = queries::export_guild_setup(db, &guild_id).await?;
     let json_bytes = serde_json::to_vec_pretty(&backup)?;
 
@@ -361,8 +359,6 @@ pub async fn import_setup(
 ) -> Result<(), Error> {
     let guild_id = ctx.guild_id().unwrap().to_string();
     let db = &ctx.data().db;
-
-    let _ = ctx.defer().await;
 
     let file_bytes = match attachment.download().await {
         Ok(bytes) => bytes,

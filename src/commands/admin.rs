@@ -529,8 +529,6 @@ pub async fn import_setup(
     let guild_id = ctx.guild_id().unwrap().to_string();
     let db = &ctx.data().db;
 
-    let _ = ctx.defer().await;
-
     let file_bytes = match attachment.download().await {
         Ok(bytes) => bytes,
         Err(e) => {

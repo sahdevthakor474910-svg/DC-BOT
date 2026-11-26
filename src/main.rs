@@ -327,9 +327,9 @@ fn build_framework(bot_data: Data) -> poise::Framework<Data, Error> {
                             } else {
                                 format!("❌ Error: {}", error)
                             };
-                            let _ = ctx
-                                .say(user_msg)
-                                .await;
+                            if ctx.say(user_msg.clone()).await.is_err() {
+                                let _ = ctx.channel_id().say(&ctx.serenity_context().http, user_msg).await;
+                            }
                         }
                         poise::FrameworkError::CommandCheckFailed { error, ctx, .. } => {
                             if let Some(err) = error {
